@@ -37,6 +37,7 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -58,21 +59,20 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
             StreamTableEnvironment.create(
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
 
-    private final String testName;
-    private final String[] snapshotExpected;
-    private final String[] binlogExpected;
+    @Parameterized.Parameter(1)
+    public String testName;
 
-    public MysqlConnectorCharsetITCase(
-            String testName, String[] snapshotExpected, String[] binlogExpected) {
-        this.testName = testName;
-        this.snapshotExpected = snapshotExpected;
-        this.binlogExpected = binlogExpected;
-    }
+    @Parameterized.Parameter(2)
+    public String[] snapshotExpected;
+
+    @Parameterized.Parameter(3)
+    public String[] binlogExpected;
 
     @Parameterized.Parameters(name = "Test column charset: {0}")
     public static Object[] parameters() {
         return new Object[][] {
             new Object[] {
+                new HashMap<>(),
                 "ucs2_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
@@ -85,6 +85,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "utf8_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
@@ -97,6 +98,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "ascii_test",
                 new String[] {"+I[1, ascii test!?]", "+I[2, Craig Marshall]", "+I[3, {test}]"},
                 new String[] {
@@ -109,6 +111,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "sjis_test",
                 new String[] {"+I[1, ひびぴ]", "+I[2, Craig Marshall]", "+I[3, フブプ]"},
                 new String[] {
@@ -121,6 +124,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "gbk_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
@@ -133,6 +137,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "cp932_test",
                 new String[] {"+I[1, ひびぴ]", "+I[2, Craig Marshall]", "+I[3, フブプ]"},
                 new String[] {
@@ -145,6 +150,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "gb2312_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
@@ -157,6 +163,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "ujis_test",
                 new String[] {"+I[1, ひびぴ]", "+I[2, Craig Marshall]", "+I[3, フブプ]"},
                 new String[] {
@@ -169,6 +176,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "euckr_test",
                 new String[] {"+I[1, 죠주쥬]", "+I[2, Craig Marshall]", "+I[3, 한국어]"},
                 new String[] {
@@ -181,6 +189,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "latin1_test",
                 new String[] {"+I[1, ÀÆÉ]", "+I[2, Craig Marshall]", "+I[3, Üæû]"},
                 new String[] {
@@ -193,6 +202,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "latin2_test",
                 new String[] {"+I[1, ÓÔŐÖ]", "+I[2, Craig Marshall]", "+I[3, ŠŞŤŹ]"},
                 new String[] {
@@ -205,6 +215,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "greek_test",
                 new String[] {"+I[1, αβγδε]", "+I[2, Craig Marshall]", "+I[3, θικλ]"},
                 new String[] {
@@ -217,6 +228,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "hebrew_test",
                 new String[] {"+I[1, בבקשה]", "+I[2, Craig Marshall]", "+I[3, שרפה]"},
                 new String[] {
@@ -229,6 +241,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "cp866_test",
                 new String[] {"+I[1, твой]", "+I[2, Craig Marshall]", "+I[3, любой]"},
                 new String[] {
@@ -241,6 +254,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "tis620_test",
                 new String[] {"+I[1, ภาษาไทย]", "+I[2, Craig Marshall]", "+I[3, ฆงจฉ]"},
                 new String[] {
@@ -253,6 +267,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "cp1250_test",
                 new String[] {"+I[1, ÓÔŐÖ]", "+I[2, Craig Marshall]", "+I[3, ŠŞŤŹ]"},
                 new String[] {
@@ -265,6 +280,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "cp1251_test",
                 new String[] {"+I[1, твой]", "+I[2, Craig Marshall]", "+I[3, любой]"},
                 new String[] {
@@ -277,6 +293,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "cp1257_test",
                 new String[] {
                     "+I[1, piedzimst brīvi]", "+I[2, Craig Marshall]", "+I[3, apveltīti ar saprātu]"
@@ -289,6 +306,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "macroman_test",
                 new String[] {"+I[1, ÀÆÉ]", "+I[2, Craig Marshall]", "+I[3, Üæû]"},
                 new String[] {
@@ -301,6 +319,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "macce_test",
                 new String[] {"+I[1, ÓÔŐÖ]", "+I[2, Craig Marshall]", "+I[3, ŮÚŰÜ]"},
                 new String[] {
@@ -313,6 +332,7 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                 }
             },
             new Object[] {
+                new HashMap<>(),
                 "big5_test",
                 new String[] {"+I[1, 大五]", "+I[2, Craig Marshall]", "+I[3, 丹店]"},
                 new String[] {

@@ -98,6 +98,13 @@ import static io.debezium.util.Strings.isNullOrEmpty;
  * specifying starting offset on start.
  *
  * <p>Line 1521 : Add more error details for some exceptions.
+ * <p>Line 1485 : Add more error details for some exceptions.
+ *
+ * <p>Line 342-380 : Choose whether to use the new EventDataDeserializers based on configuration.
+ *
+ * <p>Line 443-449 : Add logs for recording the time of processing binlog.
+ *
+ * <p>Line 980-984 : Skip processing Event that EventData is null, witch is filtered by tableId.
  */
 public class MySqlStreamingChangeEventSource
         implements StreamingChangeEventSource<MySqlPartition, MySqlOffsetContext> {
@@ -133,6 +140,9 @@ public class MySqlStreamingChangeEventSource
 
     @SingleThreadAccess("binlog client thread")
     private Instant eventTimestamp;
+
+    /** record the last timestamp of meeting new binlog. */
+    private long lastTimestampOfMeetingNewBinlog;
 
     /** Describe binlog position. */
     public static class BinlogPosition {
@@ -211,6 +221,7 @@ public class MySqlStreamingChangeEventSource
         this.eventDispatcher = dispatcher;
         this.errorHandler = errorHandler;
         this.metrics = metrics;
+        this.lastTimestampOfMeetingNewBinlog = System.currentTimeMillis();
 
         eventDeserializationFailureHandlingMode =
                 connectorConfig.getEventProcessingFailureHandlingMode();
@@ -253,6 +264,10 @@ public class MySqlStreamingChangeEventSource
                 configuration.getBoolean(MySqlConnectorConfig.GTID_SOURCE_FILTER_DML_EVENTS);
         gtidDmlSourceFilter =
                 filterDmlEventsByGtidSource ? connectorConfig.gtidSourceFilter() : null;
+        boolean filterDmlEvents =
+                configuration.getBoolean(
+                        ExtendedMysqlConnectorConfig
+                                .SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
 
         // Set up the event deserializer with additional type(s) ...
         final Map<Long, TableMapEventData> tableMapEventByTableId =
@@ -323,25 +338,46 @@ public class MySqlStreamingChangeEventSource
         eventDeserializer.setEventDataDeserializer(EventType.GTID, new GtidEventDataDeserializer());
         eventDeserializer.setEventDataDeserializer(
                 EventType.WRITE_ROWS,
-                new RowDeserializers.WriteRowsDeserializer(tableMapEventByTableId));
+                filterDmlEvents
+                        ? new WriteRowsWithFilterDeserializer(
+                                tableMapEventByTableId, taskContext.getSchema())
+                        : new RowDeserializers.WriteRowsDeserializer(tableMapEventByTableId));
         eventDeserializer.setEventDataDeserializer(
                 EventType.UPDATE_ROWS,
-                new RowDeserializers.UpdateRowsDeserializer(tableMapEventByTableId));
+                filterDmlEvents
+                        ? new UpdateRowsWithFilterDeserializer(
+                                tableMapEventByTableId, taskContext.getSchema())
+                        : new RowDeserializers.UpdateRowsDeserializer(tableMapEventByTableId));
         eventDeserializer.setEventDataDeserializer(
                 EventType.DELETE_ROWS,
-                new RowDeserializers.DeleteRowsDeserializer(tableMapEventByTableId));
+                filterDmlEvents
+                        ? new DeleteRowsWithFilterDeserializer(
+                                tableMapEventByTableId, taskContext.getSchema())
+                        : new RowDeserializers.DeleteRowsDeserializer(tableMapEventByTableId));
         eventDeserializer.setEventDataDeserializer(
                 EventType.EXT_WRITE_ROWS,
-                new RowDeserializers.WriteRowsDeserializer(tableMapEventByTableId)
-                        .setMayContainExtraInformation(true));
+                filterDmlEvents
+                        ? new WriteRowsWithFilterDeserializer(
+                                        tableMapEventByTableId, taskContext.getSchema())
+                                .setMayContainExtraInformation(true)
+                        : new RowDeserializers.WriteRowsDeserializer(tableMapEventByTableId)
+                                .setMayContainExtraInformation(true));
         eventDeserializer.setEventDataDeserializer(
                 EventType.EXT_UPDATE_ROWS,
-                new RowDeserializers.UpdateRowsDeserializer(tableMapEventByTableId)
-                        .setMayContainExtraInformation(true));
+                filterDmlEvents
+                        ? new UpdateRowsWithFilterDeserializer(
+                                        tableMapEventByTableId, taskContext.getSchema())
+                                .setMayContainExtraInformation(true)
+                        : new RowDeserializers.UpdateRowsDeserializer(tableMapEventByTableId)
+                                .setMayContainExtraInformation(true));
         eventDeserializer.setEventDataDeserializer(
                 EventType.EXT_DELETE_ROWS,
-                new RowDeserializers.DeleteRowsDeserializer(tableMapEventByTableId)
-                        .setMayContainExtraInformation(true));
+                filterDmlEvents
+                        ? new DeleteRowsWithFilterDeserializer(
+                                        tableMapEventByTableId, taskContext.getSchema())
+                                .setMayContainExtraInformation(true)
+                        : new RowDeserializers.DeleteRowsDeserializer(tableMapEventByTableId)
+                                .setMayContainExtraInformation(true));
         client.setEventDeserializer(eventDeserializer);
     }
 
@@ -402,6 +438,13 @@ public class MySqlStreamingChangeEventSource
                                 ((EventDeserializer.EventDataWrapper) eventData).getInternal();
             } else {
                 rotateEventData = (RotateEventData) eventData;
+            }
+            if (event.getHeader().getTimestamp() != 0) {
+                LOGGER.debug(
+                        "spend {} ms to process last binlog, start to process {}",
+                        System.currentTimeMillis() - lastTimestampOfMeetingNewBinlog,
+                        rotateEventData.getBinlogFilename());
+                lastTimestampOfMeetingNewBinlog = System.currentTimeMillis();
             }
             offsetContext.setBinlogStartPoint(
                     rotateEventData.getBinlogFilename(), rotateEventData.getBinlogPosition());
@@ -953,6 +996,11 @@ public class MySqlStreamingChangeEventSource
             RowsProvider<T, U> rowsProvider,
             BinlogChangeEmitter<U> changeEmitter)
             throws InterruptedException {
+        if (event.getData() == null) {
+            startingRowNumber = 0;
+            offsetContext.changeEventCompleted();
+            return;
+        }
         if (skipEvent) {
             // We can skip this because we should already be at least this far ...
             LOGGER.info("Skipping previously processed row event: {}", event);

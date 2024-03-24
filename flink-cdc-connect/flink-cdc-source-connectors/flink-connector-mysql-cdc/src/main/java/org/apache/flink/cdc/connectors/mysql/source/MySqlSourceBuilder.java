@@ -286,6 +286,13 @@ public class MySqlSourceBuilder<T> {
         return this;
     }
 
+    public MySqlSourceBuilder<T> scanOnlyDeserializeCapturedTablesChangelog(
+            boolean scanOnlyDeserializeCapturedTablesChangelog) {
+        this.configFactory.scanOnlyDeserializeCapturedTablesChangelog(
+                scanOnlyDeserializeCapturedTablesChangelog);
+        return this;
+    }
+
     /**
      * Build the {@link MySqlSource}.
      *

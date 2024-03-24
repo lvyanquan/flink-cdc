@@ -40,8 +40,8 @@ import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.TableId;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.sql.SQLException;
@@ -60,27 +60,27 @@ import static org.junit.Assert.fail;
 /** Tests for {@link org.apache.flink.cdc.connectors.mysql.debezium.reader.SnapshotSplitReader}. */
 public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
 
-    private static final UniqueDatabase customerDatabase =
+    private final UniqueDatabase customerDatabase =
             new UniqueDatabase(MYSQL_CONTAINER, "customer", "mysqluser", "mysqlpw");
 
-    private static final UniqueDatabase customer3_0Database =
+    private final UniqueDatabase customer30Database =
             new UniqueDatabase(MYSQL_CONTAINER, "customer3.0", "mysqluser", "mysqlpw");
 
     private static BinaryLogClient binaryLogClient;
     private static MySqlConnection mySqlConnection;
 
-    @BeforeClass
-    public static void init() {
+    @Before
+    public void init() {
         customerDatabase.createAndInitialize();
-        customer3_0Database.createAndInitialize();
+        customer30Database.createAndInitialize();
         MySqlSourceConfig sourceConfig =
                 getConfig(customerDatabase, new String[] {"customers"}, 10);
         binaryLogClient = DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
         mySqlConnection = DebeziumUtils.createMySqlConnection(sourceConfig);
     }
 
-    @AfterClass
-    public static void afterClass() throws Exception {
+    @After
+    public void after() throws Exception {
         if (mySqlConnection != null) {
             mySqlConnection.close();
         }
@@ -122,7 +122,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
     @Test
     public void testReadSingleSnapshotSplitWithDotName() throws Exception {
         MySqlSourceConfig sourceConfig =
-                getConfig(customer3_0Database, new String[] {"customers3.0"}, 4);
+                getConfig(customer30Database, new String[] {"customers3.0"}, 4);
         BinaryLogClient binaryLogClient =
                 DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
         MySqlConnection mySqlConnection = DebeziumUtils.createMySqlConnection(sourceConfig);
@@ -145,7 +145,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         Arrays.asList(
                                         String.format(
                                                 "`%s`.`customers3.0`",
-                                                customer3_0Database.getDatabaseName()))
+                                                customer30Database.getDatabaseName()))
                                 .stream()
                                 .map(TableId::parse)
                                 .collect(Collectors.toList()));

@@ -271,4 +271,13 @@ public class MySqlSourceOptions {
                     .withDescription(
                             "Optional assign strategy for MySqlSnapshotSplitAssigner, valid enumerations are "
                                     + "\"ascending_order\", \"descending_order\"");
+
+    @Experimental
+    public static final ConfigOption<Boolean>
+            SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED =
+                    ConfigOptions.key("scan.only.deserialize.captured.tables.changelog.enabled")
+                            .booleanType()
+                            .defaultValue(false)
+                            .withDescription(
+                                    "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 }

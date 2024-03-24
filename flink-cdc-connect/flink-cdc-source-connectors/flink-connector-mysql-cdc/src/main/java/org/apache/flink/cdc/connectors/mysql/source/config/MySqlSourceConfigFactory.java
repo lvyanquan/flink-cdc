@@ -74,6 +74,7 @@ public class MySqlSourceConfigFactory implements Serializable {
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     private boolean skipSnapshotBackfill = false;
     @Nullable private AliyunRdsConfig rdsConfig;
+    private boolean scanOnlyDeserializeCapturedTablesChangelog = false;
 
     private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
 
@@ -292,6 +293,13 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
+    public MySqlSourceConfigFactory scanOnlyDeserializeCapturedTablesChangelog(
+            boolean scanOnlyDeserializeCapturedTablesChangelog) {
+        this.scanOnlyDeserializeCapturedTablesChangelog =
+                scanOnlyDeserializeCapturedTablesChangelog;
+        return this;
+    }
+
     public MySqlSourceConfigFactory enableReadingRdsArchivedBinlog(AliyunRdsConfig rdsConfig) {
         this.rdsConfig = rdsConfig;
         return this;
@@ -360,6 +368,11 @@ public class MySqlSourceConfigFactory implements Serializable {
         }
         if (serverTimeZone != null) {
             props.setProperty("database.serverTimezone", serverTimeZone);
+        }
+
+        if (scanOnlyDeserializeCapturedTablesChangelog) {
+            props.setProperty(
+                    "scan.only.deserialize.captured.tables.changelog", String.valueOf(true));
         }
 
         // override the user-defined debezium properties
