@@ -293,6 +293,12 @@ public class MySqlSourceBuilder<T> {
         return this;
     }
 
+    public MySqlSourceBuilder<T> scanParallelDeserializeChangelog(
+            boolean scanParallelDeserializeChangelog) {
+        this.configFactory.scanParallelDeserializeChangelog(scanParallelDeserializeChangelog);
+        return this;
+    }
+
     /**
      * Build the {@link MySqlSource}.
      *

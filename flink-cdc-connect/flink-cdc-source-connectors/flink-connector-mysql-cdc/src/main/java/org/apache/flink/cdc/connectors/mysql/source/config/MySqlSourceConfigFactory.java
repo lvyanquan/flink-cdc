@@ -78,6 +78,8 @@ public class MySqlSourceConfigFactory implements Serializable {
 
     private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
 
+    private boolean scanParallelDeserializeChangelog = false;
+
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
         return this;
@@ -311,6 +313,12 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
+    public MySqlSourceConfigFactory scanParallelDeserializeChangelog(
+            boolean scanParallelDeserializeChangelog) {
+        this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
+        return this;
+    }
+
     /** Creates a new {@link MySqlSourceConfig} for the given subtask {@code subtaskId}. */
     public MySqlSourceConfig createConfig(int subtaskId) {
         // hard code server name, because we don't need to distinguish it, docs:
@@ -373,6 +381,9 @@ public class MySqlSourceConfigFactory implements Serializable {
         if (scanOnlyDeserializeCapturedTablesChangelog) {
             props.setProperty(
                     "scan.only.deserialize.captured.tables.changelog", String.valueOf(true));
+        }
+        if (scanParallelDeserializeChangelog) {
+            props.setProperty("scan.parallel-deserialize-changelog.enabled", String.valueOf(true));
         }
 
         // override the user-defined debezium properties

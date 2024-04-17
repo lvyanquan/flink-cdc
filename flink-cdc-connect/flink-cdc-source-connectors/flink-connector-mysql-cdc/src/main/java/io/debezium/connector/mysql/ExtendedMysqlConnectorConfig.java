@@ -37,4 +37,38 @@ public class ExtendedMysqlConnectorConfig {
                     .withDefault(false)
                     .withDescription(
                             "If set to true, we will only deserialize changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+
+    public static final Field SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED =
+            Field.create("scan.parallel-deserialize-changelog.enabled")
+                    .withDisplayName("Binlog parser parallel")
+                    .withType(ConfigDef.Type.BOOLEAN)
+                    .withWidth(ConfigDef.Width.SHORT)
+                    .withImportance(ConfigDef.Importance.MEDIUM)
+                    .withDefault(false)
+                    .withDescription(
+                            "If set to true, Multiple threads will be used to complete time-consuming intermediate conversions, but the final output will still be in order.");
+
+    public static final Field SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE =
+            Field.create("scan.parallel-deserialize-changelog.ringbuffer.size")
+                    .withDisplayName("Binlog parser ringBuffer size")
+                    .withType(ConfigDef.Type.INT)
+                    .withWidth(ConfigDef.Width.SHORT)
+                    .withImportance(ConfigDef.Importance.MEDIUM)
+                    .withDefault(256)
+                    .withDescription("The length of the ringbuffer during parallel conversion.");
+
+    /**
+     * If set to true, we will only filter out DML events earlier during {@link
+     * EventDataDeserializer} deserialize method.
+     *
+     * <p>Defaults to 256.
+     */
+    public static final Field SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE =
+            Field.create("scan.parallel-deserialize-changelog.handler.size")
+                    .withDisplayName("Binlog parser handler size")
+                    .withType(ConfigDef.Type.INT)
+                    .withWidth(ConfigDef.Width.SHORT)
+                    .withImportance(ConfigDef.Importance.MEDIUM)
+                    .withDefault(3)
+                    .withDescription("The size of the event handler during parallel conversion.");
 }

@@ -1,0 +1,42 @@
+/*
+ * Copyright 2013 Stanley Shyiko
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.github.shyiko.mysql.binlog;
+
+import com.github.shyiko.mysql.binlog.event.Event;
+import com.lmax.disruptor.EventHandler;
+
+/** Process {@link Event} by {@link BinaryLogClient} sequentially. */
+public class BinlogEventConsumer implements EventHandler<Event> {
+
+    private final BinaryLogClient binaryLogClient;
+
+    public BinlogEventConsumer(BinaryLogClient logClient) {
+        this.binaryLogClient = logClient;
+    }
+
+    /** refer to {@link BinaryLogClient#listenForEventPackets()}. */
+    @Override
+    public void onEvent(Event event, long sequence, boolean endOfBatch) {
+        if (binaryLogClient.isConnected()) {
+            binaryLogClient.eventLastSeen = System.currentTimeMillis();
+            binaryLogClient.updateGtidSet(event);
+            binaryLogClient.notifyEventListeners(event);
+            binaryLogClient.updateClientBinlogFilenameAndPosition(event);
+        }
+        event.clearAll();
+    }
+}

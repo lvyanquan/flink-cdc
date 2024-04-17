@@ -19,16 +19,23 @@ package org.apache.flink.cdc.connectors.mysql.debezium.dispatcher;
 
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 
+import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.connector.base.ChangeEventQueue;
+import io.debezium.connector.mysql.MySqlChangeRecordEmitter;
 import io.debezium.connector.mysql.MySqlPartition;
+import io.debezium.connector.mysql.util.NamedThreadFactory;
 import io.debezium.document.DocumentWriter;
 import io.debezium.pipeline.DataChangeEvent;
 import io.debezium.pipeline.EventDispatcher;
 import io.debezium.pipeline.source.snapshot.incremental.IncrementalSnapshotChangeEventSource;
 import io.debezium.pipeline.source.spi.EventMetadataProvider;
 import io.debezium.pipeline.spi.ChangeEventCreator;
+import io.debezium.pipeline.spi.ChangeRecordEmitter;
 import io.debezium.pipeline.spi.SchemaChangeEventEmitter;
+import io.debezium.relational.TableSchema;
 import io.debezium.relational.history.HistoryRecord;
 import io.debezium.schema.DataCollectionFilters;
 import io.debezium.schema.DataCollectionId;
@@ -48,9 +55,16 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher.BINLOG_FILENAME_OFFSET_KEY;
 import static org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher.BINLOG_POSITION_OFFSET_KEY;
+import static com.ververica.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher.BINLOG_FILENAME_OFFSET_KEY;
+import static com.ververica.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher.BINLOG_POSITION_OFFSET_KEY;
+import static com.ververica.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext.MySqlEventMetadataProvider.SERVER_ID_KEY;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE;
 
 /**
  * A subclass implementation of {@link EventDispatcher}.
@@ -70,12 +84,17 @@ public class EventDispatcherImpl<T extends DataCollectionId>
     private static final DocumentWriter DOCUMENT_WRITER = DocumentWriter.defaultWriter();
 
     private final ChangeEventQueue<DataChangeEvent> queue;
-    private final HistorizedDatabaseSchema historizedSchema;
+    private final HistorizedDatabaseSchema<T> historizedSchema;
     private final DataCollectionFilters.DataCollectionFilter<T> filter;
     private final CommonConnectorConfig connectorConfig;
     private final TopicSelector<T> topicSelector;
     private final Schema schemaChangeKeySchema;
     private final Schema schemaChangeValueSchema;
+
+    private Disruptor<ChangeRecordEvent<T>> disruptor;
+
+    // Record exception that occur during parallel processing.
+    private final AtomicReference<Throwable> disruptorException;
 
     public EventDispatcherImpl(
             CommonConnectorConfig connectorConfig,
@@ -124,6 +143,10 @@ public class EventDispatcherImpl<T extends DataCollectionId>
                                 connectorConfig.getSourceInfoStructMaker().schema())
                         .field(HISTORY_RECORD_FIELD, Schema.OPTIONAL_STRING_SCHEMA)
                         .build();
+        disruptorException = new AtomicReference<>();
+        if (connectorConfig.getConfig().getBoolean(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED)) {
+            initializeDisruptor();
+        }
     }
 
     public ChangeEventQueue<DataChangeEvent> getQueue() {
@@ -236,6 +259,78 @@ public class EventDispatcherImpl<T extends DataCollectionId>
                             String.format("dispatch schema change event %s error ", event), e);
                 }
             }
+        }
+    }
+
+    /** This method is overWrote to provide an additional parallel conversion solution. */
+    @Override
+    public boolean dispatchDataChangeEvent(
+            MySqlPartition partition,
+            T dataCollectionId,
+            final ChangeRecordEmitter<MySqlPartition> changeRecordEmitter)
+            throws InterruptedException {
+        if (disruptor == null) {
+            // keep the behavior as before.
+            return super.dispatchDataChangeEvent(partition, dataCollectionId, changeRecordEmitter);
+        }
+        if (disruptorException.get() != null) {
+            throw new RuntimeException(disruptorException.get());
+        }
+        if (!filter.isIncluded(dataCollectionId)) {
+            LOG.trace("Filtered data change event for {}", dataCollectionId);
+            eventListener.onFilteredEvent(
+                    partition, "source = " + dataCollectionId, changeRecordEmitter.getOperation());
+            dispatchFilteredEvent(
+                    changeRecordEmitter.getPartition(), changeRecordEmitter.getOffset());
+        } else {
+            disruptor.publishEvent(
+                    (event, sequence) -> {
+                        event.setDataCollectionId(dataCollectionId);
+                        event.setPartition(partition);
+                        event.setTableSchema((TableSchema) schema.schemaFor(dataCollectionId));
+                        event.setChangeRecordEmitter(
+                                (MySqlChangeRecordEmitter) changeRecordEmitter);
+                    });
+        }
+
+        return true;
+    }
+
+    private void initializeDisruptor() {
+        if (disruptor == null) {
+            int bufferSize =
+                    connectorConfig
+                            .getConfig()
+                            .getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+            disruptor =
+                    new Disruptor<>(
+                            ChangeRecordEvent::new,
+                            bufferSize,
+                            new NamedThreadFactory("ChangeRecordEvent", true),
+                            ProducerType.SINGLE,
+                            new YieldingWaitStrategy());
+            int handlerSize =
+                    connectorConfig
+                            .getConfig()
+                            .getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
+            ChangeRecordEventHandler<T>[] handlers = new ChangeRecordEventHandler[handlerSize];
+            for (int i = 0; i < handlerSize; i++) {
+                handlers[i] = new ChangeRecordEventHandler<>(disruptorException);
+            }
+            disruptor
+                    .handleEventsWithWorkerPool(handlers)
+                    .then(new ChangeRecordEventConsumer<>(this));
+
+            disruptor.start();
+        }
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        if (disruptor != null) {
+            disruptor.shutdown();
+            disruptor = null;
         }
     }
 }

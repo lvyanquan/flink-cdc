@@ -195,7 +195,7 @@ public class SwitchingBinaryLogClient extends BinaryLogClient {
         }
     }
 
-    private void notifyEventListeners(Event event) {
+    public void notifyEventListeners(Event event) {
         for (EventListener eventListener : getEventListeners()) {
             eventListener.onEvent(event);
         }

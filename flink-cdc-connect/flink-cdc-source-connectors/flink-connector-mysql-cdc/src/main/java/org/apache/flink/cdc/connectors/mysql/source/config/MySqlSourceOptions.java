@@ -280,4 +280,18 @@ public class MySqlSourceOptions {
                             .defaultValue(false)
                             .withDescription(
                                     "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+    public static final ConfigOption<Boolean> SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED =
+            ConfigOptions.key("scan.read-changelog-as-append-only.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to convert all changelogs as append only during reading Binlog data. If set to true, changelog will be read as +I (insert), -U (update before), +U (update after), and -D (delete). Otherwise, all changelog will be treated as +I (insert).");
+
+    @Experimental
+    public static final ConfigOption<Boolean> SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED =
+            ConfigOptions.key("scan.parallel-deserialize-changelog.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 }

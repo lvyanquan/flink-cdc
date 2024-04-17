@@ -206,6 +206,9 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
                 statefulTaskContext.getBinaryLogClient().disconnect();
             }
 
+            if (statefulTaskContext.getDispatcher() != null) {
+                statefulTaskContext.getDispatcher().close();
+            }
             stopBinlogReadTask();
             if (executorService != null) {
                 executorService.shutdown();

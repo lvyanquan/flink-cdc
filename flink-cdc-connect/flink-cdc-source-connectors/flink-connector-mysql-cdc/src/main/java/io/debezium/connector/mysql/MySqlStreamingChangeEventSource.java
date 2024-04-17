@@ -8,6 +8,8 @@ package io.debezium.connector.mysql;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.BinaryLogClient.LifecycleListener;
+import com.github.shyiko.mysql.binlog.BinlogEventConsumer;
+import com.github.shyiko.mysql.binlog.BinlogEventHandler;
 import com.github.shyiko.mysql.binlog.event.DeleteRowsEventData;
 import com.github.shyiko.mysql.binlog.event.Event;
 import com.github.shyiko.mysql.binlog.event.EventData;
@@ -23,6 +25,7 @@ import com.github.shyiko.mysql.binlog.event.TableMapEventData;
 import com.github.shyiko.mysql.binlog.event.UpdateRowsEventData;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDataDeserializationException;
+import com.github.shyiko.mysql.binlog.event.deserialization.EventDataDeserializer;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
 import com.github.shyiko.mysql.binlog.event.deserialization.GtidEventDataDeserializer;
 import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream;
@@ -31,6 +34,9 @@ import com.github.shyiko.mysql.binlog.network.DefaultSSLSocketFactory;
 import com.github.shyiko.mysql.binlog.network.SSLMode;
 import com.github.shyiko.mysql.binlog.network.SSLSocketFactory;
 import com.github.shyiko.mysql.binlog.network.ServerException;
+import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 import io.debezium.DebeziumException;
 import io.debezium.annotation.SingleThreadAccess;
 import io.debezium.config.CommonConnectorConfig.EventProcessingFailureHandlingMode;
@@ -38,6 +44,7 @@ import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnectorConfig.GtidNewChannelPosition;
 import io.debezium.connector.mysql.MySqlConnectorConfig.SecureConnectionMode;
 import io.debezium.connector.mysql.util.ErrorMessageUtils;
+import io.debezium.connector.mysql.util.NamedThreadFactory;
 import io.debezium.data.Envelope.Operation;
 import io.debezium.function.BlockingConsumer;
 import io.debezium.pipeline.ErrorHandler;
@@ -53,6 +60,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -82,6 +90,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE;
 import static io.debezium.util.Strings.isNullOrEmpty;
 
 /**
@@ -137,6 +148,8 @@ public class MySqlStreamingChangeEventSource
     private final MySqlConnection connection;
     private final EventDispatcher<MySqlPartition, TableId> eventDispatcher;
     private final ErrorHandler errorHandler;
+    // build EventData in parallel.
+    @Nullable private final Disruptor<Event> disruptor;
 
     @SingleThreadAccess("binlog client thread")
     private Instant eventTimestamp;
@@ -274,11 +287,100 @@ public class MySqlStreamingChangeEventSource
                 new HashMap<Long, TableMapEventData>();
         EventDeserializer eventDeserializer =
                 new EventDeserializer() {
+
+                    /**
+                     * Process insert/update/delete Event in parallel, Process other events as
+                     * before.
+                     */
+                    public Event nextEventInParallel(ByteArrayInputStream inputStream)
+                            throws IOException {
+                        if (inputStream.peek() == -1) {
+                            return null;
+                        }
+                        EventHeader eventHeader = eventHeaderDeserializer.deserialize(inputStream);
+                        EventData eventData = null;
+                        byte[] bytes = null;
+                        switch (eventHeader.getEventType()) {
+                            case FORMAT_DESCRIPTION:
+                                eventData =
+                                        deserializeFormatDescriptionEventData(
+                                                inputStream, eventHeader);
+                                break;
+                            case TABLE_MAP:
+                                eventData = deserializeTableMapEventData(inputStream, eventHeader);
+                                TableMapEventData metadata = (TableMapEventData) eventData;
+                                tableMapEventByTableId.put(metadata.getTableId(), metadata);
+                                long tableNumber = metadata.getTableId();
+                                String databaseName = metadata.getDatabase();
+                                String tableName = metadata.getTable();
+                                TableId tableId = new TableId(databaseName, null, tableName);
+                                taskContext.getSchema().assignTableNumber(tableNumber, tableId);
+                                break;
+                            case TRANSACTION_PAYLOAD:
+                                eventData =
+                                        deserializeTransactionPayloadEventData(
+                                                inputStream, eventHeader);
+                                break;
+                            case UPDATE_ROWS:
+                            case EXT_UPDATE_ROWS:
+                            case WRITE_ROWS:
+                            case EXT_WRITE_ROWS:
+                            case DELETE_ROWS:
+                            case EXT_DELETE_ROWS:
+                                // convert byte into EventData later in ringBuffer.
+                                bytes = inputStream.read((int) eventHeader.getDataLength());
+                                break;
+                            case ROTATE:
+                                // wait for all event in ringBuffer to be processed as rotate event
+                                // will clear
+                                // TableMapEventData.
+                                long lastSequenceNumber = disruptor.getRingBuffer().getCursor();
+                                while (disruptor.getRingBuffer().getMinimumGatingSequence()
+                                        < lastSequenceNumber) {
+                                    try {
+                                        Thread.sleep(10);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                }
+                                EventDataDeserializer eventDataDeserializer =
+                                        getEventDataDeserializer(eventHeader.getEventType());
+                                eventData =
+                                        deserializeEventData(
+                                                inputStream, eventHeader, eventDataDeserializer);
+                                RotateEventData command = (RotateEventData) eventData;
+                                assert command != null;
+                                taskContext.getSchema().clearTableMappings();
+                                break;
+                            default:
+                                eventDataDeserializer =
+                                        getEventDataDeserializer(eventHeader.getEventType());
+                                eventData =
+                                        deserializeEventData(
+                                                inputStream, eventHeader, eventDataDeserializer);
+                        }
+                        final Event event = new Event(eventHeader, eventData);
+                        event.setDataBytes(bytes);
+                        disruptor.publishEvent(
+                                (eventInDisruptor, sequence) -> {
+                                    eventInDisruptor.setHeader(eventHeader);
+                                    eventInDisruptor.setData(event.getData());
+                                    eventInDisruptor.setDataBytes(event.getDataBytes());
+                                });
+                        return event;
+                    }
+
                     @Override
                     public Event nextEvent(ByteArrayInputStream inputStream) throws IOException {
                         try {
-                            // Delegate to the superclass ...
-                            Event event = super.nextEvent(inputStream);
+                            Event event;
+                            if (disruptor != null) {
+                                event = nextEventInParallel(inputStream);
+                            } else {
+                                // keep the behavior as before.
+                                // Delegate to the superclass ...
+                                event = super.nextEvent(inputStream);
+                            }
                             if (event == null) {
                                 return null;
                             }
@@ -379,6 +481,27 @@ public class MySqlStreamingChangeEventSource
                         : new RowDeserializers.DeleteRowsDeserializer(tableMapEventByTableId)
                                 .setMayContainExtraInformation(true));
         client.setEventDeserializer(eventDeserializer);
+        if (configuration.getBoolean(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED)) {
+            int bufferSize =
+                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+            disruptor =
+                    new Disruptor<>(
+                            Event::new,
+                            bufferSize,
+                            new NamedThreadFactory(Event.class.getSimpleName(), true),
+                            ProducerType.SINGLE,
+                            new YieldingWaitStrategy());
+            int handlerSize =
+                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
+            BinlogEventHandler[] handlers = new BinlogEventHandler[handlerSize];
+            for (int i = 0; i < handlerSize; i++) {
+                handlers[i] = new BinlogEventHandler(eventDeserializer);
+            }
+            disruptor.handleEventsWithWorkerPool(handlers).then(new BinlogEventConsumer(client));
+            client.setProcessInParallel(true);
+        } else {
+            disruptor = null;
+        }
     }
 
     protected void onEvent(MySqlOffsetContext offsetContext, Event event) {
@@ -587,10 +710,12 @@ public class MySqlStreamingChangeEventSource
      * @param event the database change data event to be processed; may not be null
      */
     protected void handleRotateLogsEvent(MySqlOffsetContext offsetContext, Event event) {
-        LOGGER.debug("Rotating logs: {}", event);
-        RotateEventData command = unwrapData(event);
-        assert command != null;
-        taskContext.getSchema().clearTableMappings();
+        if (disruptor == null) {
+            LOGGER.debug("Rotating logs: {}", event);
+            RotateEventData command = unwrapData(event);
+            assert command != null;
+            taskContext.getSchema().clearTableMappings();
+        }
     }
 
     protected void handlePreviousGtidsEvent(MySqlOffsetContext offsetContext, Event event) {
@@ -1254,6 +1379,9 @@ public class MySqlStreamingChangeEventSource
                     LOGGER.debug(
                             "Attempting to establish binlog reader connection with timeout of {} ms",
                             timeout);
+                    if (disruptor != null) {
+                        disruptor.start();
+                    }
                     client.connect(timeout);
                     // Need to wait for keepalive thread to be running, otherwise it can be left
                     // orphaned
@@ -1326,6 +1454,9 @@ public class MySqlStreamingChangeEventSource
             }
         } finally {
             try {
+                if (disruptor != null) {
+                    disruptor.shutdown();
+                }
                 client.disconnect();
             } catch (Exception e) {
                 LOGGER.info("Exception while stopping binary log client", e);
