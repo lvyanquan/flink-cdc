@@ -51,6 +51,7 @@ public class MySqlValidator implements Validator {
     private static final String BINLOG_FORMAT_ROW = "ROW";
     private static final String BINLOG_FORMAT_IMAGE_FULL = "FULL";
     private static final String DEFAULT_BINLOG_ROW_VALUE_OPTIONS = "";
+    private static final String ALIYUN_RDS_SUFFIX = "mysql.rds.aliyuncs.com";
 
     private final Properties dbzProperties;
     private final MySqlSourceConfig sourceConfig;
@@ -106,6 +107,10 @@ public class MySqlValidator implements Validator {
         } else if (versionNumbers[0] < 5) {
             isSatisfied = false;
         } else {
+            if (versionNumbers[1] == 6 && sourceConfig.getHostname().endsWith(ALIYUN_RDS_SUFFIX)) {
+                LOG.warn(
+                        "The MySQL instance is RDS MySQL 5.6, please check it's not a read-only instance manually, the read-only instance can not offer binlog data.");
+            }
             isSatisfied = versionNumbers[1] >= 6;
         }
         if (!isSatisfied) {
