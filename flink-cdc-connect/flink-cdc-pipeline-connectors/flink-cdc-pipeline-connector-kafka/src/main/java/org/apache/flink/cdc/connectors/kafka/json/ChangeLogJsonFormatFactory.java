@@ -28,6 +28,7 @@ import org.apache.flink.formats.json.JsonFormatOptions;
 import org.apache.flink.formats.json.JsonFormatOptionsUtil;
 
 import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
+import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
 import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
 /**
@@ -55,6 +56,8 @@ public class ChangeLogJsonFormatFactory {
         final boolean encodeDecimalAsPlainNumber =
                 formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
 
+        final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
+
         switch (type) {
             case DEBEZIUM_JSON:
                 {
@@ -62,7 +65,8 @@ public class ChangeLogJsonFormatFactory {
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber);
+                            encodeDecimalAsPlainNumber,
+                            writeNullProperties);
                 }
             case CANAL_JSON:
                 {
@@ -70,7 +74,8 @@ public class ChangeLogJsonFormatFactory {
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber);
+                            encodeDecimalAsPlainNumber,
+                            writeNullProperties);
                 }
             default:
                 {

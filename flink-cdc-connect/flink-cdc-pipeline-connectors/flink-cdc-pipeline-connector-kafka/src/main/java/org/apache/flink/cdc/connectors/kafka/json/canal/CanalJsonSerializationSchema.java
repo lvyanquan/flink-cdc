@@ -77,17 +77,21 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
 
     private InitializationContext context;
 
+    private final boolean writeNullProperties;
+
     public CanalJsonSerializationSchema(
             TimestampFormat timestampFormat,
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
             String mapNullKeyLiteral,
-            boolean encodeDecimalAsPlainNumber) {
+            boolean encodeDecimalAsPlainNumber,
+            boolean writeNullProperties) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
         this.encodeDecimalAsPlainNumber = encodeDecimalAsPlainNumber;
         this.zoneId = ZoneId.systemDefault();
         jsonSerializers = new HashMap<>();
+        this.writeNullProperties = writeNullProperties;
     }
 
     @Override
@@ -118,7 +122,8 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber);
+                            encodeDecimalAsPlainNumber,
+                            writeNullProperties);
             try {
                 jsonSerializer.open(context);
             } catch (Exception e) {

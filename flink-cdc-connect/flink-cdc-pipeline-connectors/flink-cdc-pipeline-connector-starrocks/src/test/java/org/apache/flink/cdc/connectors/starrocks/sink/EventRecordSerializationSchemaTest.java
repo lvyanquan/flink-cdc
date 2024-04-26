@@ -17,11 +17,9 @@
 
 package org.apache.flink.cdc.connectors.starrocks.sink;
 
-import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.operators.ProcessingTimeService;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.cdc.common.data.DecimalData;
 import org.apache.flink.cdc.common.data.LocalZonedTimestampData;
@@ -339,19 +337,20 @@ public class EventRecordSerializationSchemaTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public boolean isObjectReuseEnabled() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public <IN> TypeSerializer<IN> createInputSerializer() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public JobID getJobId() {
-            throw new UnsupportedOperationException();
-        }
+        // These methods are not used in Flink 1.17
+        //        @Override
+        //        public boolean isObjectReuseEnabled() {
+        //            throw new UnsupportedOperationException();
+        //        }
+        //
+        //        @Override
+        //        public <IN> TypeSerializer<IN> createInputSerializer() {
+        //            throw new UnsupportedOperationException();
+        //        }
+        //
+        //        @Override
+        //        public JobID getJobId() {
+        //            throw new UnsupportedOperationException();
+        //        }
     }
 }

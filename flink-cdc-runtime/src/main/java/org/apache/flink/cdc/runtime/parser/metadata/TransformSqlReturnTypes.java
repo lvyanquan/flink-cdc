@@ -18,7 +18,7 @@
 package org.apache.flink.cdc.runtime.parser.metadata;
 
 import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.utils.LogicalTypeMerging;
+import org.apache.flink.table.types.logical.utils.LogicalTypeMergingUtils;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlOperatorBinding;
@@ -64,7 +64,7 @@ public class TransformSqlReturnTypes {
                     final int p = numType.getPrecision();
                     final int s = numType.getScale();
                     final int r = lenVal.intValueExact();
-                    DecimalType dt = LogicalTypeMerging.findRoundDecimalType(p, s, r);
+                    DecimalType dt = LogicalTypeMergingUtils.findRoundDecimalType(p, s, r);
                     return opBinding
                             .getTypeFactory()
                             .createSqlType(SqlTypeName.DECIMAL, dt.getPrecision(), dt.getScale());
