@@ -231,7 +231,7 @@ Notice that:
 
 4. Finally, submit job to Flink Standalone cluster using Cli.
    ```shell
-   bash bin/flink-cdc.sh mysql-to-doris.yaml
+   bash bin/flink-cdc.sh mysql-to-doris.yaml --jar lib/mysql-connector-java-8.0.27.jar
    ```
 After successful submission, the return information is as follows：
    ```shell
