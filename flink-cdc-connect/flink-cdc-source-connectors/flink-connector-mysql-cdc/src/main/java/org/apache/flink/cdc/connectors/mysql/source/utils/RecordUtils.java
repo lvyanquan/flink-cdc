@@ -36,6 +36,8 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -381,11 +383,14 @@ public class RecordUtils {
                 && value.getString(Envelope.FieldName.OPERATION) != null;
     }
 
-    public static TableId getTableId(SourceRecord dataRecord) {
+    public static @Nullable TableId getTableId(SourceRecord dataRecord) {
         Struct value = (Struct) dataRecord.value();
         Struct source = value.getStruct(Envelope.FieldName.SOURCE);
         String dbName = source.getString(DATABASE_NAME_KEY);
         String tableName = source.getString(TABLE_NAME_KEY);
+        if (tableName == null) {
+            return null;
+        }
         return new TableId(dbName, null, tableName);
     }
 

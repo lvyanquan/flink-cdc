@@ -94,25 +94,29 @@ public class MySqlSourceReaderMetrics {
      * @param record current processing {@link SourceRecord}
      */
     public void markRecord(SourceRecord record) {
-        // Update reader-level numRecordsIn
-        metricGroup.getIOMetricGroup().getNumRecordsInCounter().inc();
-        // Increase reader and table level input counters
-        updateRecordCounters(record);
-        // Update currentFetchEventTimeLag
-        updateTemporalMetrics(record);
+        try {
+            // Update reader-level numRecordsIn
+            metricGroup.getIOMetricGroup().getNumRecordsInCounter().inc();
+            // Increase reader and table level input counters
+            updateRecordCounters(record);
+            // Update currentFetchEventTimeLag
+            updateTemporalMetrics(record);
+        } catch (Exception e) {
+            // Catch all exceptions as errors in metric handling should not fail the job
+            LOG.warn("Failed to update metrics", e);
+        }
     }
 
     // ------------------------------- Helper functions -----------------------------
 
-    private TableMetrics getTableMetrics(SourceRecord record) {
+    private TableMetrics getTableMetrics(TableId tableId) {
         return tableMetricsMap.computeIfAbsent(
-                getTableId(record),
-                tableId -> new TableMetrics(tableId.catalog(), tableId.table(), metricGroup));
+                tableId, id -> new TableMetrics(id.catalog(), id.table(), metricGroup));
     }
 
     private void updateRecordCounters(SourceRecord record) {
-        TableMetrics tableMetrics = getTableMetrics(record);
         if (isDataChangeRecord(record)) {
+            TableMetrics tableMetrics = getTableMetrics(getTableId(record));
             Envelope.Operation op = Envelope.operationFor(record);
             switch (op) {
                 case READ:
@@ -134,7 +138,10 @@ public class MySqlSourceReaderMetrics {
             }
         } else if (RecordUtils.isSchemaChangeEvent(record)) {
             schemaChangeCounter.inc();
-            tableMetrics.markSchemaChangeRecord();
+            TableId tableId = getTableId(record);
+            if (tableId != null) {
+                getTableMetrics(tableId).markSchemaChangeRecord();
+            }
         }
     }
 

@@ -774,6 +774,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         String customerTable = "customers";
         String anotherCustomerTable = "customers_1";
         customDatabase.createAndInitialize();
+        MySqlConnection connection = getConnection();
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         MySqlSource<String> source =
@@ -823,11 +824,12 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                 getEnumeratorMetricGroupByTableName(anotherCustomerTable);
         validateEnumeratorPerTableMetrics(customerTableMetricGroup, 1, 0);
         validateEnumeratorPerTableMetrics(anotherCustomerTableMetricGroup, 1, 0);
+
         // --------------------------------- Binlog phase -----------------------------
+        makeFirstPartBinlogEvents(connection, customDatabase.qualifiedTableName(customerTable));
         makeFirstPartBinlogEvents(
-                getConnection(), customDatabase.qualifiedTableName(customerTable));
-        makeFirstPartBinlogEvents(
-                getConnection(), customDatabase.qualifiedTableName(anotherCustomerTable));
+                connection, customDatabase.qualifiedTableName(anotherCustomerTable));
+
         // Wait until we receive 8 changes made above
         int expectedBinlogRecordsInCustomerTable = 4;
         int expectedBinlogRecordsInAnotherCustomerTable = 4;
@@ -844,6 +846,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         validateEnumeratorPerTableMetrics(anotherCustomerTableMetricGroup, 1, 0);
         jobClient.cancel().get();
         iterator.close();
+        connection.close();
     }
 
     private MetricGroup getReaderMetricGroupByTableName(String tableName) {
@@ -858,8 +861,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         Set<MetricGroup> groups = metricReporter.findGroups(tableName);
         for (MetricGroup group : groups) {
             if (tableName.equals(group.getAllVariables().get("<table>"))) {
-                if (Arrays.stream(group.getScopeComponents())
-                        .anyMatch(s -> s.equals(componentName))) {
+                if (Arrays.asList(group.getScopeComponents()).contains(componentName)) {
                     return group;
                 }
             }
@@ -972,6 +974,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         assertTrue(currentReadTimestampMs.getValue() > 0);
     }
 
+    @SuppressWarnings("unchecked")
     private void validateEnumeratorMetrics(
             MetricGroup enumeratorMetricGroup,
             boolean isSnapshotPhase,
@@ -1012,6 +1015,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                 ((Gauge<Integer>) readerMetrics.get(NUM_SNAPSHOT_SPLITS_REMAINING)).getValue());
     }
 
+    @SuppressWarnings("unchecked")
     private void validateEnumeratorPerTableMetrics(
             MetricGroup metricGroup,
             Integer numSnapshotSplitsProcessed,
