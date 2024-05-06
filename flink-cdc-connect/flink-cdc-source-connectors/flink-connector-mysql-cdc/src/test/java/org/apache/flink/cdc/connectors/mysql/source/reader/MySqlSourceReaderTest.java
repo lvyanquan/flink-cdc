@@ -99,6 +99,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isH
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isSchemaChangeEvent;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isWatermarkEvent;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSplitEnumeratorContext;
 import static org.apache.flink.core.io.InputStatus.MORE_AVAILABLE;
 import static org.apache.flink.util.Preconditions.checkState;
 import static org.junit.Assert.assertEquals;
@@ -309,9 +310,9 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         sourceConfig,
                         DEFAULT_PARALLELISM,
                         tableNames.stream().map(TableId::parse).collect(Collectors.toList()),
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        false);
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSplit> splits = new ArrayList<>();
         MySqlSnapshotSplit split = (MySqlSnapshotSplit) assigner.getNext().get();
         splits.add(split);
@@ -365,9 +366,9 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         sourceConfig,
                         DEFAULT_PARALLELISM,
                         Collections.singletonList(TableId.parse(tableName)),
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        false);
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
         // should contain only one split
         assertFalse(assigner.getNext().isPresent());
@@ -506,7 +507,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
 
     private MySqlSplit createBinlogSplit(MySqlSourceConfig sourceConfig) {
         MySqlBinlogSplitAssigner binlogSplitAssigner =
-                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSourceEnumeratorMetrics());
+                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext());
         binlogSplitAssigner.open();
         return binlogSplitAssigner.getNext().get();
     }

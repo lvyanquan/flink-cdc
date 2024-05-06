@@ -630,12 +630,9 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
             MySqlSourceConfig sourceConfig, List<TableId> remainingTables) {
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig,
-                        DEFAULT_PARALLELISM,
-                        remainingTables,
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        sourceConfig, DEFAULT_PARALLELISM, remainingTables, false);
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSplit> mySqlSplitList = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> mySqlSplit = assigner.getNext();

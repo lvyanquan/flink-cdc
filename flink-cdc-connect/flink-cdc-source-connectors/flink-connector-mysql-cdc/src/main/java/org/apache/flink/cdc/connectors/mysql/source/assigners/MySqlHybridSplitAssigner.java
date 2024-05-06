@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.assigners;
 
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.HybridPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
@@ -56,42 +57,36 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     private final MySqlSnapshotSplitAssigner snapshotSplitAssigner;
 
-    private final MySqlSourceEnumeratorMetrics enumeratorMetrics;
+    private final SplitEnumeratorContext<MySqlSplit> enumeratorContext;
+    private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     public MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             List<TableId> remainingTables,
             boolean isTableIdCaseSensitive,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig,
-                        currentParallelism,
-                        remainingTables,
-                        isTableIdCaseSensitive,
-                        enumeratorMetrics),
+                        sourceConfig, currentParallelism, remainingTables, isTableIdCaseSensitive),
                 false,
                 sourceConfig.getSplitMetaGroupSize(),
-                enumeratorMetrics);
+                enumeratorContext);
     }
 
     public MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             HybridPendingSplitsState checkpoint,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig,
-                        currentParallelism,
-                        checkpoint.getSnapshotPendingSplits(),
-                        enumeratorMetrics),
+                        sourceConfig, currentParallelism, checkpoint.getSnapshotPendingSplits()),
                 checkpoint.isBinlogSplitAssigned(),
                 sourceConfig.getSplitMetaGroupSize(),
-                enumeratorMetrics);
+                enumeratorContext);
     }
 
     private MySqlHybridSplitAssigner(
@@ -99,22 +94,26 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             MySqlSnapshotSplitAssigner snapshotSplitAssigner,
             boolean isBinlogSplitAssigned,
             int splitMetaGroupSize,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this.sourceConfig = sourceConfig;
         this.snapshotSplitAssigner = snapshotSplitAssigner;
         this.isBinlogSplitAssigned = isBinlogSplitAssigned;
         this.splitMetaGroupSize = splitMetaGroupSize;
-        this.enumeratorMetrics = enumeratorMetrics;
+        this.enumeratorContext = enumeratorContext;
     }
 
     @Override
     public void open() {
+        this.enumeratorMetrics = new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup());
+
         if (isBinlogSplitAssigned) {
             enumeratorMetrics.enterBinlogReading();
         } else {
             enumeratorMetrics.exitBinlogReading();
         }
+
         snapshotSplitAssigner.open();
+        snapshotSplitAssigner.initEnumeratorMetrics(enumeratorMetrics);
     }
 
     @Override

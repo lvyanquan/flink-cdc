@@ -431,14 +431,11 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration,
-                        DEFAULT_PARALLELISM,
-                        new ArrayList<>(),
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        configuration, DEFAULT_PARALLELISM, new ArrayList<>(), false);
 
         assertTrue(assigner.needToDiscoveryTables());
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assertTrue(assigner.getNext().isPresent());
         assertFalse(assigner.needToDiscoveryTables());
     }
@@ -492,11 +489,7 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         .collect(Collectors.toList());
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration,
-                        DEFAULT_PARALLELISM,
-                        remainingTables,
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        configuration, DEFAULT_PARALLELISM, remainingTables, false);
         return getSplitsFromAssigner(assigner);
     }
 
@@ -589,16 +582,14 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         true,
                         ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
         final MySqlSnapshotSplitAssigner assigner =
-                new MySqlSnapshotSplitAssigner(
-                        configuration,
-                        DEFAULT_PARALLELISM,
-                        checkpoint,
-                        getMySqlSourceEnumeratorMetrics());
+                new MySqlSnapshotSplitAssigner(configuration, DEFAULT_PARALLELISM, checkpoint);
         return getSplitsFromAssigner(assigner);
     }
 
     private List<String> getSplitsFromAssigner(final MySqlSnapshotSplitAssigner assigner) {
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
+
         List<MySqlSplit> sqlSplits = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> split = assigner.getNext();

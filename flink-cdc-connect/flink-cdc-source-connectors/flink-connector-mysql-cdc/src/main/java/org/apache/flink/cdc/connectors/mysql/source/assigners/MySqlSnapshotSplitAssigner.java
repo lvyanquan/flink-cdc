@@ -80,7 +80,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     // the table that need to be split into chunks
     private final List<TableId> remainingTables;
     private final boolean isRemainingTablesCheckpointed;
-    private final MySqlSourceEnumeratorMetrics enumeratorMetrics;
+    private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     private final MySqlPartition partition;
     private final Object lock = new Object();
@@ -97,8 +97,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             List<TableId> remainingTables,
-            boolean isTableIdCaseSensitive,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            boolean isTableIdCaseSensitive) {
         this(
                 sourceConfig,
                 currentParallelism,
@@ -111,15 +110,13 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 remainingTables,
                 isTableIdCaseSensitive,
                 true,
-                ChunkSplitterState.NO_SPLITTING_TABLE_STATE,
-                enumeratorMetrics);
+                ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
     }
 
     public MySqlSnapshotSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
-            SnapshotPendingSplitsState checkpoint,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            SnapshotPendingSplitsState checkpoint) {
         this(
                 sourceConfig,
                 currentParallelism,
@@ -132,8 +129,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 checkpoint.getRemainingTables(),
                 checkpoint.isTableIdCaseSensitive(),
                 checkpoint.isRemainingTablesCheckpointed(),
-                checkpoint.getChunkSplitterState(),
-                enumeratorMetrics);
+                checkpoint.getChunkSplitterState());
     }
 
     private MySqlSnapshotSplitAssigner(
@@ -148,8 +144,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             List<TableId> remainingTables,
             boolean isTableIdCaseSensitive,
             boolean isRemainingTablesCheckpointed,
-            ChunkSplitterState chunkSplitterState,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            ChunkSplitterState chunkSplitterState) {
         this.sourceConfig = sourceConfig;
         this.currentParallelism = currentParallelism;
         this.alreadyProcessedTables = alreadyProcessedTables;
@@ -175,7 +170,6 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 createChunkSplitter(sourceConfig, isTableIdCaseSensitive, chunkSplitterState);
         this.partition =
                 new MySqlPartition(sourceConfig.getMySqlConnectorConfig().getLogicalName());
-        this.enumeratorMetrics = enumeratorMetrics;
     }
 
     @Override
@@ -184,19 +178,23 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         discoveryCaptureTables();
         captureNewlyAddedTables();
         startAsynchronouslySplit();
-        initEnumeratorMetrics();
     }
 
-    private void initEnumeratorMetrics() {
-        enumeratorMetrics.enterSnapshotPhase();
-        enumeratorMetrics.registerMetrics(
+    /** This should be invoked after this class's open method. */
+    public void initEnumeratorMetrics(MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+        this.enumeratorMetrics = enumeratorMetrics;
+
+        this.enumeratorMetrics.enterSnapshotPhase();
+        this.enumeratorMetrics.registerMetrics(
                 alreadyProcessedTables::size, assignedSplits::size, remainingSplits::size);
-        enumeratorMetrics.addNewTables(computeTablesPendingSnapshot());
+        this.enumeratorMetrics.addNewTables(computeTablesPendingSnapshot());
         for (MySqlSchemalessSnapshotSplit snapshotSplit : remainingSplits) {
-            enumeratorMetrics.getTableMetrics(snapshotSplit.getTableId()).addNewSplits(1);
+            this.enumeratorMetrics.getTableMetrics(snapshotSplit.getTableId()).addNewSplits(1);
         }
         for (MySqlSchemalessSnapshotSplit snapshotSplit : assignedSplits.values()) {
-            enumeratorMetrics.getTableMetrics(snapshotSplit.getTableId()).addProcessedSplits(1);
+            this.enumeratorMetrics
+                    .getTableMetrics(snapshotSplit.getTableId())
+                    .addProcessedSplits(1);
         }
     }
 

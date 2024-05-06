@@ -83,6 +83,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffsetUt
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getSnapshotSplitInfo;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getStartingOffsetOfBinlogSplit;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSplitEnumeratorContext;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -858,7 +859,7 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
 
     private MySqlBinlogSplit createBinlogSplit(MySqlSourceConfig sourceConfig) throws Exception {
         MySqlBinlogSplitAssigner binlogSplitAssigner =
-                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSourceEnumeratorMetrics());
+                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext());
         binlogSplitAssigner.open();
         try (MySqlConnection jdbc = DebeziumUtils.createMySqlConnection(sourceConfig)) {
             Map<TableId, TableChanges.TableChange> tableSchemas =
@@ -1135,12 +1136,9 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig,
-                        DEFAULT_PARALLELISM,
-                        remainingTables,
-                        false,
-                        getMySqlSourceEnumeratorMetrics());
+                        sourceConfig, DEFAULT_PARALLELISM, remainingTables, false);
         assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSnapshotSplit> mySqlSplits = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> mySqlSplit = assigner.getNext();

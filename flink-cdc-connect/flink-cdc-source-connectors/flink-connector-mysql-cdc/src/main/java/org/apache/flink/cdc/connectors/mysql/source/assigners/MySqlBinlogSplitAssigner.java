@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.assigners;
 
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.BinlogPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
@@ -44,31 +45,33 @@ public class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
 
     private boolean isBinlogSplitAssigned;
 
-    private final MySqlSourceEnumeratorMetrics enumeratorMetrics;
+    private final SplitEnumeratorContext<MySqlSplit> enumeratorContext;
+    private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     public MySqlBinlogSplitAssigner(
-            MySqlSourceConfig sourceConfig, MySqlSourceEnumeratorMetrics enumeratorMetrics) {
-        this(sourceConfig, false, enumeratorMetrics);
+            MySqlSourceConfig sourceConfig, SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+        this(sourceConfig, false, enumeratorContext);
     }
 
     public MySqlBinlogSplitAssigner(
             MySqlSourceConfig sourceConfig,
             BinlogPendingSplitsState checkpoint,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
-        this(sourceConfig, checkpoint.isBinlogSplitAssigned(), enumeratorMetrics);
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+        this(sourceConfig, checkpoint.isBinlogSplitAssigned(), enumeratorContext);
     }
 
     private MySqlBinlogSplitAssigner(
             MySqlSourceConfig sourceConfig,
             boolean isBinlogSplitAssigned,
-            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this.sourceConfig = sourceConfig;
         this.isBinlogSplitAssigned = isBinlogSplitAssigned;
-        this.enumeratorMetrics = enumeratorMetrics;
+        this.enumeratorContext = enumeratorContext;
     }
 
     @Override
     public void open() {
+        this.enumeratorMetrics = new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup());
         if (isBinlogSplitAssigned) {
             enumeratorMetrics.enterBinlogReading();
         } else {

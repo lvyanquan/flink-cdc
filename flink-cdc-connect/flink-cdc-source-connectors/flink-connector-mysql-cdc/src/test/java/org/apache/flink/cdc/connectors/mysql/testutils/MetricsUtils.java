@@ -17,18 +17,17 @@
 
 package org.apache.flink.cdc.connectors.mysql.testutils;
 
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
-import org.apache.flink.runtime.metrics.groups.InternalOperatorCoordinatorMetricGroup;
-import org.apache.flink.runtime.metrics.groups.InternalSplitEnumeratorMetricGroup;
-import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 
 /** The test utils for metrics. */
 public class MetricsUtils {
+    public static SplitEnumeratorContext getMySqlSplitEnumeratorContext() {
+        return new MockSplitEnumeratorContext<>(1);
+    }
+
     public static MySqlSourceEnumeratorMetrics getMySqlSourceEnumeratorMetrics() {
-        return new MySqlSourceEnumeratorMetrics(
-                new InternalSplitEnumeratorMetricGroup(
-                        new InternalOperatorCoordinatorMetricGroup(
-                                UnregisteredMetricGroups
-                                        .createUnregisteredJobManagerOperatorMetricGroup())));
+        return new MySqlSourceEnumeratorMetrics(getMySqlSplitEnumeratorContext().metricGroup());
     }
 }
