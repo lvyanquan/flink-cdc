@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -110,7 +111,11 @@ public class MySqlHybridSplitAssignerTest extends MySqlSourceTestBase {
         HybridPendingSplitsState checkpoint =
                 new HybridPendingSplitsState(snapshotPendingSplitsState, false);
         final MySqlHybridSplitAssigner assigner =
-                new MySqlHybridSplitAssigner(configuration, DEFAULT_PARALLELISM, checkpoint);
+                new MySqlHybridSplitAssigner(
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        checkpoint,
+                        getMySqlSourceEnumeratorMetrics());
 
         // step 2. Get the MySqlBinlogSplit after all snapshot splits finished
         Optional<MySqlSplit> binlogSplit = assigner.getNext();
@@ -152,7 +157,12 @@ public class MySqlHybridSplitAssignerTest extends MySqlSourceTestBase {
 
         // Create and initialize assigner
         MySqlHybridSplitAssigner assigner =
-                new MySqlHybridSplitAssigner(sourceConfig, 1, new ArrayList<>(), false);
+                new MySqlHybridSplitAssigner(
+                        sourceConfig,
+                        1,
+                        new ArrayList<>(),
+                        false,
+                        getMySqlSourceEnumeratorMetrics());
         assigner.open();
 
         // Get all snapshot splits

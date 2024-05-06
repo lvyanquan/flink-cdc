@@ -31,9 +31,14 @@ import org.apache.flink.cdc.connectors.mysql.testutils.TestTable;
 import org.apache.flink.cdc.connectors.mysql.testutils.TestTableSchemas;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
+import org.apache.flink.cdc.debezium.StringDebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.Metric;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
@@ -82,6 +87,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -94,8 +100,16 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static org.apache.flink.api.common.JobStatus.RUNNING;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.IS_BINLOG_READING;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.IS_SNAPSHOTTING;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_SNAPSHOT_SPLITS_PROCESSED;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_SNAPSHOT_SPLITS_REMAINING;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_TABLES_REMAINING;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_TABLES_SNAPSHOTTED;
 import static org.apache.flink.util.Preconditions.checkState;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /** IT tests for {@link MySqlSource}. */
 @RunWith(Parameterized.class)
@@ -564,6 +578,183 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         // seen as stream event. This will occur data duplicate. For example, user_20 will be
         // deleted twice, and user_15213 will be inserted twice.
         assertEqualsInAnyOrder(expectedRecords, records);
+    }
+
+    @Test
+    public void testSplitEnumeratorMetrics() throws Exception {
+        String customerTable = "customers";
+        String anotherCustomerTable = "customers_1";
+        customDatabase.createAndInitialize();
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        MySqlSource<String> source =
+                MySqlSource.<String>builder()
+                        .hostname(MYSQL_CONTAINER.getHost())
+                        .port(MYSQL_CONTAINER.getDatabasePort())
+                        .databaseList(customDatabase.getDatabaseName())
+                        .tableList(
+                                customDatabase.qualifiedTableName(customerTable),
+                                customDatabase.qualifiedTableName(anotherCustomerTable))
+                        .username(customDatabase.getUsername())
+                        .password(customDatabase.getPassword())
+                        .deserializer(new StringDebeziumDeserializationSchema())
+                        .serverId(getServerId())
+                        .includeSchemaChanges(true)
+                        .build();
+        DataStreamSource<String> stream =
+                env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
+        CollectResultIterator<String> iterator = addCollector(env, stream);
+        JobClient jobClient = env.executeAsync();
+        iterator.setJobClient(jobClient);
+        // ---------------------------- Snapshot phase ------------------------------
+        // Wait until we receive all 42 snapshot records
+        int expectedSnapshotRecordsInCustomerTable = 21;
+        int expectedSnapshotRecordsInAnotherCustomerTable = 21;
+        int numSnapshotRecordsReceived = 0;
+        while (numSnapshotRecordsReceived
+                        < expectedSnapshotRecordsInCustomerTable
+                                + expectedSnapshotRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numSnapshotRecordsReceived++;
+        }
+        Set<MetricGroup> splitEnumeratorMetricGroups = metricReporter.findGroups("enumerator");
+        MetricGroup enumeratorMetricGroup =
+                splitEnumeratorMetricGroups.stream()
+                        .filter(
+                                mg ->
+                                        !Arrays.stream(mg.getScopeComponents())
+                                                .anyMatch(s -> s.equals("table")))
+                        .findFirst()
+                        .get();
+        validateEnumeratorMetrics(enumeratorMetricGroup, false, 2, 0, 2, 0);
+        // Per-table metrics
+        MetricGroup customerTableMetricGroup = getEnumeratorMetricGroupByTableName(customerTable);
+        MetricGroup anotherCustomerTableMetricGroup =
+                getEnumeratorMetricGroupByTableName(anotherCustomerTable);
+        validateEnumeratorPerTableMetrics(customerTableMetricGroup, 1, 0);
+        validateEnumeratorPerTableMetrics(anotherCustomerTableMetricGroup, 1, 0);
+        // --------------------------------- Binlog phase -----------------------------
+        makeFirstPartBinlogEvents(
+                getConnection(), customDatabase.qualifiedTableName(customerTable));
+        makeFirstPartBinlogEvents(
+                getConnection(), customDatabase.qualifiedTableName(anotherCustomerTable));
+        // Wait until we receive 8 changes made above
+        int expectedBinlogRecordsInCustomerTable = 4;
+        int expectedBinlogRecordsInAnotherCustomerTable = 4;
+        int numBinlogRecordsReceived = 0;
+        while (numBinlogRecordsReceived
+                        < expectedBinlogRecordsInCustomerTable
+                                + expectedBinlogRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numBinlogRecordsReceived++;
+        }
+        validateEnumeratorMetrics(enumeratorMetricGroup, false, 2, 0, 2, 0);
+        validateEnumeratorPerTableMetrics(customerTableMetricGroup, 1, 0);
+        validateEnumeratorPerTableMetrics(anotherCustomerTableMetricGroup, 1, 0);
+        jobClient.cancel().get();
+        iterator.close();
+    }
+
+    private MetricGroup getReaderMetricGroupByTableName(String tableName) {
+        return getMetricGroupByTableName(tableName, "taskmanager");
+    }
+
+    private MetricGroup getEnumeratorMetricGroupByTableName(String tableName) {
+        return getMetricGroupByTableName(tableName, "jobmanager");
+    }
+
+    private MetricGroup getMetricGroupByTableName(String tableName, String componentName) {
+        Set<MetricGroup> groups = metricReporter.findGroups(tableName);
+        for (MetricGroup group : groups) {
+            if (tableName.equals(group.getAllVariables().get("<table>"))) {
+                if (Arrays.stream(group.getScopeComponents())
+                        .anyMatch(s -> s.equals(componentName))) {
+                    return group;
+                }
+            }
+        }
+        fail(String.format("Could not find metric group with table name '%s'", tableName));
+        return null;
+    }
+
+    private void validateEnumeratorMetrics(
+            MetricGroup enumeratorMetricGroup,
+            boolean isSnapshotPhase,
+            Integer numTablesSnapshotted,
+            Integer numTablesRemaining,
+            Integer numSnapshotSplitsProcessed,
+            Integer numSnapshotSplitsRemaining) {
+        Map<String, Metric> readerMetrics = metricReporter.getMetricsByGroup(enumeratorMetricGroup);
+        // isSnapshotting
+        assertTrue(readerMetrics.containsKey(IS_SNAPSHOTTING));
+        assertEquals(
+                Integer.valueOf(isSnapshotPhase ? 1 : 0),
+                ((Gauge<Integer>) readerMetrics.get(IS_SNAPSHOTTING)).getValue());
+        // isBinlogReading
+        assertTrue(readerMetrics.containsKey(IS_BINLOG_READING));
+        assertEquals(
+                Integer.valueOf(isSnapshotPhase ? 0 : 1),
+                ((Gauge<Integer>) readerMetrics.get(IS_BINLOG_READING)).getValue());
+        // numTablesSnapshotted
+        assertTrue(readerMetrics.containsKey(NUM_TABLES_SNAPSHOTTED));
+        assertEquals(
+                numTablesSnapshotted,
+                ((Gauge<Integer>) readerMetrics.get(NUM_TABLES_SNAPSHOTTED)).getValue());
+        // numTablesRemaining
+        assertTrue(readerMetrics.containsKey(NUM_TABLES_REMAINING));
+        assertEquals(
+                numTablesRemaining,
+                ((Gauge<Integer>) readerMetrics.get(NUM_TABLES_REMAINING)).getValue());
+        // numSnapshotSplitsProcessed
+        assertTrue(readerMetrics.containsKey(NUM_SNAPSHOT_SPLITS_PROCESSED));
+        assertEquals(
+                numSnapshotSplitsProcessed,
+                ((Gauge<Integer>) readerMetrics.get(NUM_SNAPSHOT_SPLITS_PROCESSED)).getValue());
+        // numSnapshotSplitsRemaining
+        assertTrue(readerMetrics.containsKey(NUM_SNAPSHOT_SPLITS_REMAINING));
+        assertEquals(
+                numSnapshotSplitsRemaining,
+                ((Gauge<Integer>) readerMetrics.get(NUM_SNAPSHOT_SPLITS_REMAINING)).getValue());
+    }
+
+    private void validateEnumeratorPerTableMetrics(
+            MetricGroup metricGroup,
+            Integer numSnapshotSplitsProcessed,
+            Integer numSnapshotSplitsRemaining) {
+        // Per-table metrics
+        Map<String, Metric> readerMetrics = metricReporter.getMetricsByGroup(metricGroup);
+        // numSnapshotSplitsProcessed per-table
+        assertTrue(readerMetrics.containsKey(NUM_SNAPSHOT_SPLITS_PROCESSED));
+        assertEquals(
+                numSnapshotSplitsProcessed,
+                ((Gauge<Integer>) readerMetrics.get(NUM_SNAPSHOT_SPLITS_PROCESSED)).getValue());
+        // numSnapshotSplitsRemaining per-table
+        assertTrue(readerMetrics.containsKey(NUM_SNAPSHOT_SPLITS_REMAINING));
+        assertEquals(
+                numSnapshotSplitsRemaining,
+                ((Gauge<Integer>) readerMetrics.get(NUM_SNAPSHOT_SPLITS_REMAINING)).getValue());
+    }
+
+    private <T> CollectResultIterator<T> addCollector(
+            StreamExecutionEnvironment env, DataStream<T> stream) {
+        TypeSerializer<T> serializer =
+                stream.getTransformation().getOutputType().createSerializer(env.getConfig());
+        String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
+        CollectSinkOperatorFactory<T> factory =
+                new CollectSinkOperatorFactory<>(serializer, accumulatorName);
+        CollectSinkOperator<T> operator = (CollectSinkOperator<T>) factory.getOperator();
+        CollectResultIterator<T> iterator =
+                new CollectResultIterator<>(
+                        operator.getOperatorIdFuture(),
+                        serializer,
+                        accumulatorName,
+                        env.getCheckpointConfig());
+        CollectStreamSink<T> sink = new CollectStreamSink<>(stream, factory);
+        sink.name("Data stream collect sink");
+        env.addOperator(sink.getTransformation());
+        return iterator;
     }
 
     private List<String> testBackfillWhenWritingEvents(

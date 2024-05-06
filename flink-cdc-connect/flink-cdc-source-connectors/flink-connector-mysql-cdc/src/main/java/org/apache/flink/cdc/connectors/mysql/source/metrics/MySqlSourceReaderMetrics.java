@@ -22,8 +22,17 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.metrics.MetricNames;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** A collection class for handling metrics in {@link MySqlSourceReader}. */
 public class MySqlSourceReaderMetrics {
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlSourceReaderMetrics.class);
+
+    // Constants
+    public static final long UNDEFINED = -1;
+    public static final String DATABASE_GROUP_KEY = "database";
+    public static final String TABLE_GROUP_KEY = "table";
 
     private final MetricGroup metricGroup;
 

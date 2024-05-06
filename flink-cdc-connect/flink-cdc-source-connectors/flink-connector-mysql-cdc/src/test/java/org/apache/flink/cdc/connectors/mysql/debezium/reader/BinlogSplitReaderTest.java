@@ -82,6 +82,7 @@ import static org.apache.flink.cdc.connectors.mysql.MySqlTestUtils.assertContain
 import static org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffsetUtils.initializeEffectiveOffset;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getSnapshotSplitInfo;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getStartingOffsetOfBinlogSplit;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -856,7 +857,8 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
     }
 
     private MySqlBinlogSplit createBinlogSplit(MySqlSourceConfig sourceConfig) throws Exception {
-        MySqlBinlogSplitAssigner binlogSplitAssigner = new MySqlBinlogSplitAssigner(sourceConfig);
+        MySqlBinlogSplitAssigner binlogSplitAssigner =
+                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSourceEnumeratorMetrics());
         binlogSplitAssigner.open();
         try (MySqlConnection jdbc = DebeziumUtils.createMySqlConnection(sourceConfig)) {
             Map<TableId, TableChanges.TableChange> tableSchemas =
@@ -1133,7 +1135,11 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, DEFAULT_PARALLELISM, remainingTables, false);
+                        sourceConfig,
+                        DEFAULT_PARALLELISM,
+                        remainingTables,
+                        false,
+                        getMySqlSourceEnumeratorMetrics());
         assigner.open();
         List<MySqlSnapshotSplit> mySqlSplits = new ArrayList<>();
         while (true) {

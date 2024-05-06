@@ -29,6 +29,7 @@ import org.junit.Test;
 import java.time.ZoneId;
 import java.util.Optional;
 
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -71,7 +72,9 @@ public class MySqlBinlogSplitAssignerTest {
     private void checkAssignedBinlogOffset(
             StartupOptions startupOptions, BinlogOffset expectedOffset) {
         // Set starting from the given option
-        MySqlBinlogSplitAssigner assigner = new MySqlBinlogSplitAssigner(getConfig(startupOptions));
+        MySqlBinlogSplitAssigner assigner =
+                new MySqlBinlogSplitAssigner(
+                        getConfig(startupOptions), getMySqlSourceEnumeratorMetrics());
         // Get splits from assigner
         Optional<MySqlSplit> optionalSplit = assigner.getNext();
         assertTrue(optionalSplit.isPresent());

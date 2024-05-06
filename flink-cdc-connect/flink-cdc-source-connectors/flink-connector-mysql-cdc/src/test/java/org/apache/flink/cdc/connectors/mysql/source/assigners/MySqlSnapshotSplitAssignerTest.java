@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset.ofEarliest;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -430,7 +431,11 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration, DEFAULT_PARALLELISM, new ArrayList<>(), false);
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        new ArrayList<>(),
+                        false,
+                        getMySqlSourceEnumeratorMetrics());
 
         assertTrue(assigner.needToDiscoveryTables());
         assigner.open();
@@ -487,7 +492,11 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         .collect(Collectors.toList());
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration, DEFAULT_PARALLELISM, remainingTables, false);
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        remainingTables,
+                        false,
+                        getMySqlSourceEnumeratorMetrics());
         return getSplitsFromAssigner(assigner);
     }
 
@@ -580,7 +589,11 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         true,
                         ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
         final MySqlSnapshotSplitAssigner assigner =
-                new MySqlSnapshotSplitAssigner(configuration, DEFAULT_PARALLELISM, checkpoint);
+                new MySqlSnapshotSplitAssigner(
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        checkpoint,
+                        getMySqlSourceEnumeratorMetrics());
         return getSplitsFromAssigner(assigner);
     }
 

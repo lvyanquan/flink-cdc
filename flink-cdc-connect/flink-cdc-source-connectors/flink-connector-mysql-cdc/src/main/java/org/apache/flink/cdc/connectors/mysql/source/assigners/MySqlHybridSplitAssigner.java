@@ -20,6 +20,7 @@ package org.apache.flink.cdc.connectors.mysql.source.assigners;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.HybridPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
@@ -55,44 +56,64 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     private final MySqlSnapshotSplitAssigner snapshotSplitAssigner;
 
+    private final MySqlSourceEnumeratorMetrics enumeratorMetrics;
+
     public MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             List<TableId> remainingTables,
-            boolean isTableIdCaseSensitive) {
+            boolean isTableIdCaseSensitive,
+            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, currentParallelism, remainingTables, isTableIdCaseSensitive),
+                        sourceConfig,
+                        currentParallelism,
+                        remainingTables,
+                        isTableIdCaseSensitive,
+                        enumeratorMetrics),
                 false,
-                sourceConfig.getSplitMetaGroupSize());
+                sourceConfig.getSplitMetaGroupSize(),
+                enumeratorMetrics);
     }
 
     public MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
-            HybridPendingSplitsState checkpoint) {
+            HybridPendingSplitsState checkpoint,
+            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, currentParallelism, checkpoint.getSnapshotPendingSplits()),
+                        sourceConfig,
+                        currentParallelism,
+                        checkpoint.getSnapshotPendingSplits(),
+                        enumeratorMetrics),
                 checkpoint.isBinlogSplitAssigned(),
-                sourceConfig.getSplitMetaGroupSize());
+                sourceConfig.getSplitMetaGroupSize(),
+                enumeratorMetrics);
     }
 
     private MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             MySqlSnapshotSplitAssigner snapshotSplitAssigner,
             boolean isBinlogSplitAssigned,
-            int splitMetaGroupSize) {
+            int splitMetaGroupSize,
+            MySqlSourceEnumeratorMetrics enumeratorMetrics) {
         this.sourceConfig = sourceConfig;
         this.snapshotSplitAssigner = snapshotSplitAssigner;
         this.isBinlogSplitAssigned = isBinlogSplitAssigned;
         this.splitMetaGroupSize = splitMetaGroupSize;
+        this.enumeratorMetrics = enumeratorMetrics;
     }
 
     @Override
     public void open() {
+        if (isBinlogSplitAssigned) {
+            enumeratorMetrics.enterBinlogReading();
+        } else {
+            enumeratorMetrics.exitBinlogReading();
+        }
         snapshotSplitAssigner.open();
     }
 
@@ -103,6 +124,7 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             return Optional.empty();
         }
         if (snapshotSplitAssigner.noMoreSplits()) {
+            enumeratorMetrics.exitSnapshotPhase();
             // binlog split assigning
             if (isBinlogSplitAssigned) {
                 // no more splits for the assigner
@@ -113,11 +135,13 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
                 // assigning the binlog split. Otherwise, records emitted from binlog split
                 // might be out-of-order in terms of same primary key with snapshot splits.
                 isBinlogSplitAssigned = true;
+                enumeratorMetrics.enterBinlogReading();
                 return Optional.of(createBinlogSplit());
             } else if (AssignerStatus.isNewlyAddedAssigningFinished(
                     snapshotSplitAssigner.getAssignerStatus())) {
                 // do not need to create binlog, but send event to wake up the binlog reader
                 isBinlogSplitAssigned = true;
+                enumeratorMetrics.enterBinlogReading();
                 return Optional.empty();
             } else {
                 // binlog split is not ready by now
@@ -153,6 +177,7 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             } else {
                 // we don't store the split, but will re-create binlog split later
                 isBinlogSplitAssigned = false;
+                enumeratorMetrics.exitBinlogReading();
             }
         }
         snapshotSplitAssigner.addSplits(snapshotSplits);

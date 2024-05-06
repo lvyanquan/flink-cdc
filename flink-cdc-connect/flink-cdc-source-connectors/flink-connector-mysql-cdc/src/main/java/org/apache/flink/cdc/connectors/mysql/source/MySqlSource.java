@@ -40,6 +40,7 @@ import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplit
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.source.enumerator.MySqlSourceEnumerator;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.reader.MySqlRecordEmitter;
 import org.apache.flink.cdc.connectors.mysql.source.reader.MySqlSourceReader;
@@ -199,6 +200,9 @@ public class MySqlSource<T>
         final MySqlValidator validator = new MySqlValidator(sourceConfig);
         validator.validate();
 
+        final MySqlSourceEnumeratorMetrics enumeratorMetrics =
+                new MySqlSourceEnumeratorMetrics(enumContext.metricGroup());
+
         final MySqlSplitAssigner splitAssigner;
         if (!sourceConfig.getStartupOptions().isStreamOnly()) {
             try (JdbcConnection jdbc = DebeziumUtils.openJdbcConnection(sourceConfig)) {
@@ -208,13 +212,14 @@ public class MySqlSource<T>
                                 sourceConfig,
                                 enumContext.currentParallelism(),
                                 new ArrayList<>(),
-                                isTableIdCaseSensitive);
+                                isTableIdCaseSensitive,
+                                enumeratorMetrics);
             } catch (Exception e) {
                 throw new FlinkRuntimeException(
                         "Failed to discover captured tables for enumerator", e);
             }
         } else {
-            splitAssigner = new MySqlBinlogSplitAssigner(sourceConfig);
+            splitAssigner = new MySqlBinlogSplitAssigner(sourceConfig, enumeratorMetrics);
         }
 
         return new MySqlSourceEnumerator(
@@ -227,17 +232,20 @@ public class MySqlSource<T>
 
         MySqlSourceConfig sourceConfig = configFactory.createConfig(0, ENUMERATOR_SERVER_NAME);
 
+        final MySqlSourceEnumeratorMetrics enumeratorMetrics =
+                new MySqlSourceEnumeratorMetrics(enumContext.metricGroup());
         final MySqlSplitAssigner splitAssigner;
         if (checkpoint instanceof HybridPendingSplitsState) {
             splitAssigner =
                     new MySqlHybridSplitAssigner(
                             sourceConfig,
                             enumContext.currentParallelism(),
-                            (HybridPendingSplitsState) checkpoint);
+                            (HybridPendingSplitsState) checkpoint,
+                            enumeratorMetrics);
         } else if (checkpoint instanceof BinlogPendingSplitsState) {
             splitAssigner =
                     new MySqlBinlogSplitAssigner(
-                            sourceConfig, (BinlogPendingSplitsState) checkpoint);
+                            sourceConfig, (BinlogPendingSplitsState) checkpoint, enumeratorMetrics);
         } else {
             throw new UnsupportedOperationException(
                     "Unsupported restored PendingSplitsState: " + checkpoint);
