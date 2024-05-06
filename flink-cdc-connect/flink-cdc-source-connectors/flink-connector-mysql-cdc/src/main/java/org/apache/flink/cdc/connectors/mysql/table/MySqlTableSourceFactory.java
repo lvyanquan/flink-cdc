@@ -54,7 +54,6 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
-import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ENABLE_READING_ARCHIVED_BINLOG;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
@@ -128,10 +127,8 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
 
         // RDS related options
-        validateRdsOptions(config);
         AliyunRdsConfig rdsConfig = null;
-        Boolean rdsReadingArchivedBinlogEnabled = config.get(RDS_ENABLE_READING_ARCHIVED_BINLOG);
-        if (rdsReadingArchivedBinlogEnabled) {
+        if (isReadingArchivedBinlogEnabled(config)) {
             rdsConfig = AliyunRdsConfig.fromConfig(config);
         }
 
@@ -209,7 +206,6 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
 
-        options.add(RDS_ENABLE_READING_ARCHIVED_BINLOG);
         options.add(RDS_REGION_ID);
         options.add(RDS_ACCESS_KEY_ID);
         options.add(RDS_ACCESS_KEY_SECRET);
@@ -406,24 +402,30 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         }
     }
 
-    private static void validateRdsOptions(ReadableConfig config) {
-        if (config.get(RDS_ENABLE_READING_ARCHIVED_BINLOG)) {
-            checkState(
-                    config.getOptional(RDS_ACCESS_KEY_ID).isPresent(),
-                    "'%s' is required if reading archived binlog is enabled.",
-                    RDS_ACCESS_KEY_ID.key());
-            checkState(
-                    config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent(),
-                    "'%s' is required if reading archived binlog is enabled.",
-                    RDS_ACCESS_KEY_SECRET.key());
-            checkState(
-                    config.getOptional(RDS_DB_INSTANCE_ID).isPresent(),
-                    "'%s' is required if reading archived binlog is enabled.",
-                    RDS_DB_INSTANCE_ID.key());
-            checkState(
-                    config.getOptional(RDS_REGION_ID).isPresent(),
-                    "'%s' is required if reading archived binlog is enabled.",
-                    RDS_REGION_ID.key());
+    private boolean isReadingArchivedBinlogEnabled(ReadableConfig config) {
+        if (config.getOptional(RDS_ACCESS_KEY_ID).isPresent()
+                || config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent()
+                || config.getOptional(RDS_DB_INSTANCE_ID).isPresent()
+                || config.getOptional(RDS_REGION_ID).isPresent()) {
+            // At least one of RDS specific options is specified. We assume that the user want to
+            // use RDS related features, so we need to check if all required options exist.
+            if (config.getOptional(RDS_ACCESS_KEY_ID).isPresent()
+                    && config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent()
+                    && config.getOptional(RDS_DB_INSTANCE_ID).isPresent()
+                    && config.getOptional(RDS_REGION_ID).isPresent()) {
+                return true;
+            } else {
+                throw new ValidationException(
+                        String.format(
+                                "All these 4 options are required to enable RDS related features: \n%s\n%s\n%s\n%s",
+                                RDS_ACCESS_KEY_ID.key(),
+                                RDS_ACCESS_KEY_SECRET.key(),
+                                RDS_DB_INSTANCE_ID.key(),
+                                RDS_REGION_ID.key()));
+            }
+        } else {
+            // None of RDS options exist. We automatically disable RDS related feature.
+            return false;
         }
     }
 }

@@ -27,12 +27,6 @@ import java.time.Duration;
 /** RDS related options. */
 @PublicEvolving
 public class AliyunRdsOptions {
-    @Experimental
-    public static final ConfigOption<Boolean> RDS_ENABLE_READING_ARCHIVED_BINLOG =
-            ConfigOptions.key("rds.enable-reading-archived-binlog")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription("Whether to read archived binlog files on RDS.");
 
     @Experimental
     public static final ConfigOption<String> RDS_REGION_ID =

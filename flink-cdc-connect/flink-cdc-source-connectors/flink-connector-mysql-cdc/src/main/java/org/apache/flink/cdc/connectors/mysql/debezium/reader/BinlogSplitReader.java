@@ -331,9 +331,16 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
             // Notes:
             // 1. Heartbeat event doesn't contain timestamp, so we just keep it
             // 2. Timestamp of event is in epoch millisecond
-            return event ->
-                    EventType.HEARTBEAT.equals(event.getHeader().getEventType())
-                            || event.getHeader().getTimestamp() >= startTimestampSec * 1000;
+            // 3. Keep GTID events to keep GTID set in state updated
+            return event -> {
+                if (EventType.HEARTBEAT.equals(getEventType(event))) {
+                    return true;
+                }
+                if (EventType.GTID.equals(getEventType(event))) {
+                    return true;
+                }
+                return event.getHeader().getTimestamp() >= startTimestampSec * 1000;
+            };
         }
         return event -> true;
     }
@@ -342,6 +349,10 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
         currentTaskRunning = false;
         // Terminate the while loop in MySqlStreamingChangeEventSource's execute method
         changeEventSourceContext.stopChangeEventSource();
+    }
+
+    private EventType getEventType(Event event) {
+        return event.getHeader().getEventType();
     }
 
     @VisibleForTesting

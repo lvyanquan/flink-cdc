@@ -45,7 +45,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_META_GROUP_SIZE;
@@ -572,7 +571,6 @@ public class MySqlTableSourceFactoryTest {
     @Test
     public void testEnablingRDSArchivedBinlog() {
         Map<String, String> options = getAllOptions();
-        options.put("rds.enable-reading-archived-binlog", "true");
         options.put("rds.region-id", "fake-region");
         options.put("rds.access-key-id", "fake-access-key-id");
         options.put("rds.access-key-secret", "fake-access-key-secret");
@@ -820,12 +818,14 @@ public class MySqlTableSourceFactoryTest {
 
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("rds.enable-reading-archived-binlog", "true");
+            properties.put("rds.access-key-id", "fake-key");
         } catch (Throwable t) {
             String msg =
-                    String.format(
-                            "'%s' is required if reading archived binlog is enabled.",
-                            RDS_ACCESS_KEY_ID.key());
+                    "All these 4 options are required to enable RDS related features: \n"
+                            + "rds.access-key-id\n"
+                            + "rds.access-key-secret\n"
+                            + "rds.db-instance-id\n"
+                            + "rds.region-id";
             assertTrue(ExceptionUtils.findThrowableWithMessage(t, msg).isPresent());
         }
     }
