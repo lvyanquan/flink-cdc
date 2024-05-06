@@ -28,6 +28,7 @@ import io.debezium.jdbc.JdbcConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -54,7 +55,7 @@ public class MySqlValidator implements Validator {
     private static final String ALIYUN_RDS_SUFFIX = "mysql.rds.aliyuncs.com";
 
     private final Properties dbzProperties;
-    private final MySqlSourceConfig sourceConfig;
+    private final @Nullable MySqlSourceConfig sourceConfig;
 
     public MySqlValidator(Properties dbzProperties) {
         this.dbzProperties = dbzProperties;
@@ -107,7 +108,8 @@ public class MySqlValidator implements Validator {
         } else if (versionNumbers[0] < 5) {
             isSatisfied = false;
         } else {
-            if (versionNumbers[1] == 6 && sourceConfig.getHostname().endsWith(ALIYUN_RDS_SUFFIX)) {
+            if (versionNumbers[1] == 6
+                    && dbzProperties.getProperty("database.hostname").endsWith(ALIYUN_RDS_SUFFIX)) {
                 LOG.warn(
                         "The MySQL instance is RDS MySQL 5.6, please check it's not a read-only instance manually, the read-only instance can not offer binlog data.");
             }
