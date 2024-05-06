@@ -148,13 +148,11 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     try {
                         while (!rdsBinlogFileQueue.isEmpty()) {
                             RdsBinlogFile rdsBinlogFile = rdsBinlogFileQueue.poll();
-                            LocalBinlogFile localBinlogFile =
-                                    retryOnException(
-                                            () -> downloadBinlogFile(rdsBinlogFile),
-                                            downloadTimeout,
-                                            Throwable.class,
-                                            "downloadBinlogFile");
-                            localBinlogFileQueue.put(localBinlogFile);
+                            retryOnException(
+                                    () -> downloadBinlogFile(rdsBinlogFile),
+                                    downloadTimeout,
+                                    Throwable.class,
+                                    "downloadBinlogFile");
                         }
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to download binlog file", e);
@@ -267,7 +265,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         return rdsBinlogFileQueue;
     }
 
-    private LocalBinlogFile downloadBinlogFile(RdsBinlogFile rdsBinlogFile) throws IOException {
+    private LocalBinlogFile downloadBinlogFile(RdsBinlogFile rdsBinlogFile) throws Exception {
         // Create temporary file
         Path localBinlogPath = binlogFileDirectory.resolve(rdsBinlogFile.getFilename());
         LocalBinlogFile localBinlogFile =
@@ -302,6 +300,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                 localBinlogFile,
                 FileUtils.byteCountToDisplaySize(bytes.length));
         Files.write(localBinlogFile.getPath(), bytes);
+        localBinlogFileQueue.put(localBinlogFile);
         return localBinlogFile;
     }
 
