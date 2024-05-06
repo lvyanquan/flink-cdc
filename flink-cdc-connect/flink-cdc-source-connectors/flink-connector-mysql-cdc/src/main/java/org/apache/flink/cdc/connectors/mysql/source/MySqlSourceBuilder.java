@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.source;
 
 import org.apache.flink.cdc.common.annotation.PublicEvolving;
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
@@ -234,6 +235,17 @@ public class MySqlSourceBuilder<T> {
     /** The interval of heartbeat event. */
     public MySqlSourceBuilder<T> heartbeatInterval(Duration heartbeatInterval) {
         this.configFactory.heartbeatInterval(heartbeatInterval);
+        return this;
+    }
+
+    /**
+     * Whether to support reading from RDS archived binlog files if the starting offset (or
+     * recovering offset from checkpoint) is not available online.
+     *
+     * @param rdsConfig RDS related configurations.
+     */
+    public MySqlSourceBuilder<T> enableReadingRdsArchivedBinlog(AliyunRdsConfig rdsConfig) {
+        this.configFactory.enableReadingRdsArchivedBinlog(rdsConfig);
         return this;
     }
 

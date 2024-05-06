@@ -199,7 +199,8 @@ public class StatefulTaskContext {
 
         MySqlOffsetContext mySqlOffsetContext = loader.load(offset.getOffset());
 
-        if (!isBinlogAvailable(mySqlOffsetContext)) {
+        if (!isBinlogAvailable(mySqlOffsetContext)
+                && !getSourceConfig().isReadRdsArchivedBinlogEnabled()) {
             throw new IllegalStateException(
                     "The connector is trying to read binlog starting at "
                             + mySqlOffsetContext.getSourceInfo()

@@ -39,6 +39,7 @@ import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlOffsetContext;
 import io.debezium.connector.mysql.MySqlStreamingChangeEventSourceMetrics;
+import io.debezium.connector.mysql.MySqlTaskContext;
 import io.debezium.heartbeat.Heartbeat;
 import io.debezium.pipeline.DataChangeEvent;
 import io.debezium.pipeline.source.spi.ChangeEventSource;
@@ -65,6 +66,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+
+import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.createRdsSwitchingContext;
+import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.needToReadRdsArchives;
 
 /**
  * A snapshot reader that reads data from Table in split level, the split is assigned by primary key
@@ -228,6 +232,19 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                         // Disable heartbeat event in snapshot split reader
                         .with(Heartbeat.HEARTBEAT_INTERVAL, 0)
                         .build();
+
+        // Check if the starting offset is available on remote server
+        MySqlTaskContext mySqlTaskContext = statefulTaskContext.getTaskContext();
+        if (needToReadRdsArchives(statefulTaskContext, backfillBinlogSplit.getStartingOffset())) {
+            LOG.info(
+                    "Backfill reader will read RDS archived binlog files "
+                            + "as the required binlog file {} is not available.",
+                    backfillBinlogSplit.getStartingOffset().getFilename());
+            mySqlTaskContext =
+                    createRdsSwitchingContext(
+                            statefulTaskContext, backfillBinlogSplit.getStartingOffset());
+        }
+
         // task to read binlog and backfill for current split
         return new MySqlBinlogSplitReadTask(
                 new MySqlConnectorConfig(dezConf),
@@ -236,7 +253,7 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                 statefulTaskContext.getSignalEventDispatcher(),
                 statefulTaskContext.getErrorHandler(),
                 StatefulTaskContext.getClock(),
-                statefulTaskContext.getTaskContext(),
+                mySqlTaskContext,
                 (MySqlStreamingChangeEventSourceMetrics)
                         statefulTaskContext.getStreamingChangeEventSourceMetrics(),
                 backfillBinlogSplit,

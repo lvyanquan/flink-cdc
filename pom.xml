@@ -90,6 +90,7 @@ limitations under the License.
         <junit5.version>5.10.1</junit5.version>
         <junit4.version>4.13.2</junit4.version>
         <assertj.version>3.24.2</assertj.version>
+        <okhttp.version>4.10.0</okhttp.version>
         <markBundledAsOptional>true</markBundledAsOptional>
         <flatten-maven-plugin.version>1.5.0</flatten-maven-plugin.version>
         <calcite.version>1.32.0</calcite.version>

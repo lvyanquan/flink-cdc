@@ -19,9 +19,12 @@ package org.apache.flink.cdc.connectors.mysql.source.config;
 
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.connectors.mysql.debezium.EmbeddedFlinkDatabaseHistory;
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.table.catalog.ObjectPath;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -69,6 +72,7 @@ public class MySqlSourceConfigFactory implements Serializable {
     private Properties dbzProperties;
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     private boolean skipSnapshotBackfill = false;
+    @Nullable private AliyunRdsConfig rdsConfig;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
@@ -285,6 +289,11 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
+    public MySqlSourceConfigFactory enableReadingRdsArchivedBinlog(AliyunRdsConfig rdsConfig) {
+        this.rdsConfig = rdsConfig;
+        return this;
+    }
+
     /** Creates a new {@link MySqlSourceConfig} for the given subtask {@code subtaskId}. */
     public MySqlSourceConfig createConfig(int subtaskId) {
         // hard code server name, because we don't need to distinguish it, docs:
@@ -377,6 +386,7 @@ public class MySqlSourceConfigFactory implements Serializable {
                 props,
                 jdbcProperties,
                 chunkKeyColumns,
-                skipSnapshotBackfill);
+                skipSnapshotBackfill,
+                rdsConfig);
     }
 }

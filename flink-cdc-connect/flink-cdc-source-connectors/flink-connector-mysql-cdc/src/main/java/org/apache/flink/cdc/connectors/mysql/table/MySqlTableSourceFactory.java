@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.table;
 
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions;
 import org.apache.flink.cdc.connectors.mysql.source.config.ServerIdRange;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
@@ -47,6 +48,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ENABLE_READING_ARCHIVED_BINLOG;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -117,6 +127,14 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
 
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
 
+        // RDS related options
+        validateRdsOptions(config);
+        AliyunRdsConfig rdsConfig = null;
+        Boolean rdsReadingArchivedBinlogEnabled = config.get(RDS_ENABLE_READING_ARCHIVED_BINLOG);
+        if (rdsReadingArchivedBinlogEnabled) {
+            rdsConfig = AliyunRdsConfig.fromConfig(config);
+        }
+
         return new MySqlTableSource(
                 physicalSchema,
                 port,
@@ -143,7 +161,8 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 JdbcUrlUtils.getJdbcProperties(context.getCatalogTable().getOptions()),
                 heartbeatInterval,
                 chunkKeyColumn,
-                skipSnapshotBackFill);
+                skipSnapshotBackFill,
+                rdsConfig);
     }
 
     @Override
@@ -189,6 +208,16 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(MySqlSourceOptions.HEARTBEAT_INTERVAL);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+
+        options.add(RDS_ENABLE_READING_ARCHIVED_BINLOG);
+        options.add(RDS_REGION_ID);
+        options.add(RDS_ACCESS_KEY_ID);
+        options.add(RDS_ACCESS_KEY_SECRET);
+        options.add(RDS_DB_INSTANCE_ID);
+        options.add(RDS_DOWNLOAD_TIMEOUT);
+        options.add(RDS_BINLOG_DIRECTORIES_PARENT_PATH);
+        options.add(RDS_BINLOG_DIRECTORY_PREFIX);
+        options.add(RDS_USE_INTRANET_LINK);
         return options;
     }
 
@@ -374,6 +403,27 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                             : ZoneId.of(sessionTimeZone);
 
             return zoneId;
+        }
+    }
+
+    private static void validateRdsOptions(ReadableConfig config) {
+        if (config.get(RDS_ENABLE_READING_ARCHIVED_BINLOG)) {
+            checkState(
+                    config.getOptional(RDS_ACCESS_KEY_ID).isPresent(),
+                    "'%s' is required if reading archived binlog is enabled.",
+                    RDS_ACCESS_KEY_ID.key());
+            checkState(
+                    config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent(),
+                    "'%s' is required if reading archived binlog is enabled.",
+                    RDS_ACCESS_KEY_SECRET.key());
+            checkState(
+                    config.getOptional(RDS_DB_INSTANCE_ID).isPresent(),
+                    "'%s' is required if reading archived binlog is enabled.",
+                    RDS_DB_INSTANCE_ID.key());
+            checkState(
+                    config.getOptional(RDS_REGION_ID).isPresent(),
+                    "'%s' is required if reading archived binlog is enabled.",
+                    RDS_REGION_ID.key());
         }
     }
 }

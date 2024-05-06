@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.table;
 
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -44,6 +45,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_META_GROUP_SIZE;
@@ -127,7 +129,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -173,7 +176,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         "testCol",
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -215,7 +219,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -255,7 +260,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -305,7 +311,8 @@ public class MySqlTableSourceFactoryTest {
                         jdbcProperties,
                         Duration.ofMillis(15213),
                         "testCol",
-                        true);
+                        true,
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -351,7 +358,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -389,7 +397,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -428,7 +437,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -468,7 +478,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -506,7 +517,8 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -549,11 +561,68 @@ public class MySqlTableSourceFactoryTest {
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
                         null,
-                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        null);
         expectedSource.producedDataType = SCHEMA_WITH_METADATA.toSourceRowDataType();
         expectedSource.metadataKeys = Arrays.asList("op_ts", "database_name");
 
         assertEquals(expectedSource, actualSource);
+    }
+
+    @Test
+    public void testEnablingRDSArchivedBinlog() {
+        Map<String, String> options = getAllOptions();
+        options.put("rds.enable-reading-archived-binlog", "true");
+        options.put("rds.region-id", "fake-region");
+        options.put("rds.access-key-id", "fake-access-key-id");
+        options.put("rds.access-key-secret", "fake-access-key-secret");
+        options.put("rds.db-instance-id", "fake-db-instance-id");
+        options.put("rds.download.timeout", "15213ms");
+        options.put("rds.binlog-directories-parent-path", "/tmp/fake/path");
+        options.put("rds.binlog-directory-prefix", "fake-prefix-");
+        options.put("rds.use-intranet-link", "false");
+        DynamicTableSource actual = createTableSource(options);
+        AliyunRdsConfig expectedConfig =
+                AliyunRdsConfig.builder()
+                        .regionId("fake-region")
+                        .accessKeyId("fake-access-key-id")
+                        .accessKeySecret("fake-access-key-secret")
+                        .dbInstanceId("fake-db-instance-id")
+                        .downloadTimeout(Duration.ofMillis(15213L))
+                        .binlogDirectoriesParentPath("/tmp/fake/path")
+                        .binlogDirectoryPrefix("fake-prefix-")
+                        .useIntranetLink(false)
+                        .build();
+        DynamicTableSource expected =
+                new MySqlTableSource(
+                        SCHEMA,
+                        3306,
+                        MY_LOCALHOST,
+                        MY_DATABASE,
+                        MY_TABLE,
+                        MY_USERNAME,
+                        MY_PASSWORD,
+                        ZoneId.systemDefault(),
+                        PROPERTIES,
+                        null,
+                        false,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
+                        CHUNK_META_GROUP_SIZE.defaultValue(),
+                        SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
+                        CONNECT_TIMEOUT.defaultValue(),
+                        CONNECT_MAX_RETRIES.defaultValue(),
+                        CONNECTION_POOL_SIZE.defaultValue(),
+                        CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND.defaultValue(),
+                        CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND.defaultValue(),
+                        StartupOptions.initial(),
+                        false,
+                        false,
+                        new Properties(),
+                        HEARTBEAT_INTERVAL.defaultValue(),
+                        null,
+                        false,
+                        expectedConfig);
+        assertEquals(expected, actual);
     }
 
     @Test
@@ -746,6 +815,17 @@ public class MySqlTableSourceFactoryTest {
                     String.format(
                             "The table-name '%s' is not a valid regular expression",
                             "*_invalid_table");
+            assertTrue(ExceptionUtils.findThrowableWithMessage(t, msg).isPresent());
+        }
+
+        try {
+            Map<String, String> properties = getAllOptions();
+            properties.put("rds.enable-reading-archived-binlog", "true");
+        } catch (Throwable t) {
+            String msg =
+                    String.format(
+                            "'%s' is required if reading archived binlog is enabled.",
+                            RDS_ACCESS_KEY_ID.key());
             assertTrue(ExceptionUtils.findThrowableWithMessage(t, msg).isPresent());
         }
     }

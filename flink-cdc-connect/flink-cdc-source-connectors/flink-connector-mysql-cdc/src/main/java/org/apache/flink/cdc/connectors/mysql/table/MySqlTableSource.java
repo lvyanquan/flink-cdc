@@ -18,7 +18,9 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
@@ -83,6 +85,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     private final Duration heartbeatInterval;
     private final String chunkKeyColumn;
     final boolean skipSnapshotBackFill;
+    @Nullable private final AliyunRdsConfig rdsConfig;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -120,7 +123,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
             Properties jdbcProperties,
             Duration heartbeatInterval,
             @Nullable String chunkKeyColumn,
-            boolean skipSnapshotBackFill) {
+            boolean skipSnapshotBackFill,
+            @Nullable AliyunRdsConfig rdsConfig) {
         this.physicalSchema = physicalSchema;
         this.port = port;
         this.hostname = checkNotNull(hostname);
@@ -150,6 +154,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
         this.heartbeatInterval = heartbeatInterval;
         this.chunkKeyColumn = chunkKeyColumn;
         this.skipSnapshotBackFill = skipSnapshotBackFill;
+        this.rdsConfig = rdsConfig;
     }
 
     @Override
@@ -175,38 +180,40 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                                 MySqlDeserializationConverterFactory.instance())
                         .build();
         if (enableParallelRead) {
-            MySqlSource<RowData> parallelSource =
-                    MySqlSource.<RowData>builder()
-                            .hostname(hostname)
-                            .port(port)
-                            .databaseList(database)
-                            // MySQL debezium connector will use the regular expressions to match
-                            // the fully-qualified table identifiers of tables.
-                            // We need use "\\." insteadof "." .
-                            .tableList(database + "\\." + tableName)
-                            .username(username)
-                            .password(password)
-                            .serverTimeZone(serverTimeZone.toString())
-                            .serverId(serverId)
-                            .splitSize(splitSize)
-                            .splitMetaGroupSize(splitMetaGroupSize)
-                            .distributionFactorUpper(distributionFactorUpper)
-                            .distributionFactorLower(distributionFactorLower)
-                            .fetchSize(fetchSize)
-                            .connectTimeout(connectTimeout)
-                            .connectMaxRetries(connectMaxRetries)
-                            .connectionPoolSize(connectionPoolSize)
-                            .debeziumProperties(dbzProperties)
-                            .startupOptions(startupOptions)
-                            .deserializer(deserializer)
-                            .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
-                            .closeIdleReaders(closeIdleReaders)
-                            .jdbcProperties(jdbcProperties)
-                            .heartbeatInterval(heartbeatInterval)
-                            .chunkKeyColumn(new ObjectPath(database, tableName), chunkKeyColumn)
-                            .skipSnapshotBackfill(skipSnapshotBackFill)
-                            .build();
-            return SourceProvider.of(parallelSource);
+            final MySqlSourceBuilder<RowData> parallelSourceBuilder = MySqlSource.builder();
+            parallelSourceBuilder
+                    .hostname(hostname)
+                    .port(port)
+                    .databaseList(database)
+                    // MySQL debezium connector will use the regular expressions to match
+                    // the fully-qualified table identifiers of tables.
+                    // We need use "\\." insteadof "." .
+                    .tableList(database + "\\." + tableName)
+                    .username(username)
+                    .password(password)
+                    .serverTimeZone(serverTimeZone.toString())
+                    .serverId(serverId)
+                    .splitSize(splitSize)
+                    .splitMetaGroupSize(splitMetaGroupSize)
+                    .distributionFactorUpper(distributionFactorUpper)
+                    .distributionFactorLower(distributionFactorLower)
+                    .fetchSize(fetchSize)
+                    .connectTimeout(connectTimeout)
+                    .connectMaxRetries(connectMaxRetries)
+                    .connectionPoolSize(connectionPoolSize)
+                    .debeziumProperties(dbzProperties)
+                    .startupOptions(startupOptions)
+                    .deserializer(deserializer)
+                    .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                    .closeIdleReaders(closeIdleReaders)
+                    .jdbcProperties(jdbcProperties)
+                    .heartbeatInterval(heartbeatInterval)
+                    .chunkKeyColumn(new ObjectPath(database, tableName), chunkKeyColumn)
+                    .skipSnapshotBackfill(skipSnapshotBackFill);
+            if (rdsConfig != null) {
+                parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
+            }
+            return SourceProvider.of(parallelSourceBuilder.build());
         } else {
             org.apache.flink.cdc.connectors.mysql.MySqlSource.Builder<RowData> builder =
                     org.apache.flink.cdc.connectors.mysql.MySqlSource.<RowData>builder()
@@ -290,7 +297,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                         jdbcProperties,
                         heartbeatInterval,
                         chunkKeyColumn,
-                        skipSnapshotBackFill);
+                        skipSnapshotBackFill,
+                        rdsConfig);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         return source;
@@ -332,7 +340,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 && Objects.equals(jdbcProperties, that.jdbcProperties)
                 && Objects.equals(heartbeatInterval, that.heartbeatInterval)
                 && Objects.equals(chunkKeyColumn, that.chunkKeyColumn)
-                && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill);
+                && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
+                && Objects.equals(rdsConfig, that.rdsConfig);
     }
 
     @Override
@@ -365,7 +374,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 jdbcProperties,
                 heartbeatInterval,
                 chunkKeyColumn,
-                skipSnapshotBackFill);
+                skipSnapshotBackFill,
+                rdsConfig);
     }
 
     @Override

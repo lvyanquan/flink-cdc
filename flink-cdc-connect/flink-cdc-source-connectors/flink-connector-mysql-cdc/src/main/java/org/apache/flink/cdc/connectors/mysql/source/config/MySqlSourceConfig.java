@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.config;
 
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -70,6 +71,11 @@ public class MySqlSourceConfig implements Serializable {
     private final Configuration dbzConfiguration;
     private final MySqlConnectorConfig dbzMySqlConfig;
 
+    // --------------------------------------------------------------------------------------------
+    // RDS Configurations
+    // --------------------------------------------------------------------------------------------
+    @Nullable private final AliyunRdsConfig rdsConfig;
+
     MySqlSourceConfig(
             String hostname,
             int port,
@@ -94,7 +100,8 @@ public class MySqlSourceConfig implements Serializable {
             Properties dbzProperties,
             Properties jdbcProperties,
             Map<ObjectPath, String> chunkKeyColumns,
-            boolean skipSnapshotBackfill) {
+            boolean skipSnapshotBackfill,
+            @Nullable AliyunRdsConfig rdsConfig) {
         this.hostname = checkNotNull(hostname);
         this.port = port;
         this.username = checkNotNull(username);
@@ -121,6 +128,7 @@ public class MySqlSourceConfig implements Serializable {
         this.jdbcProperties = jdbcProperties;
         this.chunkKeyColumns = chunkKeyColumns;
         this.skipSnapshotBackfill = skipSnapshotBackfill;
+        this.rdsConfig = rdsConfig;
     }
 
     public String getHostname() {
@@ -230,5 +238,14 @@ public class MySqlSourceConfig implements Serializable {
 
     public boolean isSkipSnapshotBackfill() {
         return skipSnapshotBackfill;
+    }
+
+    public boolean isReadRdsArchivedBinlogEnabled() {
+        return rdsConfig != null;
+    }
+
+    @Nullable
+    public AliyunRdsConfig getRdsConfig() {
+        return rdsConfig;
     }
 }

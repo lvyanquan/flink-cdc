@@ -120,6 +120,18 @@ limitations under the License.
                                         org.apache.flink.cdc.connectors.shaded.com.zaxxer
                                     </shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>okhttp3</pattern>
+                                    <shadedPattern>
+                                        org.apache.flink.cdc.connectors.shaded.okhttp3
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.aliyun.rds20140815</pattern>
+                                    <shadedPattern>
+                                        org.apache.flink.cdc.connectors.shaded.com.aliyun.rds20140815
+                                    </shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>

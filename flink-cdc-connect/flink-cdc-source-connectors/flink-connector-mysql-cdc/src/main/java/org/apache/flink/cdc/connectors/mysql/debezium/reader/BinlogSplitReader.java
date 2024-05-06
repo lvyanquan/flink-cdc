@@ -37,6 +37,7 @@ import com.github.shyiko.mysql.binlog.event.Event;
 import com.github.shyiko.mysql.binlog.event.EventType;
 import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.connector.mysql.MySqlStreamingChangeEventSourceMetrics;
+import io.debezium.connector.mysql.MySqlTaskContext;
 import io.debezium.pipeline.DataChangeEvent;
 import io.debezium.relational.TableId;
 import io.debezium.relational.Tables;
@@ -59,6 +60,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
+
+import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.createRdsSwitchingContext;
+import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.needToReadRdsArchives;
 
 /**
  * A Debezium binlog reader implementation that also support reads binlog and filter overlapping
@@ -102,6 +106,19 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
         this.capturedTableFilter =
                 statefulTaskContext.getConnectorConfig().getTableFilters().dataCollectionFilter();
         this.queue = statefulTaskContext.getQueue();
+
+        // Check if the starting offset is available on remote server
+        MySqlTaskContext mySqlTaskContext = statefulTaskContext.getTaskContext();
+        if (needToReadRdsArchives(statefulTaskContext, currentBinlogSplit.getStartingOffset())) {
+            LOG.info(
+                    "Binlog reader will read RDS archived binlog files "
+                            + "as the required binlog file {} is not available.",
+                    currentBinlogSplit.getStartingOffset().getFilename());
+            mySqlTaskContext =
+                    createRdsSwitchingContext(
+                            statefulTaskContext, currentBinlogSplit.getStartingOffset());
+        }
+
         this.binlogSplitReadTask =
                 new MySqlBinlogSplitReadTask(
                         statefulTaskContext.getConnectorConfig(),
@@ -110,7 +127,7 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
                         statefulTaskContext.getSignalEventDispatcher(),
                         statefulTaskContext.getErrorHandler(),
                         StatefulTaskContext.getClock(),
-                        statefulTaskContext.getTaskContext(),
+                        mySqlTaskContext,
                         (MySqlStreamingChangeEventSourceMetrics)
                                 statefulTaskContext.getStreamingChangeEventSourceMetrics(),
                         currentBinlogSplit,
