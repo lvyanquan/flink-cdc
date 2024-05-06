@@ -251,7 +251,12 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     response.statusCode);
             response.getBody().getItems().getBinLogFile().stream()
                     .map(payload -> RdsBinlogFile.fromRdsResponsePayload(payload, useIntranetLink))
-                    .forEach(rdsBinlogFileQueue::add);
+                    .forEach(
+                            file -> {
+                                if (!rdsBinlogFileQueue.contains(file)) {
+                                    rdsBinlogFileQueue.add(file);
+                                }
+                            });
             LOG.info("Received response from RDS: {}", rdsBinlogFileQueue);
             LOG.info(
                     "Approximate binlog size to download: {}",
@@ -261,7 +266,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         }
     }
 
-    public PriorityQueue<RdsBinlogFile> getRdsBinlogFileQueue() {
+    PriorityQueue<RdsBinlogFile> getRdsBinlogFileQueue() {
         return rdsBinlogFileQueue;
     }
 
@@ -400,7 +405,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
 
     // ------------------------------------- Helper classes ----------------------------------
 
-    private static class RdsBinlogFile implements Comparable<RdsBinlogFile> {
+    static class RdsBinlogFile implements Comparable<RdsBinlogFile> {
         private final String filename;
         private final URL downloadLink;
 
