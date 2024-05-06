@@ -62,8 +62,11 @@ public class AliyunRdsConfig implements Serializable {
         configuration.set(RDS_ACCESS_KEY_SECRET, other.get(RDS_ACCESS_KEY_SECRET));
         configuration.set(RDS_DB_INSTANCE_ID, other.get(RDS_DB_INSTANCE_ID));
         configuration.set(RDS_DOWNLOAD_TIMEOUT, other.get(RDS_DOWNLOAD_TIMEOUT));
-        configuration.set(
-                RDS_BINLOG_DIRECTORIES_PARENT_PATH, other.get(RDS_BINLOG_DIRECTORIES_PARENT_PATH));
+        if (other.getOptional(RDS_BINLOG_DIRECTORIES_PARENT_PATH).isPresent()) {
+            configuration.set(
+                    RDS_BINLOG_DIRECTORIES_PARENT_PATH,
+                    other.get(RDS_BINLOG_DIRECTORIES_PARENT_PATH));
+        }
         configuration.set(RDS_BINLOG_DIRECTORY_PREFIX, other.get(RDS_BINLOG_DIRECTORY_PREFIX));
         configuration.set(RDS_USE_INTRANET_LINK, other.get(RDS_USE_INTRANET_LINK));
         return new AliyunRdsConfig(configuration);
