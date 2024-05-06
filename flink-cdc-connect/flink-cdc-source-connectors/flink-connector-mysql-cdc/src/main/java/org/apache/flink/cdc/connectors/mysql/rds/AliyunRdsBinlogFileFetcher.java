@@ -78,7 +78,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     // Constants
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private static final DateTimeFormatter TIMESTAMP_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneId.of("UTC"));
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneId.of("UTC"));
     private static final int STATUS_CODE_SUCCESS = 200;
     // RDS information
     private final AliyunRdsConfig rdsConfig;
