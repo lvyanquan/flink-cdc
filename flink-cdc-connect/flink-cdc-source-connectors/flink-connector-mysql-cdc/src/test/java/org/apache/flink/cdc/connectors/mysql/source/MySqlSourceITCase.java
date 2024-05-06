@@ -35,9 +35,11 @@ import org.apache.flink.cdc.debezium.StringDebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -65,8 +67,10 @@ import org.apache.flink.util.Collector;
 
 import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.jdbc.JdbcConnection;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -106,7 +110,17 @@ import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEn
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_SNAPSHOT_SPLITS_REMAINING;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_TABLES_REMAINING;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.NUM_TABLES_SNAPSHOTTED;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.CURRENT_READ_TIMESTAMP_MS;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NUM_DELETE_DML_RECORDS;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NUM_INSERT_DML_RECORDS;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NUM_SNAPSHOT_RECORDS;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NUM_UPDATE_DML_RECORDS;
+import static org.apache.flink.runtime.metrics.MetricNames.CURRENT_EMIT_EVENT_TIME_LAG;
+import static org.apache.flink.runtime.metrics.MetricNames.CURRENT_FETCH_EVENT_TIME_LAG;
+import static org.apache.flink.runtime.metrics.MetricNames.IO_NUM_RECORDS_IN;
+import static org.apache.flink.runtime.metrics.MetricNames.SOURCE_IDLE_TIME;
 import static org.apache.flink.util.Preconditions.checkState;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -115,7 +129,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 @RunWith(Parameterized.class)
 public class MySqlSourceITCase extends MySqlSourceTestBase {
 
-    @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
+    public static final Duration TIMEOUT = Duration.ofSeconds(300);
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(TIMEOUT.getSeconds());
 
     private static final String DEFAULT_SCAN_STARTUP_MODE = "initial";
     private final UniqueDatabase customDatabase =
@@ -581,6 +597,179 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    public void testSourceMetrics() throws Exception {
+        customDatabase.createAndInitialize();
+        String customerTableName = "customers";
+        String anotherCustomerTableName = "customers_1";
+        TestTable customers =
+                new TestTable(customDatabase, customerTableName, TestTableSchemas.CUSTOMERS);
+        TestTable anotherCustomers =
+                new TestTable(customDatabase, anotherCustomerTableName, TestTableSchemas.CUSTOMERS);
+        String blankDatabase = "blank_db_" + RandomStringUtils.randomAlphabetic(6);
+        MySqlConnection connection = getConnection();
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        MySqlSource<String> source =
+                MySqlSource.<String>builder()
+                        .hostname(MYSQL_CONTAINER.getHost())
+                        .port(MYSQL_CONTAINER.getDatabasePort())
+                        .databaseList(customDatabase.getDatabaseName(), blankDatabase)
+                        .tableList(customers.getTableId(), anotherCustomers.getTableId())
+                        .username(customDatabase.getUsername())
+                        .password(customDatabase.getPassword())
+                        .deserializer(new StringDebeziumDeserializationSchema())
+                        .serverId(getServerId())
+                        .includeSchemaChanges(true)
+                        .build();
+        DataStreamSource<String> stream =
+                env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
+        CollectResultIterator<String> iterator = addCollector(env, stream);
+        JobClient jobClient = env.executeAsync();
+        iterator.setJobClient(jobClient);
+
+        // ---------------------------- Snapshot phase ------------------------------
+        // Wait until we receive all 42 snapshot records
+        int expectedSnapshotRecordsInCustomerTable = 21;
+        int expectedSnapshotRecordsInAnotherCustomerTable = 21;
+        int numSnapshotRecordsReceived = 0;
+        while (numSnapshotRecordsReceived
+                        < expectedSnapshotRecordsInCustomerTable
+                                + expectedSnapshotRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numSnapshotRecordsReceived++;
+        }
+
+        // Per-reader metrics
+        List<OperatorMetricGroup> metricGroups =
+                metricReporter.findOperatorMetricGroups(jobClient.getJobID(), "MySQL CDC Source");
+        // There should be only 1 parallelism of source, so it's safe to get the only group
+        OperatorMetricGroup operatorMetricGroup = metricGroups.get(0);
+        validateReaderCounters(operatorMetricGroup, numSnapshotRecordsReceived, 0, 0, 0, 0);
+
+        // Per-table metrics
+        MetricGroup customerTableMetricGroup = getReaderMetricGroupByTableName(customerTableName);
+        MetricGroup anotherCustomerTableMetricGroup =
+                getReaderMetricGroupByTableName(anotherCustomerTableName);
+        validateTableCounters(
+                customerTableMetricGroup, expectedSnapshotRecordsInCustomerTable, 0, 0, 0, 0);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                0,
+                0,
+                0,
+                0);
+
+        // --------------------------------- Binlog phase -----------------------------
+        makeFirstPartBinlogEvents(connection, customers.getTableId());
+        makeFirstPartBinlogEvents(connection, anotherCustomers.getTableId());
+
+        // Wait until we receive 8 changes made above
+        int expectedBinlogRecordsInCustomerTable = 4;
+        int expectedBinlogRecordsInAnotherCustomerTable = 4;
+        int numBinlogRecordsReceived = 0;
+        while (numBinlogRecordsReceived
+                        < expectedBinlogRecordsInCustomerTable
+                                + expectedBinlogRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numBinlogRecordsReceived++;
+        }
+
+        // Per-reader metrics
+        validateReaderCounters(operatorMetricGroup, numSnapshotRecordsReceived, 2, 4, 2, 0);
+
+        // Per-table metrics
+        validateTableCounters(
+                customerTableMetricGroup, expectedSnapshotRecordsInCustomerTable, 1, 2, 1, 0);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                1,
+                2,
+                1,
+                0);
+
+        // Temporal metrics
+        validateTemporalMetrics(operatorMetricGroup);
+
+        // ------------------------------ Schema change ---------------------------
+        addColumnToTable(connection, customers.getTableId());
+        addColumnToTable(connection, anotherCustomers.getTableId());
+
+        // Wait until we receive the schema change record
+        int expectedSchemaChangeRecordsInCustomerTable = 1;
+        int expectedSchemaChangeRecordsInAnotherCustomerTable = 1;
+        int numSchemaChangeRecordsReceived = 0;
+        while (numSchemaChangeRecordsReceived
+                        < expectedSchemaChangeRecordsInCustomerTable
+                                + expectedSchemaChangeRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numSchemaChangeRecordsReceived++;
+        }
+
+        // Per-reader metrics
+        validateReaderCounters(
+                operatorMetricGroup,
+                numSnapshotRecordsReceived,
+                2,
+                4,
+                2,
+                expectedSchemaChangeRecordsInCustomerTable
+                        + expectedSchemaChangeRecordsInAnotherCustomerTable);
+
+        // Per-table metrics
+        validateTableCounters(
+                customerTableMetricGroup,
+                expectedSnapshotRecordsInCustomerTable,
+                1,
+                2,
+                1,
+                expectedSchemaChangeRecordsInCustomerTable);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                1,
+                2,
+                1,
+                expectedSchemaChangeRecordsInAnotherCustomerTable);
+
+        // Temporal metrics
+        validateTemporalMetrics(operatorMetricGroup);
+
+        // DB-level schema change
+        connection.execute(String.format("CREATE DATABASE IF NOT EXISTS %s", blankDatabase));
+        connection.commit();
+        int expectedSchemaChangeRecordsInDatabase = 1;
+
+        while (numSchemaChangeRecordsReceived
+                        < expectedSchemaChangeRecordsInCustomerTable
+                                + expectedSchemaChangeRecordsInAnotherCustomerTable
+                                + expectedSchemaChangeRecordsInDatabase
+                && iterator.hasNext()) {
+            iterator.next();
+            numSchemaChangeRecordsReceived++;
+        }
+
+        validateReaderCounters(
+                operatorMetricGroup,
+                expectedSnapshotRecordsInCustomerTable
+                        + expectedSnapshotRecordsInAnotherCustomerTable,
+                2,
+                4,
+                2,
+                expectedSchemaChangeRecordsInCustomerTable
+                        + expectedSchemaChangeRecordsInAnotherCustomerTable
+                        + expectedSchemaChangeRecordsInDatabase);
+
+        jobClient.cancel().get();
+        iterator.close();
+        connection.close();
+    }
+
+    @Test
     public void testSplitEnumeratorMetrics() throws Exception {
         String customerTable = "customers";
         String anotherCustomerTable = "customers_1";
@@ -677,6 +866,110 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         }
         fail(String.format("Could not find metric group with table name '%s'", tableName));
         return null;
+    }
+
+    private void validateTableCounters(
+            MetricGroup tableMetricGroup,
+            int snapshot,
+            int insert,
+            int update,
+            int delete,
+            int schemaChange) {
+        // Per-table metrics
+        Map<String, Metric> tableMetrics = metricReporter.getMetricsByGroup(tableMetricGroup);
+
+        // numRecordsIn per-table
+        assertTrue(tableMetrics.containsKey(IO_NUM_RECORDS_IN));
+        Counter recordsCounter = (Counter) tableMetrics.get(IO_NUM_RECORDS_IN);
+        Assert.assertEquals(
+                snapshot + insert + update + delete + schemaChange, recordsCounter.getCount());
+
+        // numSnapshotRecords per-table
+        assertTrue(tableMetrics.containsKey(NUM_SNAPSHOT_RECORDS));
+        Counter snapshotCounter = (Counter) tableMetrics.get(NUM_SNAPSHOT_RECORDS);
+        Assert.assertEquals(snapshot, snapshotCounter.getCount());
+
+        // numInsertDMLRecordsIn per-table should be 0
+        assertTrue(tableMetrics.containsKey(NUM_INSERT_DML_RECORDS));
+        Counter inputCounter = (Counter) tableMetrics.get(NUM_INSERT_DML_RECORDS);
+        Assert.assertEquals(insert, inputCounter.getCount());
+
+        // numUpdateDMLRecordsIn per-table should be 0
+        assertTrue(tableMetrics.containsKey(NUM_UPDATE_DML_RECORDS));
+        Counter updateCounter = (Counter) tableMetrics.get(NUM_UPDATE_DML_RECORDS);
+        Assert.assertEquals(update, updateCounter.getCount());
+
+        // numDeleteDMLRecordsIn per-table should be 0
+        assertTrue(tableMetrics.containsKey(NUM_DELETE_DML_RECORDS));
+        Counter deleteCounter = (Counter) tableMetrics.get(NUM_DELETE_DML_RECORDS);
+        Assert.assertEquals(delete, deleteCounter.getCount());
+    }
+
+    private void validateReaderCounters(
+            OperatorMetricGroup operatorMetricGroup,
+            int snapshot,
+            int insert,
+            int update,
+            int delete,
+            int schemaChange) {
+        // numRecordsIn
+        // We can't tell the exact value of numRecordsIn, because we capture the number or raw input
+        // of the binary log client in the binlog reading phase.
+        assertThat(operatorMetricGroup.getIOMetricGroup().getNumRecordsInCounter().getCount())
+                .isGreaterThanOrEqualTo(snapshot + insert + update + delete + schemaChange);
+
+        // Per-table metrics
+        Map<String, Metric> readerMetrics = metricReporter.getMetricsByGroup(operatorMetricGroup);
+
+        // numSnapshotRecords per-table
+        assertTrue(readerMetrics.containsKey(NUM_SNAPSHOT_RECORDS));
+        Counter snapshotCounter = (Counter) readerMetrics.get(NUM_SNAPSHOT_RECORDS);
+        Assert.assertEquals(snapshot, snapshotCounter.getCount());
+
+        // numInsertDMLRecordsIn per-table should be 0
+        assertTrue(readerMetrics.containsKey(NUM_INSERT_DML_RECORDS));
+        Counter inputCounter = (Counter) readerMetrics.get(NUM_INSERT_DML_RECORDS);
+        Assert.assertEquals(insert, inputCounter.getCount());
+
+        // numUpdateDMLRecordsIn per-table should be 0
+        assertTrue(readerMetrics.containsKey(NUM_UPDATE_DML_RECORDS));
+        Counter updateCounter = (Counter) readerMetrics.get(NUM_UPDATE_DML_RECORDS);
+        Assert.assertEquals(update, updateCounter.getCount());
+
+        // numDeleteDMLRecordsIn per-table should be 0
+        assertTrue(readerMetrics.containsKey(NUM_DELETE_DML_RECORDS));
+        Counter deleteCounter = (Counter) readerMetrics.get(NUM_DELETE_DML_RECORDS);
+        Assert.assertEquals(delete, deleteCounter.getCount());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateTemporalMetrics(OperatorMetricGroup operatorMetricGroup) {
+        Map<String, Metric> metrics = metricReporter.getMetricsByGroup(operatorMetricGroup);
+
+        // currentEmitEventTimeLag
+        assertTrue(metrics.containsKey(CURRENT_EMIT_EVENT_TIME_LAG));
+        Gauge<Long> currentEmitEventTimeLag =
+                (Gauge<Long>) metrics.get(CURRENT_EMIT_EVENT_TIME_LAG);
+        assertTrue(currentEmitEventTimeLag.getValue() > 0);
+        assertTrue(currentEmitEventTimeLag.getValue() < TIMEOUT.toMillis());
+
+        // currentFetchEventTimeLag
+        assertTrue(metrics.containsKey(CURRENT_FETCH_EVENT_TIME_LAG));
+        Gauge<Long> currentFetchEventTimeLag =
+                (Gauge<Long>) metrics.get(CURRENT_FETCH_EVENT_TIME_LAG);
+        assertTrue(currentFetchEventTimeLag.getValue() > 0);
+        assertTrue(currentFetchEventTimeLag.getValue() < TIMEOUT.toMillis());
+
+        // sourceIdleTime should be positive (we can't know the exact value)
+        assertTrue(metrics.containsKey(SOURCE_IDLE_TIME));
+        Gauge<Long> sourceIdleTime = (Gauge<Long>) metrics.get(SOURCE_IDLE_TIME);
+        assertTrue(sourceIdleTime.getValue() > 0);
+        assertTrue(sourceIdleTime.getValue() < TIMEOUT.toMillis());
+
+        // currentReadTimestampMs
+        assertTrue(metrics.containsKey(CURRENT_READ_TIMESTAMP_MS));
+        Gauge<Long> currentReadTimestampMs = (Gauge<Long>) metrics.get(CURRENT_READ_TIMESTAMP_MS);
+        assertTrue(currentReadTimestampMs.getValue() > 0);
     }
 
     private void validateEnumeratorMetrics(
@@ -1262,6 +1555,12 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         io.debezium.config.Configuration configuration =
                 io.debezium.config.Configuration.from(properties);
         return DebeziumUtils.createMySqlConnection(configuration, new Properties());
+    }
+
+    private void addColumnToTable(MySqlConnection connection, String tableId) throws Exception {
+        connection.execute(
+                "ALTER TABLE " + tableId + " ADD COLUMN new_int_column INT DEFAULT 15213");
+        connection.commit();
     }
 
     private String getTableId() {

@@ -48,7 +48,6 @@ import org.apache.flink.connector.base.source.reader.synchronization.FutureCompl
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderOutput;
 import org.apache.flink.core.io.InputStatus;
-import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -70,7 +69,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -89,9 +87,7 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getBinlogPosition;
-import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getFetchTimestamp;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getHistoryRecord;
-import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getMessageTimestamp;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getWatermark;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isDataChangeRecord;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isHeartbeatEvent;
@@ -458,20 +454,16 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             throws Exception {
         final FutureCompletingBlockingQueue<RecordsWithSplitIds<SourceRecords>> elementsQueue =
                 new FutureCompletingBlockingQueue<>();
-        // make  SourceReaderContext#metricGroup compatible between Flink 1.13 and Flink 1.14
-        final Method metricGroupMethod = readerContext.getClass().getMethod("metricGroup");
-        metricGroupMethod.setAccessible(true);
-        final MetricGroup metricGroup = (MetricGroup) metricGroupMethod.invoke(readerContext);
         final RecordEmitter<SourceRecords, SourceRecord, MySqlSplitState> recordEmitter =
                 limit > 0
                         ? new MysqlLimitedRecordEmitter(
                                 new ForwardDeserializeSchema(),
-                                new MySqlSourceReaderMetrics(metricGroup),
+                                new MySqlSourceReaderMetrics(readerContext.metricGroup()),
                                 configuration.isIncludeSchemaChanges(),
                                 limit)
                         : new MySqlRecordEmitter<>(
                                 new ForwardDeserializeSchema(),
-                                new MySqlSourceReaderMetrics(metricGroup),
+                                new MySqlSourceReaderMetrics(readerContext.metricGroup()),
                                 configuration.isIncludeSchemaChanges());
         final MySqlSourceReaderContext mySqlSourceReaderContext =
                 new MySqlSourceReaderContext(readerContext);
@@ -672,7 +664,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 }
             } else if (isDataChangeRecord(element)) {
                 updateStartingOffsetForSplit(splitState, element);
-                reportMetrics(element);
+                sourceReaderMetrics.markRecord(element);
                 emitElement(element, output);
             } else if (isHeartbeatEvent(element)) {
                 updateStartingOffsetForSplit(splitState, element);
@@ -694,18 +686,6 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 throws Exception {
             outputCollector.output = output;
             debeziumDeserializationSchema.deserialize(element, outputCollector);
-        }
-
-        private void reportMetrics(SourceRecord element) {
-            Long messageTimestamp = getMessageTimestamp(element);
-
-            if (messageTimestamp != null && messageTimestamp > 0L) {
-                // report fetch delay
-                Long fetchTimestamp = getFetchTimestamp(element);
-                if (fetchTimestamp != null && fetchTimestamp >= messageTimestamp) {
-                    sourceReaderMetrics.recordFetchDelay(fetchTimestamp - messageTimestamp);
-                }
-            }
         }
 
         private static class OutputCollector<T> implements Collector<T> {

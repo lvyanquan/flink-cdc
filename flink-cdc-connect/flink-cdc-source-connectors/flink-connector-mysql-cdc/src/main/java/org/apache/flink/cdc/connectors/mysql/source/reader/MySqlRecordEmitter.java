@@ -97,7 +97,6 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
             }
         } else if (RecordUtils.isDataChangeRecord(element)) {
             updateStartingOffsetForSplit(splitState, element);
-            reportMetrics(element);
             emitElement(element, output);
         } else if (RecordUtils.isHeartbeatEvent(element)) {
             updateStartingOffsetForSplit(splitState, element);
@@ -115,22 +114,9 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
     }
 
     private void emitElement(SourceRecord element, SourceOutput<T> output) throws Exception {
+        sourceReaderMetrics.markRecord(element);
         outputCollector.output = output;
         debeziumDeserializationSchema.deserialize(element, outputCollector);
-    }
-
-    private void reportMetrics(SourceRecord element) {
-
-        Long messageTimestamp = RecordUtils.getMessageTimestamp(element);
-
-        if (messageTimestamp != null && messageTimestamp > 0L) {
-            // report fetch delay
-            Long fetchTimestamp = RecordUtils.getFetchTimestamp(element);
-            if (fetchTimestamp != null && fetchTimestamp >= messageTimestamp) {
-                // report fetch delay
-                sourceReaderMetrics.recordFetchDelay(fetchTimestamp - messageTimestamp);
-            }
-        }
     }
 
     private static class OutputCollector<T> implements Collector<T> {
