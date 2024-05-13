@@ -174,7 +174,11 @@ public class FlinkPipelineComposer implements PipelineComposer {
         PartitioningTranslator partitioningTranslator = new PartitioningTranslator();
         stream =
                 partitioningTranslator.translate(
-                        stream, parallelism, parallelism, schemaOperatorIDGenerator.generate());
+                        stream,
+                        parallelism,
+                        parallelism,
+                        schemaOperatorIDGenerator.generate(),
+                        dataSink.getHashFunctionProvider());
 
         // Build Sink Operator
 
