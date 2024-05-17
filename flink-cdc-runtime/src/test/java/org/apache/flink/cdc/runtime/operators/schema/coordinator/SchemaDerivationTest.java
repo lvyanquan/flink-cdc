@@ -32,7 +32,7 @@ import org.apache.flink.cdc.common.schema.Selectors;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
 
-import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import org.junit.jupiter.api.Test;
 
