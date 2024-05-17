@@ -31,7 +31,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-doc:
+  check-documentation:
     if: github.repository == 'apache/flink-cdc'
     runs-on: ubuntu-latest
     steps:
@@ -40,13 +40,13 @@ jobs:
         uses: gaurav-nelson/github-action-markdown-link-check@1.0.15
         with:
           config-file: '.dlc.json'
-      - name: Build doc
+      - name: Build documentation
         run: |
           docker run --rm --volume "$PWD:/root/flink-cdc" chesnay/flink-ci:java_8_11_17_21_maven_386 bash -c "cd /root/flink-cdc && chmod +x ./.github/workflows/docs.sh && ./.github/workflows/docs.sh"
 
   build-documentation:
     if: github.event_name != 'pull_request' && github.repository == 'apache/flink-cdc'
-    name: "Check and build doc"
+    name: "Check and build documentation"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
