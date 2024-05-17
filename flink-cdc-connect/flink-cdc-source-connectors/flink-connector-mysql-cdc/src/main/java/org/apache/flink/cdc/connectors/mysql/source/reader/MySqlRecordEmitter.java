@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
+import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getMessageTimestamp;
+
 /**
  * The {@link RecordEmitter} implementation for {@link MySqlSourceReader}.
  *
@@ -116,15 +118,27 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
     private void emitElement(SourceRecord element, SourceOutput<T> output) throws Exception {
         sourceReaderMetrics.markRecord(element);
         outputCollector.output = output;
+        outputCollector.currentMessageTimestamp = getMessageTimestamp(element);
         debeziumDeserializationSchema.deserialize(element, outputCollector);
     }
 
     private static class OutputCollector<T> implements Collector<T> {
         private SourceOutput<T> output;
+        private Long currentMessageTimestamp;
 
         @Override
         public void collect(T record) {
-            output.collect(record);
+            if (currentMessageTimestamp != null && currentMessageTimestamp > 0) {
+                // Only binlog event contains a valid timestamp. We use the output with timestamp to
+                // report the event time and let the source operator to report
+                // "currentEmitEventTimeLag" correctly.
+                output.collect(record, currentMessageTimestamp);
+            } else {
+                // Records in snapshot mode have a zero timestamp in the message. We use the output
+                // without timestamp to collect the record. Metric "currentEmitEventTimeLag" will
+                // not be updated in the source operator in this case.
+                output.collect(record);
+            }
         }
 
         @Override

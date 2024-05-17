@@ -116,6 +116,7 @@ public class MySqlHybridSplitAssignerTest extends MySqlSourceTestBase {
                         DEFAULT_PARALLELISM,
                         checkpoint,
                         getMySqlSplitEnumeratorContext());
+        assigner.open();
 
         // step 2. Get the MySqlBinlogSplit after all snapshot splits finished
         Optional<MySqlSplit> binlogSplit = assigner.getNext();

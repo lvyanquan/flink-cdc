@@ -44,8 +44,8 @@ public class JaninoCompilerTest {
         String expression = "1==2";
         Parser parser = new Parser(new Scanner(null, new StringReader(expression)));
         ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator();
-        expressionEvaluator.cook(parser);
-        Object evaluate = expressionEvaluator.evaluate();
+        expressionEvaluator.cook(new Parser[] {parser});
+        Object evaluate = expressionEvaluator.evaluate(null);
         Assert.assertEquals(false, evaluate);
     }
 

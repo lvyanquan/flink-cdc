@@ -23,6 +23,7 @@ import org.apache.flink.cdc.connectors.tests.utils.FlinkContainerTestEnvironment
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runners.Parameterized;
@@ -52,6 +53,7 @@ import java.util.stream.Stream;
 import static org.junit.Assert.assertNotNull;
 
 /** End-to-end tests for sqlserver-cdc connector uber jar. */
+@Ignore
 public class SqlServerE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqlServerE2eITCase.class);

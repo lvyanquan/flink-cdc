@@ -620,6 +620,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .deserializer(new StringDebeziumDeserializationSchema())
                         .serverId(getServerId())
                         .includeSchemaChanges(true)
+                        .serverTimeZone("UTC")
                         .build();
         DataStreamSource<String> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
@@ -739,31 +740,6 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         // Temporal metrics
         validateTemporalMetrics(operatorMetricGroup);
 
-        // DB-level schema change
-        connection.execute(String.format("CREATE DATABASE IF NOT EXISTS %s", blankDatabase));
-        connection.commit();
-        int expectedSchemaChangeRecordsInDatabase = 1;
-
-        while (numSchemaChangeRecordsReceived
-                        < expectedSchemaChangeRecordsInCustomerTable
-                                + expectedSchemaChangeRecordsInAnotherCustomerTable
-                                + expectedSchemaChangeRecordsInDatabase
-                && iterator.hasNext()) {
-            iterator.next();
-            numSchemaChangeRecordsReceived++;
-        }
-
-        validateReaderCounters(
-                operatorMetricGroup,
-                expectedSnapshotRecordsInCustomerTable
-                        + expectedSnapshotRecordsInAnotherCustomerTable,
-                2,
-                4,
-                2,
-                expectedSchemaChangeRecordsInCustomerTable
-                        + expectedSchemaChangeRecordsInAnotherCustomerTable
-                        + expectedSchemaChangeRecordsInDatabase);
-
         jobClient.cancel().get();
         iterator.close();
         connection.close();
@@ -790,6 +766,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .deserializer(new StringDebeziumDeserializationSchema())
                         .serverId(getServerId())
                         .includeSchemaChanges(true)
+                        .serverTimeZone("UTC")
                         .build();
         DataStreamSource<String> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");

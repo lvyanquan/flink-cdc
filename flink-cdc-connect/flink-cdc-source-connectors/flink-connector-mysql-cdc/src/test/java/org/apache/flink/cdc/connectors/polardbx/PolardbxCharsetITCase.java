@@ -26,6 +26,7 @@ import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.StringUtils;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -39,7 +40,9 @@ import java.util.Arrays;
 /** Test supporting different column charsets for Polardbx. */
 @RunWith(Parameterized.class)
 public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
-    private static final String DATABASE = "charset_test";
+
+    private static final String DDL_FILE = "charset_test";
+    private static final String DATABASE_NAME = "cdc_c_" + getRandomSuffix();
 
     private final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
@@ -128,7 +131,8 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
     @BeforeClass
     public static void beforeClass() throws InterruptedException {
         initializePolardbxTables(
-                DATABASE,
+                DDL_FILE,
+                DATABASE_NAME,
                 s ->
                         !StringUtils.isNullOrWhitespaceOnly(s)
                                 && (s.contains("utf8_test")
@@ -143,6 +147,11 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
         TestValuesTableFactory.clearAllData();
         env.setParallelism(4);
         env.enableCheckpointing(200);
+    }
+
+    @AfterClass
+    public static void after() {
+        dropDatabase(DATABASE_NAME);
     }
 
     @Test
@@ -163,15 +172,15 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = 'Asia/Shanghai',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         testName,
-                        HOST_NAME,
+                        getHost(),
                         PORT,
                         USER_NAME,
                         PASSWORD,
-                        DATABASE,
+                        DATABASE_NAME,
                         testName,
                         true,
                         getServerId(),
@@ -193,7 +202,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
             statement.execute(
                     String.format(
                             "/*TDDL:FORBID_EXECUTE_DML_ALL=FALSE*/UPDATE %s.%s SET table_id = table_id + 10;",
-                            DATABASE, testName));
+                            DATABASE_NAME, testName));
         }
         assertEqualsInAnyOrder(
                 Arrays.asList(binlogExpected), fetchRows(iterator, binlogExpected.length));

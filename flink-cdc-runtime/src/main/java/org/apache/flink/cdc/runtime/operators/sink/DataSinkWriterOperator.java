@@ -36,6 +36,7 @@ import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
+import org.apache.flink.streaming.api.operators.RecordObserver;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
@@ -205,9 +206,16 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
                                     "org.apache.flink.streaming.runtime.operators.sink.SinkWriterOperator");
             Constructor<?> constructor =
                     flinkWriterClass.getDeclaredConstructor(
-                            Sink.class, ProcessingTimeService.class, MailboxExecutor.class);
+                            Sink.class,
+                            ProcessingTimeService.class,
+                            MailboxExecutor.class,
+                            RecordObserver.class);
             constructor.setAccessible(true);
-            return constructor.newInstance(sink, processingTimeService, mailboxExecutor);
+            return constructor.newInstance(
+                    sink,
+                    processingTimeService,
+                    mailboxExecutor,
+                    RecordObserver.getSimpleObserver());
         } catch (Exception e) {
             throw new RuntimeException("Failed to create SinkWriterOperator in Flink", e);
         }

@@ -23,6 +23,7 @@ import org.apache.flink.cdc.connectors.tests.utils.FlinkContainerTestEnvironment
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ import static org.apache.flink.cdc.connectors.oracle.source.OracleSourceTestBase
 import static org.apache.flink.cdc.connectors.oracle.source.OracleSourceTestBase.TEST_USER;
 
 /** End-to-end tests for oracle-cdc connector uber jar. */
+@Ignore
 public class OracleE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(OracleE2eITCase.class);

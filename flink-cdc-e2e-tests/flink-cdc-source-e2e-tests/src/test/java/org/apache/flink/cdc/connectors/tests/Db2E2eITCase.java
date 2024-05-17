@@ -26,6 +26,7 @@ import org.awaitility.Awaitility;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -62,6 +63,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.testcontainers.containers.Db2Container.DB2_PORT;
 
 /** End-to-end tests for db2 cdc connector uber jar. */
+@Ignore
 public class Db2E2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(Db2E2eITCase.class);

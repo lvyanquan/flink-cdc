@@ -26,6 +26,7 @@ import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -43,11 +44,17 @@ import static java.lang.String.format;
  * test.
  */
 public class PolardbxSourceITCase extends PolardbxSourceTestBase {
-    private static final String DATABASE = "polardbx_ddl_test";
+    private static final String DDL_FILE = "polardbx_ddl_test";
+    private static final String DATABASE_NAME = "cdc_s_" + getRandomSuffix();
 
     @BeforeClass
     public static void beforeClass() throws InterruptedException {
-        initializePolardbxTables(DATABASE, null);
+        initializePolardbxTables(DDL_FILE, DATABASE_NAME, null);
+    }
+
+    @AfterClass
+    public static void afterClass() {
+        dropDatabase(DATABASE_NAME);
     }
 
     @Test
@@ -80,14 +87,14 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = 'Asia/Shanghai',"
                                 + " 'server-id' = '%s'"
                                 + ")",
-                        HOST_NAME,
+                        getHost(),
                         PORT,
                         USER_NAME,
                         PASSWORD,
-                        DATABASE,
+                        DATABASE_NAME,
                         getTableNameRegex(captureCustomerTables),
                         getServerId());
 
@@ -132,7 +139,7 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
         // third step: check dml events
         try (Connection connection = getJdbcConnection();
                 Statement statement = connection.createStatement()) {
-            statement.execute("use " + DATABASE);
+            statement.execute("use " + DATABASE_NAME);
             statement.execute("INSERT INTO orders VALUES (6, 1006,1006, 1006,'2022-01-17');");
             statement.execute("INSERT INTO orders VALUES (7,1007, 1007,1007, '2022-01-17');");
             statement.execute("UPDATE orders SET seller_id= 9999, order_id=9999 WHERE id=6;");
@@ -230,14 +237,14 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = 'Asia/Shanghai',"
                                 + " 'server-id' = '%s'"
                                 + ")",
-                        HOST_NAME,
+                        getHost(),
                         PORT,
                         USER_NAME,
                         PASSWORD,
-                        DATABASE,
+                        DATABASE_NAME,
                         getTableNameRegex(captureCustomerTables),
                         getServerId());
         tEnv.executeSql(sourceDDL);
@@ -297,14 +304,14 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = 'Asia/Shanghai',"
                                 + " 'server-id' = '%s'"
                                 + ")",
-                        HOST_NAME,
+                        getHost(),
                         PORT,
                         USER_NAME,
                         PASSWORD,
-                        DATABASE,
+                        DATABASE_NAME,
                         getTableNameRegex(captureCustomerTables),
                         getServerId());
 
@@ -351,7 +358,7 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
         // third step: check dml events
         try (Connection connection = getJdbcConnection();
                 Statement statement = connection.createStatement()) {
-            statement.execute("use " + DATABASE);
+            statement.execute("use " + DATABASE_NAME);
             statement.execute(
                     "INSERT INTO orders_with_multi_pks VALUES (6, 1006,1006, 1006,'2022-01-17');");
             statement.execute(

@@ -76,4 +76,29 @@ limitations under the License.
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!-- Skip the tests for the unused pipeline connectors in VVR CDC. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>regex-property</id>
+                        <goals>
+                            <goal>regex-property</goal>
+                        </goals>
+                        <configuration>
+                            <name>skipTests</name>
+                            <value>${project.artifactId}</value>
+                            <regex>(flink-connector-db2-cdc)|(flink-connector-oceanbase-cdc)|(flink-connector-oracle-cdc)|(flink-connector-sqlserver-cdc)|(flink-connector-tidb-cdc)|(flink-connector-vitess-cdc)</regex>
+                            <replacement>true</replacement>
+                            <failIfNoMatch>false</failIfNoMatch>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
