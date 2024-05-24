@@ -72,7 +72,7 @@ public class MySqlSourceReaderMetrics {
 
     // currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
     // record fetched into the source operator
-    private volatile long fetchDelay = 0L;
+    private volatile long fetchDelay = UNDEFINED;
 
     // Timestamp when the current processing event was produced in MySQL.
     private volatile long currentReadTimestampMs = UNDEFINED;
