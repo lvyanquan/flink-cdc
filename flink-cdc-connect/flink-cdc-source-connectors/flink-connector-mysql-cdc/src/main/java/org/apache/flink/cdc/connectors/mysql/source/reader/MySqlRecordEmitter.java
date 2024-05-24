@@ -118,7 +118,7 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
     private void emitElement(SourceRecord element, SourceOutput<T> output) throws Exception {
         sourceReaderMetrics.markRecord(element);
         outputCollector.output = output;
-        outputCollector.currentMessageTimestamp = getMessageTimestamp(element);
+        outputCollector.currentMessageTimestamp = RecordUtils.getMessageTimestamp(element);
         debeziumDeserializationSchema.deserialize(element, outputCollector);
     }
 
