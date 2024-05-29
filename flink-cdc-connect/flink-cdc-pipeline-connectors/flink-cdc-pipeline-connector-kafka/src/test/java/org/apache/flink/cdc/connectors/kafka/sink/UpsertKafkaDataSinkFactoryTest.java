@@ -28,20 +28,20 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 
-/** Tests for {@link KafkaDataSinkFactory}. */
-public class KafkaDataSinkFactoryTest {
+/** Tests for {@link UpsertKafkaDataSinkFactory}. */
+public class UpsertKafkaDataSinkFactoryTest {
 
     @Test
-    public void testCreateDataSink() {
+    public void testCreateUpsertDataSink() {
         DataSinkFactory sinkFactory =
-                FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
-        Assertions.assertTrue(sinkFactory instanceof KafkaDataSinkFactory);
+                FactoryDiscoveryUtils.getFactoryByIdentifier("upsert-kafka", DataSinkFactory.class);
+        Assertions.assertTrue(sinkFactory instanceof UpsertKafkaDataSinkFactory);
 
         Configuration conf = Configuration.fromMap(new HashMap<>());
         DataSink dataSink =
                 sinkFactory.createDataSink(
                         new FactoryHelper.DefaultContext(
                                 conf, conf, Thread.currentThread().getContextClassLoader()));
-        Assertions.assertTrue(dataSink instanceof KafkaDataSink);
+        Assertions.assertTrue(dataSink instanceof UpsertKafkaDataSink);
     }
 }

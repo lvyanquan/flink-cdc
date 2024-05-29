@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.kafka.json.debezium;
+package org.apache.flink.cdc.connectors.kafka.json;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
@@ -26,59 +26,49 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
-import org.apache.flink.cdc.connectors.kafka.json.TableSchemaInfo;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonFormatOptions;
 import org.apache.flink.formats.json.JsonRowDataSerializationSchema;
-import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
 import static java.lang.String.format;
-import static org.apache.flink.table.types.utils.TypeConversions.fromLogicalToDataType;
 
 /**
- * Serialization schema from FlinkCDC pipeline internal data structure {@link Event} to Debezium
- * JSON.
+ * Serialization schema from FlinkCDC pipeline internal data structure {@link Event} to normal JSON.
  *
  * @see <a href="https://debezium.io/">Debezium</a>
  */
-public class DebeziumJsonSerializationSchema implements SerializationSchema<Event> {
+public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<Event> {
     private static final long serialVersionUID = 1L;
 
-    private static final StringData OP_INSERT = StringData.fromString("c"); // insert
-    private static final StringData OP_DELETE = StringData.fromString("d"); // delete
-    private static final StringData OP_UPDATE = StringData.fromString("u"); // update
+    /** Timestamp format specification which is used to parse timestamp. */
+    private final TimestampFormat timestampFormat;
+
+    /** The handling mode when serializing null keys for map data. */
+    private final JsonFormatOptions.MapNullKeyMode mapNullKeyMode;
+
+    /** The string literal when handling mode for map null key LITERAL. */
+    private final String mapNullKeyLiteral;
+
+    /** Flag indicating whether to serialize all decimals as plain numbers. */
+    private final boolean encodeDecimalAsPlainNumber;
+
+    private final boolean writeNullProperties;
+    private final ZoneId zoneId;
 
     /**
      * A map of {@link TableId} and its {@link SerializationSchema} to serialize Debezium JSON data.
      */
     private final Map<TableId, TableSchemaInfo> jsonSerializers;
 
-    private transient GenericRowData reuseGenericRowData;
-
-    private final TimestampFormat timestampFormat;
-
-    private final JsonFormatOptions.MapNullKeyMode mapNullKeyMode;
-
-    private final String mapNullKeyLiteral;
-
-    private final boolean encodeDecimalAsPlainNumber;
-
-    private final ZoneId zoneId;
-
     private InitializationContext context;
 
-    private final boolean writeNullProperties;
-
-    public DebeziumJsonSerializationSchema(
+    public UpsertKafkaJsonSerializationSchema(
             TimestampFormat timestampFormat,
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
             String mapNullKeyLiteral,
@@ -89,14 +79,13 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
         this.encodeDecimalAsPlainNumber = encodeDecimalAsPlainNumber;
-        this.zoneId = zoneId;
-        jsonSerializers = new HashMap<>();
         this.writeNullProperties = writeNullProperties;
+        this.zoneId = zoneId;
+        this.jsonSerializers = new HashMap<>();
     }
 
     @Override
     public void open(InitializationContext context) {
-        reuseGenericRowData = new GenericRowData(3);
         this.context = context;
     }
 
@@ -118,7 +107,7 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
                     DataTypeUtils.toFlinkDataType(schema.toRowDataType()).getLogicalType();
             JsonRowDataSerializationSchema jsonSerializer =
                     new JsonRowDataSerializationSchema(
-                            createJsonRowType(fromLogicalToDataType(rowType)),
+                            (org.apache.flink.table.types.logical.RowType) rowType,
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
@@ -137,48 +126,23 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
 
         DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
         try {
+            TableSchemaInfo tableSchemaInfo = jsonSerializers.get(dataChangeEvent.tableId());
             switch (dataChangeEvent.op()) {
                 case INSERT:
-                    reuseGenericRowData.setField(0, null);
-                    reuseGenericRowData.setField(
-                            1,
-                            jsonSerializers
-                                    .get(dataChangeEvent.tableId())
-                                    .getRowDataFromRecordData(dataChangeEvent.after()));
-                    reuseGenericRowData.setField(2, OP_INSERT);
-                    return jsonSerializers
-                            .get(dataChangeEvent.tableId())
+                    return tableSchemaInfo
                             .getSerializationSchema()
-                            .serialize(reuseGenericRowData);
-                case DELETE:
-                    reuseGenericRowData.setField(
-                            0,
-                            jsonSerializers
-                                    .get(dataChangeEvent.tableId())
-                                    .getRowDataFromRecordData(dataChangeEvent.before()));
-                    reuseGenericRowData.setField(1, null);
-                    reuseGenericRowData.setField(2, OP_DELETE);
-                    return jsonSerializers
-                            .get(dataChangeEvent.tableId())
-                            .getSerializationSchema()
-                            .serialize(reuseGenericRowData);
+                            .serialize(
+                                    tableSchemaInfo.getRowDataFromRecordData(
+                                            dataChangeEvent.after(), RowKind.INSERT));
                 case UPDATE:
                 case REPLACE:
-                    reuseGenericRowData.setField(
-                            0,
-                            jsonSerializers
-                                    .get(dataChangeEvent.tableId())
-                                    .getRowDataFromRecordData(dataChangeEvent.before()));
-                    reuseGenericRowData.setField(
-                            1,
-                            jsonSerializers
-                                    .get(dataChangeEvent.tableId())
-                                    .getRowDataFromRecordData(dataChangeEvent.after()));
-                    reuseGenericRowData.setField(2, OP_UPDATE);
-                    return jsonSerializers
-                            .get(dataChangeEvent.tableId())
+                    return tableSchemaInfo
                             .getSerializationSchema()
-                            .serialize(reuseGenericRowData);
+                            .serialize(
+                                    tableSchemaInfo.getRowDataFromRecordData(
+                                            dataChangeEvent.after(), RowKind.UPDATE_AFTER));
+                case DELETE:
+                    return null;
                 default:
                     throw new UnsupportedOperationException(
                             format(
@@ -188,16 +152,5 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
         } catch (Throwable t) {
             throw new RuntimeException(format("Could not serialize event '%s'.", event), t);
         }
-    }
-
-    private static RowType createJsonRowType(DataType databaseSchema) {
-        // Debezium JSON contains some other information, e.g. "source", "ts_ms"
-        // but we don't need them.
-        return (RowType)
-                DataTypes.ROW(
-                                DataTypes.FIELD("before", databaseSchema),
-                                DataTypes.FIELD("after", databaseSchema),
-                                DataTypes.FIELD("op", DataTypes.STRING()))
-                        .getLogicalType();
     }
 }

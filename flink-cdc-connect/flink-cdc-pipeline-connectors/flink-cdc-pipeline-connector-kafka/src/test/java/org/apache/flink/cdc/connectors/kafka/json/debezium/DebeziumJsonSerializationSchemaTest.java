@@ -21,6 +21,7 @@ import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DataChangeEvent;
+import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
@@ -40,6 +41,11 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.time.ZoneId;
+import java.util.Collections;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 /** Tests for {@link DebeziumJsonSerializationSchema}. */
 public class DebeziumJsonSerializationSchemaTest {
 
@@ -53,7 +59,9 @@ public class DebeziumJsonSerializationSchemaTest {
                         .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, false);
         SerializationSchema<Event> serializationSchema =
                 ChangeLogJsonFormatFactory.createSerializationSchema(
-                        new Configuration(), JsonSerializationType.DEBEZIUM_JSON);
+                        new Configuration(),
+                        JsonSerializationType.DEBEZIUM_JSON,
+                        ZoneId.systemDefault());
         serializationSchema.open(new MockInitializationContext());
         // create table
         Schema schema =
@@ -124,5 +132,18 @@ public class DebeziumJsonSerializationSchemaTest {
                         "{\"before\":{\"col1\":\"1\",\"col2\":\"1\"},\"after\":{\"col1\":\"1\",\"col2\":\"x\"},\"op\":\"u\"}");
         actual = mapper.readTree(serializationSchema.serialize(updateEvent));
         Assertions.assertEquals(expected, actual);
+
+        // Drop col1
+        serializationSchema.serialize(
+                new DropColumnEvent(TABLE_1, Collections.singletonList("col1")));
+        generator = new BinaryRecordDataGenerator(RowType.of(DataTypes.STRING()));
+        DataChangeEvent insertEvent3 =
+                DataChangeEvent.insertEvent(
+                        TABLE_1,
+                        generator.generate(new Object[] {BinaryStringData.fromString("20")}));
+        assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
+                .isEqualTo(
+                        mapper.readTree(
+                                "{\"before\":null,\"after\":{\"col2\":\"20\"},\"op\":\"c\"}"));
     }
 }

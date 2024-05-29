@@ -25,9 +25,12 @@ import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
 import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.connectors.kafka.json.KeyJsonSerializationSchema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.DeliveryGuarantee;
-import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkFixedPartitioner;
+import org.apache.flink.formats.common.TimestampFormat;
+import org.apache.flink.formats.json.JsonFormatOptions;
+import org.apache.flink.formats.json.JsonFormatOptionsUtil;
 
 import java.time.ZoneId;
 import java.util.HashSet;
@@ -37,11 +40,14 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.PROPERTIES_PREFIX;
+import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
+import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
+import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
-/** A dummy {@link DataSinkFactory} to create {@link KafkaDataSink}. */
-public class KafkaDataSinkFactory implements DataSinkFactory {
+/** A dummy {@link DataSinkFactory} to create {@link UpsertKafkaDataSink}. */
+public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
 
-    public static final String IDENTIFIER = "kafka";
+    public static final String IDENTIFIER = "upsert-kafka";
 
     @Override
     public DataSink createDataSink(Context context) {
@@ -58,11 +64,9 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
                             context.getPipelineConfiguration()
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
-        JsonSerializationType jsonSerializationType =
-                context.getFactoryConfiguration().get(KafkaDataSinkOptions.VALUE_FORMAT);
         SerializationSchema<Event> valueSerialization =
                 ChangeLogJsonFormatFactory.createSerializationSchema(
-                        configuration, jsonSerializationType, zoneId);
+                        configuration, JsonSerializationType.UPSERT_KAFKA_JSON, zoneId);
         final Properties kafkaProperties = new Properties();
         Map<String, String> allOptions = context.getFactoryConfiguration().toMap();
         allOptions.keySet().stream()
@@ -79,10 +83,10 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
                         .get(KafkaDataSinkOptions.SINK_ADD_TABLEID_TO_HEADER_ENABLED);
         String customHeaders =
                 context.getFactoryConfiguration().get(KafkaDataSinkOptions.SINK_CUSTOM_HEADER);
-        return new KafkaDataSink(
+        return new UpsertKafkaDataSink(
                 deliveryGuarantee,
                 kafkaProperties,
-                new FlinkFixedPartitioner<>(),
+                createKeySerialization(configuration, zoneId),
                 valueSerialization,
                 topic,
                 addTableToHeaderEnabled,
@@ -106,5 +110,25 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
         options.add(KafkaDataSinkOptions.TOPIC);
         options.add(KafkaDataSinkOptions.SINK_ADD_TABLEID_TO_HEADER_ENABLED);
         return options;
+    }
+
+    private SerializationSchema<Event> createKeySerialization(
+            Configuration formatOptions, ZoneId zoneId) {
+        TimestampFormat timestampFormat = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
+        JsonFormatOptions.MapNullKeyMode mapNullKeyMode =
+                JsonFormatOptionsUtil.getMapNullKeyMode(formatOptions);
+        String mapNullKeyLiteral = formatOptions.get(JSON_MAP_NULL_KEY_LITERAL);
+
+        final boolean encodeDecimalAsPlainNumber =
+                formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+
+        final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
+        return new KeyJsonSerializationSchema(
+                timestampFormat,
+                mapNullKeyMode,
+                mapNullKeyLiteral,
+                encodeDecimalAsPlainNumber,
+                writeNullProperties,
+                zoneId);
     }
 }

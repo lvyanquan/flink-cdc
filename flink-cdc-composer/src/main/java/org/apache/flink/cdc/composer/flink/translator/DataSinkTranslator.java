@@ -20,10 +20,12 @@ package org.apache.flink.cdc.composer.flink.translator;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
+import org.apache.flink.cdc.common.sink.FlinkDataStreamSinkProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkFunctionProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.composer.definition.SinkDef;
@@ -68,6 +70,13 @@ public class DataSinkTranslator {
                     (FlinkSinkFunctionProvider) eventSinkProvider;
             SinkFunction<Event> sinkFunction = sinkFunctionProvider.getSinkFunction();
             sinkTo(input, sinkFunction, sinkName, schemaOperatorID);
+        } else if (eventSinkProvider instanceof FlinkDataStreamSinkProvider) {
+            // SinkFunction
+            FlinkDataStreamSinkProvider dataStreamSinkProvider =
+                    (FlinkDataStreamSinkProvider) eventSinkProvider;
+            Tuple2<DataStream<Event>, Sink<Event>> result =
+                    dataStreamSinkProvider.consumeDataStream(input);
+            sinkTo(result.f0, result.f1, sinkName, schemaOperatorID);
         }
     }
 

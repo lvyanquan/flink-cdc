@@ -27,6 +27,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.BinaryStringData;
+import org.apache.flink.types.RowKind;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -55,6 +56,19 @@ public class TableSchemaInfo {
     /** convert to {@link RowData}, which will be pass to serializationSchema. */
     public RowData getRowDataFromRecordData(RecordData recordData) {
         GenericRowData genericRowData = new GenericRowData(recordData.getArity());
+        for (int i = 0; i < recordData.getArity(); i++) {
+            genericRowData.setField(i, fieldGetters.get(i).getFieldOrNull(recordData));
+        }
+        return genericRowData;
+    }
+
+    /**
+     * convert to {@link RowData} with a special row kind, which will be pass to
+     * serializationSchema.
+     */
+    public RowData getRowDataFromRecordData(RecordData recordData, RowKind rowKind) {
+        GenericRowData genericRowData = new GenericRowData(recordData.getArity());
+        genericRowData.setRowKind(rowKind);
         for (int i = 0; i < recordData.getArity(); i++) {
             genericRowData.setField(i, fieldGetters.get(i).getFieldOrNull(recordData));
         }
@@ -159,5 +173,9 @@ public class TableSchemaInfo {
 
     public SerializationSchema<RowData> getSerializationSchema() {
         return serializationSchema;
+    }
+
+    public List<RecordData.FieldGetter> getFieldGetters() {
+        return fieldGetters;
     }
 }

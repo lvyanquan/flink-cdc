@@ -30,7 +30,6 @@ import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartiti
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 
-import java.time.ZoneId;
 import java.util.Properties;
 
 /** A {@link DataSink} for "Kafka" connector. */
@@ -41,8 +40,6 @@ public class KafkaDataSink implements DataSink {
     final DeliveryGuarantee deliveryGuarantee;
 
     final FlinkKafkaPartitioner<Event> partitioner;
-
-    final ZoneId zoneId;
 
     final SerializationSchema<Event> valueSerialization;
 
@@ -56,7 +53,6 @@ public class KafkaDataSink implements DataSink {
             DeliveryGuarantee deliveryGuarantee,
             Properties kafkaProperties,
             FlinkKafkaPartitioner<Event> partitioner,
-            ZoneId zoneId,
             SerializationSchema<Event> valueSerialization,
             String topic,
             boolean addTableToHeaderEnabled,
@@ -64,7 +60,6 @@ public class KafkaDataSink implements DataSink {
         this.deliveryGuarantee = deliveryGuarantee;
         this.kafkaProperties = kafkaProperties;
         this.partitioner = partitioner;
-        this.zoneId = zoneId;
         this.valueSerialization = valueSerialization;
         this.topic = topic;
         this.addTableToHeaderEnabled = addTableToHeaderEnabled;

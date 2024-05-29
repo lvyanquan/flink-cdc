@@ -29,7 +29,10 @@ public enum JsonSerializationType {
     DEBEZIUM_JSON("debezium-json"),
 
     /** Use {@link CanalJsonSerializationSchema} to serialize. */
-    CANAL_JSON("canal-json");
+    CANAL_JSON("canal-json"),
+
+    /** Use {@link UpsertKafkaJsonSerializationSchema} to serialize for upsert kafka. */
+    UPSERT_KAFKA_JSON("upsert-kafka-json");
 
     private final String value;
 

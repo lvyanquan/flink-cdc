@@ -84,12 +84,13 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
             String mapNullKeyLiteral,
             boolean encodeDecimalAsPlainNumber,
-            boolean writeNullProperties) {
+            boolean writeNullProperties,
+            ZoneId zoneId) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
         this.encodeDecimalAsPlainNumber = encodeDecimalAsPlainNumber;
-        this.zoneId = ZoneId.systemDefault();
+        this.zoneId = zoneId;
         jsonSerializers = new HashMap<>();
         this.writeNullProperties = writeNullProperties;
     }

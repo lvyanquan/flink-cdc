@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.kafka.json.canal;
+package org.apache.flink.cdc.connectors.kafka.json;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
@@ -27,9 +27,6 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.types.RowType;
-import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
-import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
-import org.apache.flink.cdc.connectors.kafka.json.MockInitializationContext;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.jackson.JacksonMapperFactory;
@@ -38,7 +35,6 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonGenerator
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.ZoneId;
@@ -46,8 +42,8 @@ import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Tests for {@link CanalJsonSerializationSchema}. */
-public class CanalJsonSerializationSchemaTest {
+/** Tests for {@link UpsertKafkaJsonSerializationSchema}. */
+public class UpsertKafkaJsonSerializationSchemaTest {
 
     public static final TableId TABLE_1 =
             TableId.tableId("default_namespace", "default_schema", "table1");
@@ -60,10 +56,9 @@ public class CanalJsonSerializationSchemaTest {
         SerializationSchema<Event> serializationSchema =
                 ChangeLogJsonFormatFactory.createSerializationSchema(
                         new Configuration(),
-                        JsonSerializationType.CANAL_JSON,
+                        JsonSerializationType.UPSERT_KAFKA_JSON,
                         ZoneId.systemDefault());
         serializationSchema.open(new MockInitializationContext());
-
         // create table
         Schema schema =
                 Schema.newBuilder()
@@ -72,11 +67,11 @@ public class CanalJsonSerializationSchemaTest {
                         .primaryKey("col1")
                         .build();
         CreateTableEvent createTableEvent = new CreateTableEvent(TABLE_1, schema);
-        Assertions.assertNull(serializationSchema.serialize(createTableEvent));
+        assertThat(serializationSchema.serialize(createTableEvent)).isNull();
 
-        // insert
         BinaryRecordDataGenerator generator =
                 new BinaryRecordDataGenerator(RowType.of(DataTypes.STRING(), DataTypes.STRING()));
+        // insert
         DataChangeEvent insertEvent1 =
                 DataChangeEvent.insertEvent(
                         TABLE_1,
@@ -85,11 +80,9 @@ public class CanalJsonSerializationSchemaTest {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("1")
                                 }));
-        JsonNode expected =
-                mapper.readTree(
-                        "{\"old\":null,\"data\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"type\":\"INSERT\"}");
+        JsonNode expected = mapper.readTree("{\"col1\":\"1\",\"col2\":\"1\"}");
         JsonNode actual = mapper.readTree(serializationSchema.serialize(insertEvent1));
-        Assertions.assertEquals(expected, actual);
+        assertThat(actual).isEqualTo(expected);
 
         DataChangeEvent insertEvent2 =
                 DataChangeEvent.insertEvent(
@@ -99,11 +92,9 @@ public class CanalJsonSerializationSchemaTest {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
                                 }));
-        expected =
-                mapper.readTree(
-                        "{\"old\":null,\"data\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"type\":\"INSERT\"}");
+        expected = mapper.readTree("{\"col1\":\"2\",\"col2\":\"2\"}");
         actual = mapper.readTree(serializationSchema.serialize(insertEvent2));
-        Assertions.assertEquals(expected, actual);
+        assertThat(actual).isEqualTo(expected);
 
         DataChangeEvent deleteEvent =
                 DataChangeEvent.deleteEvent(
@@ -113,11 +104,7 @@ public class CanalJsonSerializationSchemaTest {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
                                 }));
-        expected =
-                mapper.readTree(
-                        "{\"old\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"data\":null,\"type\":\"DELETE\"}");
-        actual = mapper.readTree(serializationSchema.serialize(deleteEvent));
-        Assertions.assertEquals(expected, actual);
+        assertThat(serializationSchema.serialize(deleteEvent)).isNull();
 
         DataChangeEvent updateEvent =
                 DataChangeEvent.updateEvent(
@@ -132,11 +119,9 @@ public class CanalJsonSerializationSchemaTest {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("x")
                                 }));
-        expected =
-                mapper.readTree(
-                        "{\"old\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"data\":[{\"col1\":\"1\",\"col2\":\"x\"}],\"type\":\"UPDATE\"}");
+        expected = mapper.readTree("{\"col1\":\"1\",\"col2\":\"x\"}");
         actual = mapper.readTree(serializationSchema.serialize(updateEvent));
-        Assertions.assertEquals(expected, actual);
+        assertThat(actual).isEqualTo(expected);
 
         // Drop col1
         serializationSchema.serialize(
@@ -147,8 +132,6 @@ public class CanalJsonSerializationSchemaTest {
                         TABLE_1,
                         generator.generate(new Object[] {BinaryStringData.fromString("20")}));
         assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
-                .isEqualTo(
-                        mapper.readTree(
-                                "{\"old\":null,\"data\":[{\"col2\":\"20\"}],\"type\":\"INSERT\"}"));
+                .isEqualTo(mapper.readTree("{\"col2\":\"20\"}"));
     }
 }
