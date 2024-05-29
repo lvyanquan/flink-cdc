@@ -100,7 +100,9 @@ import java.util.logging.Logger;
  * <p>Line 251~253: add {@link #setProcessInParallel(boolean)} method to set {@link
  * #processInParallel}.
  *
- * <p>Line 1181: add processInParallel check to decide whether to notify listeners and update binlog
+ * <p>Line 1038 : catch Throwable instead of Exception.
+ *
+ * <p>Line 1183: add processInParallel check to decide whether to notify listeners and update binlog
  * position later.
  */
 public class BinaryLogClient implements BinaryLogClientMXBean {
@@ -1034,10 +1036,10 @@ public class BinaryLogClient implements BinaryLogClientMXBean {
                             exceptionReference.set(e);
                             countDownLatch.countDown(); // making sure we don't end up waiting whole
                             // "timeout"
-                        } catch (Exception e) {
+                        } catch (Throwable t) {
                             exceptionReference.set(
                                     new IOException(
-                                            e)); // method is asynchronous, catch all exceptions so
+                                            t)); // method is asynchronous, catch all exceptions so
                             // that they are not lost
                             countDownLatch.countDown(); // making sure we don't end up waiting whole
                             // "timeout"
