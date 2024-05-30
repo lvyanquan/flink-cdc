@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.values.factory;
 
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.configuration.ConfigOption;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.Factory;
@@ -51,10 +52,14 @@ public class ValuesDataFactory implements DataSourceFactory, DataSinkFactory {
 
     @Override
     public DataSink createDataSink(Context context) {
+        Configuration config = context.getFactoryConfiguration();
         return new ValuesDataSink(
-                context.getFactoryConfiguration().get(ValuesDataSinkOptions.MATERIALIZED_IN_MEMORY),
-                context.getFactoryConfiguration().get(ValuesDataSinkOptions.PRINT_ENABLED),
-                context.getFactoryConfiguration().get(ValuesDataSinkOptions.SINK_API));
+                config.get(ValuesDataSinkOptions.MATERIALIZED_IN_MEMORY),
+                config.get(ValuesDataSinkOptions.PRINT_ENABLED),
+                config.get(ValuesDataSinkOptions.SINK_API),
+                config.get(ValuesDataSinkOptions.SINK_STANDARD_ERROR),
+                config.get(ValuesDataSinkOptions.SINK_LOGGER),
+                config.get(ValuesDataSinkOptions.SINK_LIMIT));
     }
 
     @Override
@@ -73,6 +78,12 @@ public class ValuesDataFactory implements DataSourceFactory, DataSinkFactory {
         options.add(ValuesDataSourceOptions.EVENT_SET_ID);
         options.add(ValuesDataSourceOptions.FAILURE_INJECTION_INDEX);
         options.add(ValuesDataSinkOptions.MATERIALIZED_IN_MEMORY);
+
+        options.add(ValuesDataSinkOptions.PRINT_ENABLED);
+        options.add(ValuesDataSinkOptions.SINK_API);
+        options.add(ValuesDataSinkOptions.SINK_STANDARD_ERROR);
+        options.add(ValuesDataSinkOptions.SINK_LOGGER);
+        options.add(ValuesDataSinkOptions.SINK_LIMIT);
         return options;
     }
 }

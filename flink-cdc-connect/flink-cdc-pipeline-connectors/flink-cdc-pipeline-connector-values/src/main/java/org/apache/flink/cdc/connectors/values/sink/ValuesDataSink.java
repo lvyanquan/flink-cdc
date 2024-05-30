@@ -36,6 +36,10 @@ import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.connectors.values.ValuesDatabase;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
@@ -52,19 +56,35 @@ public class ValuesDataSink implements DataSink, Serializable {
 
     private final SinkApi sinkApi;
 
-    public ValuesDataSink(boolean materializedInMemory, boolean print, SinkApi sinkApi) {
+    private final boolean stdErr;
+
+    private final boolean logger;
+
+    private final long limit;
+
+    public ValuesDataSink(
+            boolean materializedInMemory,
+            boolean print,
+            SinkApi sinkApi,
+            boolean stdErr,
+            boolean logger,
+            long limit) {
         this.materializedInMemory = materializedInMemory;
         this.print = print;
         this.sinkApi = sinkApi;
+        this.stdErr = stdErr;
+        this.logger = logger;
+        this.limit = limit;
     }
 
     @Override
     public EventSinkProvider getEventSinkProvider() {
         if (SinkApi.SINK_V2.equals(sinkApi)) {
-            return FlinkSinkProvider.of(new ValuesSink(materializedInMemory, print));
+            return FlinkSinkProvider.of(
+                    new ValuesSink(materializedInMemory, print, stdErr, logger, limit));
         } else {
             return FlinkSinkFunctionProvider.of(
-                    new ValuesDataSinkFunction(materializedInMemory, print));
+                    new ValuesDataSinkFunction(materializedInMemory, print, stdErr, logger, limit));
         }
     }
 
@@ -80,9 +100,23 @@ public class ValuesDataSink implements DataSink, Serializable {
 
         private final boolean print;
 
-        public ValuesSink(boolean materializedInMemory, boolean print) {
+        private final boolean stdErr;
+
+        private final boolean logger;
+
+        private final long limit;
+
+        public ValuesSink(
+                boolean materializedInMemory,
+                boolean print,
+                boolean stdErr,
+                boolean logger,
+                long limit) {
             this.materializedInMemory = materializedInMemory;
             this.print = print;
+            this.stdErr = stdErr;
+            this.logger = logger;
+            this.limit = limit;
         }
 
         @Override
@@ -90,6 +124,9 @@ public class ValuesDataSink implements DataSink, Serializable {
             return new ValuesSinkWriter(
                     materializedInMemory,
                     print,
+                    stdErr,
+                    logger,
+                    limit,
                     context.getSubtaskId(),
                     context.getNumberOfParallelSubtasks());
         }
@@ -100,9 +137,19 @@ public class ValuesDataSink implements DataSink, Serializable {
      */
     private static class ValuesSinkWriter implements SinkWriter<Event> {
 
+        private static final Logger LOGGER = LoggerFactory.getLogger(ValuesSinkWriter.class);
+
         private final boolean materializedInMemory;
 
         private final boolean print;
+
+        private final boolean stdErr;
+
+        private final boolean logger;
+
+        private final long limit;
+        private long printCnt = 0;
+        private boolean exceedLimitWarned = false;
 
         private final int subtaskIndex;
 
@@ -117,10 +164,19 @@ public class ValuesDataSink implements DataSink, Serializable {
         private final Map<TableId, List<RecordData.FieldGetter>> fieldGetterMaps;
 
         public ValuesSinkWriter(
-                boolean materializedInMemory, boolean print, int subtaskIndex, int numSubtasks) {
+                boolean materializedInMemory,
+                boolean print,
+                boolean stdErr,
+                boolean logger,
+                long limit,
+                int subtaskIndex,
+                int numSubtasks) {
             super();
             this.materializedInMemory = materializedInMemory;
             this.print = print;
+            this.stdErr = stdErr;
+            this.logger = logger;
+            this.limit = limit;
             this.subtaskIndex = subtaskIndex;
             this.numSubtasks = numSubtasks;
             schemaMaps = new HashMap<>();
@@ -149,14 +205,30 @@ public class ValuesDataSink implements DataSink, Serializable {
             } else if (materializedInMemory && event instanceof DataChangeEvent) {
                 ValuesDatabase.applyDataChangeEvent((DataChangeEvent) event);
             }
+
+            // print the detail message to console for verification.
             if (print) {
-                String prefix = numSubtasks > 1 ? subtaskIndex + "> " : "";
-                // print the detail message to console for verification.
-                System.out.println(
-                        prefix
-                                + ValuesDataSinkHelper.convertEventToStr(
-                                        event,
-                                        fieldGetterMaps.get(((ChangeEvent) event).tableId())));
+                if (printCnt < limit) {
+                    String prefix = numSubtasks > 1 ? subtaskIndex + "> " : "";
+                    String output =
+                            prefix
+                                    + ValuesDataSinkHelper.convertEventToStr(
+                                            event,
+                                            fieldGetterMaps.get(((ChangeEvent) event).tableId()));
+
+                    PrintStream stream = !stdErr ? System.out : System.err;
+                    stream.println(output);
+
+                    if (logger) {
+                        LOGGER.info(output);
+                    }
+                    printCnt++;
+                } else if (!exceedLimitWarned) {
+                    exceedLimitWarned = true;
+                    LOGGER.warn(
+                            "The number of events exceeds the values sink limit, and the rest rows will not be output. "
+                                    + "Please increase the value for option 'sink.limit' in the values sink to display more events.");
+                }
             }
         }
 

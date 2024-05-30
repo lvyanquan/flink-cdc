@@ -42,4 +42,23 @@ public class ValuesDataSinkOptions {
                     .defaultValue(ValuesDataSink.SinkApi.SINK_V2)
                     .withDescription(
                             "The sink api on which the sink is based: SinkFunction or SinkV2.");
+
+    public static final ConfigOption<Boolean> SINK_STANDARD_ERROR =
+            ConfigOptions.key("sink.print.standard-error")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "True, if the sink should print to standard error instead of standard out.");
+
+    public static final ConfigOption<Boolean> SINK_LOGGER =
+            ConfigOptions.key("sink.print.logger")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("True, if the sink should output through logger.");
+
+    public static final ConfigOption<Long> SINK_LIMIT =
+            ConfigOptions.key("sink.print.limit")
+                    .longType()
+                    .defaultValue(2000L)
+                    .withDescription("Limit of logger records to output, default 2000");
 }
