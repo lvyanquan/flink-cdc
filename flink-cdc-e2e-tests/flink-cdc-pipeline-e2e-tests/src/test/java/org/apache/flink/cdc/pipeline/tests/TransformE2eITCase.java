@@ -294,19 +294,19 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                 String.format(
                         "DataChangeEvent{tableId=%s.TABLEALPHA, before=[1009, 8.1, 0, 2009, 8.1], after=[1009, 100, 0, 2009, 100], op=UPDATE, meta=()}",
                         transformRenameDatabase.getDatabaseName()),
-                20000L);
+                6000L);
 
         waitUntilSpecificEvent(
                 String.format(
                         "DataChangeEvent{tableId=%s.TABLEALPHA, before=[], after=[3007, 7, 79, 4007, 7], op=INSERT, meta=()}",
                         transformRenameDatabase.getDatabaseName()),
-                20000L);
+                6000L);
 
         waitUntilSpecificEvent(
                 String.format(
                         "DataChangeEvent{tableId=%s.TABLEBETA, before=[2011, 11, Big Sur, 3011, 11], after=[], op=DELETE, meta=()}",
                         transformRenameDatabase.getDatabaseName()),
-                20000L);
+                6000L);
 
         String stdout = taskManagerConsumer.toUtf8String();
         System.out.println(stdout);
@@ -314,7 +314,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
 
     private void validateResult(List<String> expectedEvents) throws Exception {
         for (String event : expectedEvents) {
-            waitUntilSpecificEvent(event, 20000L);
+            waitUntilSpecificEvent(event, 6000L);
         }
     }
 
