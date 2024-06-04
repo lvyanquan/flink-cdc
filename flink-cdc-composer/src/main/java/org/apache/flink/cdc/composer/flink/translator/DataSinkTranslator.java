@@ -22,6 +22,7 @@ import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.cdc.common.annotation.Internal;
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
@@ -80,7 +81,8 @@ public class DataSinkTranslator {
         }
     }
 
-    private void sinkTo(
+    @VisibleForTesting
+    void sinkTo(
             DataStream<Event> input,
             Sink<Event> sink,
             String sinkName,
@@ -94,7 +96,7 @@ public class DataSinkTranslator {
         if (sink instanceof TwoPhaseCommittingSink) {
             addCommittingTopology(sink, stream, sinkName, schemaOperatorID);
         } else {
-            input.transform(
+            stream.transform(
                     SINK_WRITER_PREFIX + sinkName,
                     CommittableMessageTypeInfo.noOutput(),
                     new DataSinkWriterOperatorFactory<>(sink, schemaOperatorID));
