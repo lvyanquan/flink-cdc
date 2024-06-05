@@ -27,8 +27,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
@@ -44,7 +42,6 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /** End-to-end tests for mysql cdc pipeline job. */
-@RunWith(Parameterized.class)
 public class MysqlE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(MysqlE2eITCase.class);
 
@@ -53,7 +50,6 @@ public class MysqlE2eITCase extends PipelineTestEnvironment {
     // ------------------------------------------------------------------------------------------
     protected static final String MYSQL_TEST_USER = "mysqluser";
     protected static final String MYSQL_TEST_PASSWORD = "mysqlpw";
-    protected static final String MYSQL_DRIVER_CLASS = "com.mysql.cj.jdbc.Driver";
     protected static final String INTER_CONTAINER_MYSQL_ALIAS = "mysql";
 
     @ClassRule
@@ -110,8 +106,7 @@ public class MysqlE2eITCase extends PipelineTestEnvironment {
                         mysqlInventoryDatabase.getDatabaseName());
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
-        Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
-        submitPipelineJob(pipelineJob, mysqlCdcJar, valuesCdcJar, mysqlDriverJar);
+        submitPipelineJob(pipelineJob, mysqlCdcJar, valuesCdcJar);
         waitUntilJobRunning(Duration.ofSeconds(30));
         LOG.info("Pipeline job is running");
         waitUtilSpecificEvent(

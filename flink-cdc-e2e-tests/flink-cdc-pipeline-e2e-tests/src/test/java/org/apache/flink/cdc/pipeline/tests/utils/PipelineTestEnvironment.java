@@ -33,8 +33,6 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container.ExecResult;
@@ -50,6 +48,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -59,11 +58,9 @@ import java.util.stream.Stream;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Test environment running pipeline job on Flink containers. */
-@RunWith(Parameterized.class)
 public abstract class PipelineTestEnvironment extends TestLogger {
-    private static final Logger LOG = LoggerFactory.getLogger(PipelineTestEnvironment.class);
 
-    @Parameterized.Parameter public String flinkVersion;
+    private static final Logger LOG = LoggerFactory.getLogger(PipelineTestEnvironment.class);
 
     // ------------------------------------------------------------------------------------------
     // Flink Variables
@@ -71,44 +68,50 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     public static final int JOB_MANAGER_REST_PORT = 8081;
     public static final String INTER_CONTAINER_JM_ALIAS = "jobmanager";
     public static final String INTER_CONTAINER_TM_ALIAS = "taskmanager";
-    public static final String FLINK_PROPERTIES =
-            String.join(
-                    "\n",
-                    Arrays.asList(
-                            "jobmanager.rpc.address: jobmanager",
-                            "taskmanager.numberOfTaskSlots: 10",
-                            "parallelism.default: 4",
-                            "execution.checkpointing.interval: 300",
-                            // this is needed for oracle-cdc tests.
-                            // see https://stackoverflow.com/a/47062742/4915129
-                            "env.java.opts: -Doracle.jdbc.timezoneAsRegion=false"));
+    public static final List<String> EXTERNAL_PROPS =
+            Arrays.asList(
+                    String.format("jobmanager.rpc.address: %s", INTER_CONTAINER_JM_ALIAS),
+                    "jobmanager.bind-host: 0.0.0.0",
+                    "taskmanager.bind-host: 0.0.0.0",
+                    "rest.bind-address: 0.0.0.0",
+                    "rest.address: 0.0.0.0",
+                    "query.server.port: 6125",
+                    "blob.server.port: 6124",
+                    "taskmanager.numberOfTaskSlots: 10",
+                    "parallelism.default: 4",
+                    "execution.checkpointing.interval: 300",
+                    "state.backend.type: hashmap");
+    public static final String FLINK_PROPERTIES = String.join("\n", EXTERNAL_PROPS);
 
     @ClassRule public static final Network NETWORK = Network.newNetwork();
 
     @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Nullable protected RestClusterClient<StandaloneClusterId> restClusterClient;
+
     protected GenericContainer<?> jobManager;
     protected GenericContainer<?> taskManager;
 
     protected ToStringConsumer jobManagerConsumer;
-
     protected ToStringConsumer taskManagerConsumer;
-
-    @Parameterized.Parameters(name = "flinkVersion: {0}")
-    public static List<String> getFlinkVersion() {
-        return Arrays.asList("1.17.1", "1.18.0");
-    }
 
     @Before
     public void before() throws Exception {
         LOG.info("Starting containers...");
         jobManagerConsumer = new ToStringConsumer();
+        // These cmds will put the FLINK_PROPERTIES to flink-conf.yaml
+        List<String> cmds = new ArrayList<>();
+        cmds.add("cp /opt/flink/conf/flink-conf.yaml /opt/flink/conf/flink-conf.yaml.tmp");
+        for (String prop : EXTERNAL_PROPS) {
+            cmds.add(String.format("echo '%s' >> /opt/flink/conf/flink-conf.yaml.tmp", prop));
+        }
+        cmds.add("mv /opt/flink/conf/flink-conf.yaml.tmp /opt/flink/conf/flink-conf.yaml");
+        String preCmd = String.join(" && ", cmds);
         jobManager =
                 new GenericContainer<>(getFlinkDockerImageTag())
-                        .withCommand("jobmanager")
-                        .withNetwork(NETWORK)
+                        .withCommand("bash", "-c", preCmd + " && jobmanager.sh start-foreground")
                         .withExtraHost("host.docker.internal", "host-gateway")
+                        .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_JM_ALIAS)
                         .withExposedPorts(JOB_MANAGER_REST_PORT)
                         .withEnv("FLINK_PROPERTIES", FLINK_PROPERTIES)
@@ -116,7 +119,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         taskManagerConsumer = new ToStringConsumer();
         taskManager =
                 new GenericContainer<>(getFlinkDockerImageTag())
-                        .withCommand("taskmanager")
+                        .withCommand("bash", "-c", preCmd + " && taskmanager.sh start-foreground")
                         .withExtraHost("host.docker.internal", "host-gateway")
                         .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_TM_ALIAS)
@@ -142,12 +145,6 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         }
     }
 
-    /** Allow overriding the default flink properties. */
-    public void overrideFlinkProperties(String properties) {
-        jobManager.withEnv("FLINK_PROPERTIES", properties);
-        taskManager.withEnv("FLINK_PROPERTIES", properties);
-    }
-
     /**
      * Submits a SQL job to the running cluster.
      *
@@ -161,11 +158,11 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         }
         jobManager.copyFileToContainer(
                 MountableFile.forHostPath(
-                        TestUtils.getResource("flink-cdc.sh", "flink-cdc-dist", "src"), 755),
+                        TestUtils.getResource("flink-cdc.sh", "flink-cdc-dist", "src"), 0777),
                 "/tmp/flinkCDC/bin/flink-cdc.sh");
         jobManager.copyFileToContainer(
                 MountableFile.forHostPath(
-                        TestUtils.getResource("flink-cdc.yaml", "flink-cdc-dist", "src"), 755),
+                        TestUtils.getResource("flink-cdc.yaml", "flink-cdc-dist", "src"), 0777),
                 "/tmp/flinkCDC/conf/flink-cdc.yaml");
         jobManager.copyFileToContainer(
                 MountableFile.forHostPath(TestUtils.getResource("flink-cdc-dist.jar")),
@@ -181,6 +178,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         String commands =
                 "/tmp/flinkCDC/bin/flink-cdc.sh /tmp/flinkCDC/conf/pipeline.yaml --flink-home /opt/flink"
                         + sb;
+
         ExecResult execResult = jobManager.execInContainer("bash", "-c", commands);
         LOG.info(execResult.getStdout());
         LOG.error(execResult.getStderr());
@@ -244,6 +242,6 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     }
 
     protected String getFlinkDockerImageTag() {
-        return String.format("flink:%s-scala_2.12", flinkVersion);
+        return "reg.docker.alibaba-inc.com/ververica/vvr:1.17-vvr-8.0-SNAPSHOT-vvp-hadoop3-20240531015410_3503";
     }
 }
