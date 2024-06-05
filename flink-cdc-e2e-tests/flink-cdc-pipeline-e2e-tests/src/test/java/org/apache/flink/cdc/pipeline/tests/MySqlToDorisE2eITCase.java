@@ -30,6 +30,8 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;]
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container;
@@ -57,6 +59,7 @@ import static org.junit.Assert.assertTrue;
 
 /** End-to-end tests for mysql cdc to Doris pipeline job. */
 @Ignore
+@RunWith(Parameterized.class)
 public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(MySqlToDorisE2eITCase.class);
 
