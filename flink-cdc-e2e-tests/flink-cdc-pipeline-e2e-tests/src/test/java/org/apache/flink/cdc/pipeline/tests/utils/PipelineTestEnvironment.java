@@ -28,6 +28,7 @@ import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.util.TestLogger;
 
+import com.fasterxml.jackson.core.Version;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -53,6 +54,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.flink.util.Preconditions.checkState;
@@ -114,7 +116,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                         .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_JM_ALIAS)
                         .withExposedPorts(JOB_MANAGER_REST_PORT)
-                        .withEnv("FLINK_PROPERTIES", FLINK_PROPERTIES)
+                        .withEnv("FLINK_PROPERTIES", flinkProperties)
                         .withLogConsumer(jobManagerConsumer);
         taskManagerConsumer = new ToStringConsumer();
         taskManager =
@@ -123,7 +125,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                         .withExtraHost("host.docker.internal", "host-gateway")
                         .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_TM_ALIAS)
-                        .withEnv("FLINK_PROPERTIES", FLINK_PROPERTIES)
+                        .withEnv("FLINK_PROPERTIES", flinkProperties)
                         .dependsOn(jobManager)
                         .withLogConsumer(taskManagerConsumer);
 
@@ -243,5 +245,38 @@ public abstract class PipelineTestEnvironment extends TestLogger {
 
     protected String getFlinkDockerImageTag() {
         return "reg.docker.alibaba-inc.com/ververica/vvr:1.17-vvr-8.0-SNAPSHOT-vvp-hadoop3-20240531015410_3503";
+    }
+
+    private static Version parseVersion(String version) {
+        List<Integer> versionParts =
+                Arrays.stream(version.split("\\."))
+                        .map(Integer::valueOf)
+                        .limit(3)
+                        .collect(Collectors.toList());
+        return new Version(
+                versionParts.get(0), versionParts.get(1), versionParts.get(2), null, null, null);
+    }
+
+    private static String getFlinkProperties(String flinkVersion) {
+        // this is needed for oracle-cdc tests.
+        // see https://stackoverflow.com/a/47062742/4915129
+        String javaOptsConfig;
+        Version version = parseVersion(flinkVersion);
+        if (version.compareTo(parseVersion("1.17.0")) >= 0) {
+            // Flink 1.17 renames `env.java.opts` to `env.java.opts.all`
+            javaOptsConfig = "env.java.opts.all: -Doracle.jdbc.timezoneAsRegion=false";
+        } else {
+            // Legacy Flink version, might drop their support in near future
+            javaOptsConfig = "env.java.opts: -Doracle.jdbc.timezoneAsRegion=false";
+        }
+
+        return String.join(
+                "\n",
+                Arrays.asList(
+                        "jobmanager.rpc.address: jobmanager",
+                        "taskmanager.numberOfTaskSlots: 10",
+                        "parallelism.default: 4",
+                        "execution.checkpointing.interval: 300",
+                        javaOptsConfig));
     }
 }
