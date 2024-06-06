@@ -188,7 +188,7 @@ MacOS 由于内部实现容器的方式不同，在部署时宿主机直接修�
    **下载链接只对已发布的版本有效, SNAPSHOT 版本需要本地基于 master 或 release- 分支编译.**
    - [MySQL pipeline connector 3.1.0](https://search.maven.org/remotecontent?filepath=org/apache/flink/flink-cdc-pipeline-connector-mysql/3.1.0/flink-cdc-pipeline-connector-mysql-3.1.0.jar)
    - [Apache Doris pipeline connector 3.1.0](https://search.maven.org/remotecontent?filepath=org/apache/flink/flink-cdc-pipeline-connector-doris/3.1.0/flink-cdc-pipeline-connector-doris-3.1.0.jar)
-   - [MySQL Connector Java](https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.27/mysql-connector-java-8.0.27.jar)
+   - [MySQL Connector Java](https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.27/mysql-connector-java-8.0.27.jar)\
 
    您还需要将下面的 Driver 包放在 Flink `lib` 目录下，或通过 `--jar` 参数将其传入 Flink CDC CLI，因为 CDC Connectors 不再包含这些 Drivers：
    - [MySQL Connector Java](https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.27/mysql-connector-java-8.0.27.jar)
@@ -230,7 +230,7 @@ sink 添加 `table.create.properties.replication_num` 参数是由于 Docker 镜
 
 4. 最后，通过命令行提交任务到 Flink Standalone cluster
    ```shell
-   bash bin/flink-cdc.sh mysql-to-doris.yaml --jar lib/mysql-connector-java-8.0.27.jar
+   bash bin/flink-cdc.sh mysql-to-doris.yaml
    ```
 提交成功后，返回信息如：
    ```shell
