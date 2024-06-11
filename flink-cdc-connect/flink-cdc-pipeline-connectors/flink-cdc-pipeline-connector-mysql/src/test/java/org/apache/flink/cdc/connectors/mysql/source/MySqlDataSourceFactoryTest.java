@@ -30,6 +30,9 @@ import org.apache.flink.table.catalog.ObjectPath;
 
 import org.junit.Test;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -153,6 +156,44 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
                 .hasMessageContaining(
                         "Cannot find any table with by the option 'tables.exclude'  = "
                                 + tableExclude);
+    }
+
+    @Test
+    public void testDatabaseAndTableWithTheSameName() throws SQLException {
+        inventoryDatabase.createAndInitialize();
+        // create a table with the same name of database
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            String createSameNameTableSql =
+                    String.format(
+                            "CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n"
+                                    + "  id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,\n"
+                                    + "  name VARCHAR(255) NOT NULL DEFAULT 'flink',\n"
+                                    + "  description VARCHAR(512)\n"
+                                    + ");",
+                            inventoryDatabase.getDatabaseName(),
+                            inventoryDatabase.getDatabaseName());
+
+            statement.execute(createSameNameTableSql);
+        }
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(
+                TABLES.key(),
+                inventoryDatabase.getDatabaseName() + "." + inventoryDatabase.getDatabaseName());
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        assertThat(dataSource.getSourceConfig().getTableList())
+                .isEqualTo(
+                        Arrays.asList(
+                                inventoryDatabase.getDatabaseName()
+                                        + "."
+                                        + inventoryDatabase.getDatabaseName()));
     }
 
     @Test
