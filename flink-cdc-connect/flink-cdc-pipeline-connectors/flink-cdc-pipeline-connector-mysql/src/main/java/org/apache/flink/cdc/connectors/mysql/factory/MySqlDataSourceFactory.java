@@ -249,10 +249,6 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CHUNK_META_GROUP_SIZE);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
-        options.add(CONNECT_MAX_RETRIES);
-        options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
-        options.add(HEARTBEAT_INTERVAL);
-        options.add(SCHEMA_CHANGE_ENABLED);
         options.add(VVR_START_TIME_MS);
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);

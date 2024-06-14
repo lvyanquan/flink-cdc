@@ -116,8 +116,8 @@ public class FactoryHelperTests {
                                 Configuration.fromMap(configurations), null, null));
 
         Assertions.assertThatThrownBy(factoryHelper::validate)
-                .isExactlyInstanceOf(ValidationException.class)
-                .hasMessageContaining("Invalid value for option 'age'.");
+                .isExactlyInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Could not parse value 'Not a number' for key 'age'.");
     }
 
     @Test
@@ -151,50 +151,24 @@ public class FactoryHelperTests {
         configurations.put("debezium.bar", "Another debezium options");
         configurations.put("canal.baz", "Yet another debezium options");
 
-        {
-            FactoryHelper factoryHelper =
-                    FactoryHelper.createFactoryHelper(
-                            getDummyFactory(),
-                            new FactoryHelper.DefaultContext(
-                                    Configuration.fromMap(configurations), null, null));
+        FactoryHelper factoryHelper =
+                FactoryHelper.createFactoryHelper(
+                        getDummyFactory(),
+                        new FactoryHelper.DefaultContext(
+                                Configuration.fromMap(configurations), null, null));
 
-            Assertions.assertThatThrownBy(factoryHelper::validate)
-                    .isExactlyInstanceOf(ValidationException.class)
-                    .hasMessageContaining("Unsupported options found for 'dummy'.");
-        }
+        Assertions.assertThatThrownBy(factoryHelper::validate)
+                .isExactlyInstanceOf(ValidationException.class)
+                .hasMessageContaining("Unsupported options found for 'dummy'.");
 
-        {
-            FactoryHelper factoryHelper =
-                    FactoryHelper.createFactoryHelper(
-                            getDummyFactory(),
-                            new FactoryHelper.DefaultContext(
-                                    Configuration.fromMap(configurations), null, null));
+        Assertions.assertThatThrownBy(() -> factoryHelper.validateExcept("debezium."))
+                .isExactlyInstanceOf(ValidationException.class)
+                .hasMessageContaining("Unsupported options found for 'dummy'.");
 
-            Assertions.assertThatThrownBy(() -> factoryHelper.validateExcept("debezium."))
-                    .isExactlyInstanceOf(ValidationException.class)
-                    .hasMessageContaining("Unsupported options found for 'dummy'.");
-        }
+        Assertions.assertThatThrownBy(() -> factoryHelper.validateExcept("canal."))
+                .isExactlyInstanceOf(ValidationException.class)
+                .hasMessageContaining("Unsupported options found for 'dummy'.");
 
-        {
-            FactoryHelper factoryHelper =
-                    FactoryHelper.createFactoryHelper(
-                            getDummyFactory(),
-                            new FactoryHelper.DefaultContext(
-                                    Configuration.fromMap(configurations), null, null));
-
-            Assertions.assertThatThrownBy(() -> factoryHelper.validateExcept("canal."))
-                    .isExactlyInstanceOf(ValidationException.class)
-                    .hasMessageContaining("Unsupported options found for 'dummy'.");
-        }
-
-        {
-            FactoryHelper factoryHelper =
-                    FactoryHelper.createFactoryHelper(
-                            getDummyFactory(),
-                            new FactoryHelper.DefaultContext(
-                                    Configuration.fromMap(configurations), null, null));
-
-            factoryHelper.validateExcept("debezium.", "canal.");
-        }
+        factoryHelper.validateExcept("debezium.", "canal.");
     }
 }
