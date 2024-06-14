@@ -29,8 +29,6 @@ import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
-
 /** Tests for {@link KafkaDataSinkFactory}. */
 public class KafkaDataSinkFactoryTest {
 
@@ -40,7 +38,7 @@ public class KafkaDataSinkFactoryTest {
                 FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
         Assertions.assertThat(sinkFactory).isInstanceOf(KafkaDataSinkFactory.class);
 
-        Configuration conf = Configuration.fromMap(new HashMap<>());
+        Configuration conf = Configuration.fromMap(ImmutableMap.<String, String>builder().build());
         DataSink dataSink =
                 sinkFactory.createDataSink(
                         new FactoryHelper.DefaultContext(

@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /** A helper for working with {@link Factory}. */
@@ -37,7 +38,7 @@ import java.util.stream.StreamSupport;
 public class FactoryHelper<F extends Factory> {
 
     protected final F factory;
-
+    
     protected final Configuration allOptions;
 
     protected final Set<String> consumedOptionKeys;
