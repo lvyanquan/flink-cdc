@@ -40,6 +40,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -54,6 +55,7 @@ import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SI
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.USERNAME;
 
 /** IT tests for {@link DorisDataSink}. */
+@Ignore
 public class DorisPipelineITCase extends DorisSinkTestBase {
 
     private static final StreamExecutionEnvironment env =

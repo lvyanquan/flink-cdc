@@ -207,22 +207,22 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
 
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         List<String> requireKeys =
-            factory.requiredOptions().stream()
-                .map(ConfigOption::key)
-                .collect(Collectors.toList());
+                factory.requiredOptions().stream()
+                        .map(ConfigOption::key)
+                        .collect(Collectors.toList());
         for (String requireKey : requireKeys) {
             Map<String, String> remainingOptions = new HashMap<>(options);
             remainingOptions.remove(requireKey);
             Factory.Context context = new MockContext(Configuration.fromMap(remainingOptions));
 
             assertThatThrownBy(() -> factory.createDataSource(context))
-                .isInstanceOf(ValidationException.class)
-                .hasMessageContaining(
-                    String.format(
-                        "One or more required options are missing.\n\n"
-                            + "Missing required options are:\n\n"
-                            + "%s",
-                        requireKey));
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining(
+                            String.format(
+                                    "One or more required options are missing.\n\n"
+                                            + "Missing required options are:\n\n"
+                                            + "%s",
+                                    requireKey));
         }
     }
 
@@ -240,11 +240,11 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
         assertThatThrownBy(() -> factory.createDataSource(context))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining(
-                "Unsupported options found for 'mysql'.\n\n"
-                    + "Unsupported options:\n\n"
-                    + "unsupported_key");
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining(
+                        "Unsupported options found for 'mysql'.\n\n"
+                                + "Unsupported options:\n\n"
+                                + "unsupported_key");
     }
 
     @Test
@@ -263,7 +263,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
         assertThat(dataSource.getSourceConfig().getTableList())
-            .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+                .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
     }
 
     @Test
@@ -284,7 +284,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
         assertThat(dataSource.getSourceConfig().getStartupOptions())
-            .isEqualTo(StartupOptions.timestamp(1234L));
+                .isEqualTo(StartupOptions.timestamp(1234L));
     }
 
     @Test
@@ -308,7 +308,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
         assertThat(dataSource.getSourceConfig().getTableList())
-            .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+                .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
         AliyunRdsConfig rdsConfig = dataSource.getSourceConfig().getRdsConfig();
         assertThat(rdsConfig.getRegionId()).isEqualTo("1");
         assertThat(rdsConfig.getAccessKeyId()).isEqualTo("2");

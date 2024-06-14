@@ -85,7 +85,7 @@ class DataSourceTranslatorTest {
                                 new Configuration(),
                                 Thread.currentThread().getContextClassLoader()));
 
-        Assert.assertTrue(dataSource instanceof DataSourceFactory1.TestDataSource);
+        Assertions.assertTrue(dataSource instanceof DataSourceFactory1.TestDataSource);
         assertThat(((DataSourceFactory1.TestDataSource) dataSource).getHost()).isEqualTo("0.0.0.0");
         assertThat(((DataSourceFactory1.TestDataSource) dataSource).getStartTimeMs())
                 .isEqualTo(1234L);

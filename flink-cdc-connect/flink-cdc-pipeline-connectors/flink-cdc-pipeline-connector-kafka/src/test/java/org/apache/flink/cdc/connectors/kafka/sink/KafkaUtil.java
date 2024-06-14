@@ -87,8 +87,7 @@ public class KafkaUtil {
         }
         return new KafkaContainer(
                         DockerImageName.parse(dockerImageVersion)
-                                .asCompatibleSubstituteFor(
-                                        org.apache.flink.util.DockerImageVersions.KAFKA))
+                                .asCompatibleSubstituteFor("confluentinc/cp-kafka:7.2.2"))
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                 .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")

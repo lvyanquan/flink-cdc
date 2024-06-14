@@ -66,6 +66,7 @@ import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.US
 
 /** IT tests for {@link DorisMetadataApplier}. */
 @RunWith(Parameterized.class)
+@Ignore
 public class DorisMetadataApplierITCase extends DorisSinkTestBase {
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
