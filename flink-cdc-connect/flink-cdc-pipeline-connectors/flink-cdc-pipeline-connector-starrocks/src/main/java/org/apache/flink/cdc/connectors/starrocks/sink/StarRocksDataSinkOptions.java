@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.configuration.ConfigOption;
 import org.apache.flink.cdc.common.configuration.ConfigOptions;
 
 import com.starrocks.connector.flink.table.sink.StarRocksSinkOptions;
+import com.starrocks.connector.flink.table.sink.StarRocksSinkSemantic;
 
 import java.time.Duration;
 import java.util.List;
@@ -118,6 +119,25 @@ public class StarRocksDataSinkOptions {
                     .intType()
                     .defaultValue(100)
                     .withDescription("Window size of histogram metrics.");
+
+    public static final ConfigOption<Integer> SINK_MAX_RETRIES =
+            ConfigOptions.key("sink.max-retries")
+                    .intType()
+                    .defaultValue(3)
+                    .withDescription("Max flushing retry times of the row batch.");
+
+    public static final ConfigOption<Long> SINK_BATCH_MAX_ROWS =
+            ConfigOptions.key("sink.buffer-flush.max-rows")
+                    .longType()
+                    .defaultValue(500000L)
+                    .withDescription("Max row count of the flush.");
+
+    public static final ConfigOption<String> SINK_SEMANTIC =
+            ConfigOptions.key("sink.semantic")
+                    .stringType()
+                    .defaultValue(StarRocksSinkSemantic.AT_LEAST_ONCE.getName())
+                    .withDescription(
+                            "Fault tolerance guarantee. `at-least-once` or `exactly-once`");
 
     /** The prefix for stream load properties, such as sink.properties.timeout. */
     public static final String SINK_PROPERTIES_PREFIX = StarRocksSinkOptions.SINK_PROPERTIES_PREFIX;

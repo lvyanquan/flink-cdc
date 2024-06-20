@@ -116,6 +116,18 @@ public class StarRocksDataSinkFactory implements DataSinkFactory {
                                 sinkConfig.set(
                                         StarRocksSinkOptions.SINK_METRIC_HISTOGRAM_WINDOW_SIZE,
                                         config));
+
+        cdcConfig
+                .getOptional(StarRocksDataSinkOptions.SINK_MAX_RETRIES)
+                .ifPresent(config -> sinkConfig.set(StarRocksSinkOptions.SINK_MAX_RETRIES, config));
+        cdcConfig
+                .getOptional(StarRocksDataSinkOptions.SINK_BATCH_MAX_ROWS)
+                .ifPresent(
+                        config -> sinkConfig.set(StarRocksSinkOptions.SINK_BATCH_MAX_ROWS, config));
+        cdcConfig
+                .getOptional(StarRocksDataSinkOptions.SINK_SEMANTIC)
+                .ifPresent(config -> sinkConfig.set(StarRocksSinkOptions.SINK_SEMANTIC, config));
+
         // specified sink configurations for cdc scenario
         sinkConfig.set(StarRocksSinkOptions.DATABASE_NAME, "*");
         sinkConfig.set(StarRocksSinkOptions.TABLE_NAME, "*");
@@ -171,6 +183,9 @@ public class StarRocksDataSinkFactory implements DataSinkFactory {
         optionalOptions.add(StarRocksDataSinkOptions.SINK_METRIC_HISTOGRAM_WINDOW_SIZE);
         optionalOptions.add(StarRocksDataSinkOptions.TABLE_CREATE_NUM_BUCKETS);
         optionalOptions.add(StarRocksDataSinkOptions.TABLE_SCHEMA_CHANGE_TIMEOUT);
+        optionalOptions.add(StarRocksDataSinkOptions.SINK_MAX_RETRIES);
+        optionalOptions.add(StarRocksDataSinkOptions.SINK_BATCH_MAX_ROWS);
+        optionalOptions.add(StarRocksDataSinkOptions.SINK_SEMANTIC);
         return optionalOptions;
     }
 }
