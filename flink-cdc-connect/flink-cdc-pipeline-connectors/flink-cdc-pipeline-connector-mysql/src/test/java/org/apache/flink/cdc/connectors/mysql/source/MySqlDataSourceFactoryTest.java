@@ -20,19 +20,33 @@ package org.apache.flink.cdc.connectors.mysql.source;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.connectors.mysql.factory.MySqlDataSourceFactory;
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
+import org.apache.flink.table.catalog.ObjectPath;
 
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_REGION_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES_EXCLUDE;
@@ -57,12 +71,22 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
         options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".prod\\.*");
+        options.put(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), "testCol");
+        options.put(SCAN_NEWLY_ADDED_TABLE_ENABLED.key(), "true");
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
-        assertThat(dataSource.getSourceConfig().getTableList())
+        MySqlSourceConfig sourceConfig = dataSource.getSourceConfig();
+        assertThat(sourceConfig.getTableList())
                 .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+
+        assertThat(sourceConfig.isScanNewlyAddedTableEnabled()).isEqualTo(true);
+        assertThat(sourceConfig.getChunkKeyColumns().size()).isEqualTo(1);
+        for (Map.Entry<ObjectPath, String> e : sourceConfig.getChunkKeyColumns().entrySet()) {
+            assertThat(e.getKey()).isEqualTo(new ObjectPath(".*", ".*"));
+            assertThat(e.getValue()).isEqualTo("testCol");
+        }
     }
 
     @Test
@@ -146,6 +170,37 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
         assertThat(dataSource.getSourceConfig().getStartupOptions())
                 .isEqualTo(StartupOptions.timestamp(1234L));
+    }
+
+    @Test
+    public void testCreateSourceWithRdsConfig() {
+        inventoryDatabase.createAndInitialize();
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".prod\\.*");
+        options.put(RDS_REGION_ID.key(), "1");
+        options.put(RDS_ACCESS_KEY_ID.key(), "2");
+        options.put(RDS_ACCESS_KEY_SECRET.key(), "3");
+        options.put(RDS_DB_INSTANCE_ID.key(), "4");
+        options.put(RDS_DOWNLOAD_TIMEOUT.key(), "100 s");
+        options.put(RDS_BINLOG_DIRECTORIES_PARENT_PATH.key(), "fake-path");
+        options.put(RDS_BINLOG_DIRECTORY_PREFIX.key(), "rds-p");
+        options.put(RDS_USE_INTRANET_LINK.key(), "false");
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        assertThat(dataSource.getSourceConfig().getTableList())
+                .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+        AliyunRdsConfig rdsConfig = dataSource.getSourceConfig().getRdsConfig();
+        assertThat(rdsConfig.getRegionId()).isEqualTo("1");
+        assertThat(rdsConfig.getAccessKeyId()).isEqualTo("2");
+        assertThat(rdsConfig.getAccessKeySecret()).isEqualTo("3");
+        assertThat(rdsConfig.getDbInstanceId()).isEqualTo("4");
+        assertThat(rdsConfig.getDownloadTimeout()).isEqualTo(Duration.ofSeconds(100));
+        assertThat(rdsConfig.isUseIntranetLink()).isEqualTo(false);
     }
 
     class MockContext implements Factory.Context {

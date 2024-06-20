@@ -25,6 +25,7 @@ import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.common.schema.Selectors;
 import org.apache.flink.cdc.common.source.DataSource;
+import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlDataSource;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
@@ -35,6 +36,7 @@ import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import org.apache.flink.cdc.connectors.mysql.utils.OptionUtils;
 import org.apache.flink.table.api.ValidationException;
+import org.apache.flink.table.catalog.ObjectPath;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_REGION_ID;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.fromConfig;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_META_GROUP_SIZE;
@@ -60,7 +71,9 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE;
@@ -152,8 +165,16 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .connectionPoolSize(connectionPoolSize)
                         .closeIdleReaders(closeIdleReaders)
                         .includeSchemaChanges(includeSchemaChanges)
+                        .scanNewlyAddedTableEnabled(config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED))
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap));
+
+        // Apply chunk key to all tables
+        if (config.getOptional(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN).isPresent()) {
+            configFactory.chunkKeyColumn(
+                    new ObjectPath(".*", ".*"),
+                    config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
+        }
 
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         List<String> capturedTables = getTableList(configFactory.createConfig(0), selectors);
@@ -175,6 +196,13 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
             }
         }
         configFactory.tableList(capturedTables.toArray(new String[0]));
+
+        // RDS related options
+        AliyunRdsConfig rdsConfig = null;
+        if (isReadingArchivedBinlogEnabled(config)) {
+            rdsConfig = fromConfig(config);
+        }
+        configFactory.enableReadingRdsArchivedBinlog(rdsConfig);
 
         return new MySqlDataSource(configFactory);
     }
@@ -214,6 +242,18 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCHEMA_CHANGE_ENABLED);
         options.add(VVR_START_TIME_MS);
+        options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
+        options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+
+        // rds config
+        options.add(RDS_REGION_ID);
+        options.add(RDS_ACCESS_KEY_ID);
+        options.add(RDS_ACCESS_KEY_SECRET);
+        options.add(RDS_DB_INSTANCE_ID);
+        options.add(RDS_DOWNLOAD_TIMEOUT);
+        options.add(RDS_BINLOG_DIRECTORIES_PARENT_PATH);
+        options.add(RDS_BINLOG_DIRECTORY_PREFIX);
+        options.add(RDS_USE_INTRANET_LINK);
         return options;
     }
 
@@ -381,6 +421,33 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                     "{} is not set, which might cause data inconsistencies for time-related fields.",
                     SERVER_TIME_ZONE.key());
             return ZoneId.systemDefault();
+        }
+    }
+
+    private boolean isReadingArchivedBinlogEnabled(Configuration config) {
+        if (config.getOptional(RDS_ACCESS_KEY_ID).isPresent()
+                || config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent()
+                || config.getOptional(RDS_DB_INSTANCE_ID).isPresent()
+                || config.getOptional(RDS_REGION_ID).isPresent()) {
+            // At least one of RDS specific options is specified. We assume that the user want to
+            // use RDS related features, so we need to check if all required options exist.
+            if (config.getOptional(RDS_ACCESS_KEY_ID).isPresent()
+                    && config.getOptional(RDS_ACCESS_KEY_SECRET).isPresent()
+                    && config.getOptional(RDS_DB_INSTANCE_ID).isPresent()
+                    && config.getOptional(RDS_REGION_ID).isPresent()) {
+                return true;
+            } else {
+                throw new ValidationException(
+                        String.format(
+                                "All these 4 options are required to enable RDS related features: \n%s\n%s\n%s\n%s",
+                                RDS_ACCESS_KEY_ID.key(),
+                                RDS_ACCESS_KEY_SECRET.key(),
+                                RDS_DB_INSTANCE_ID.key(),
+                                RDS_REGION_ID.key()));
+            }
+        } else {
+            // None of RDS options exist. We automatically disable RDS related feature.
+            return false;
         }
     }
 }

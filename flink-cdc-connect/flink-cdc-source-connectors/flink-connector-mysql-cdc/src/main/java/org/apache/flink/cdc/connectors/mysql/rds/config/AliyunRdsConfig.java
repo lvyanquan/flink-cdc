@@ -72,7 +72,7 @@ public class AliyunRdsConfig implements Serializable {
         return new AliyunRdsConfig(configuration);
     }
 
-    private AliyunRdsConfig(Configuration configuration) {
+    public AliyunRdsConfig(Configuration configuration) {
         this.configuration = configuration;
     }
 
