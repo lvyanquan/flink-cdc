@@ -74,7 +74,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.util.DockerImageVersions.KAFKA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
@@ -87,6 +86,7 @@ class KafkaDataSinkITCase extends TestLogger {
     private static final int ZK_TIMEOUT_MILLIS = 30000;
     private static final short TOPIC_REPLICATION_FACTOR = 1;
     private static AdminClient admin;
+    private static final String KAFKA = "reg.docker.alibaba-inc.com/confluentinc/cp-kafka:7.2.2";
 
     private String topic;
 

@@ -43,7 +43,8 @@ public class LegacyMongoDBContainer extends GenericContainer<LegacyMongoDBContai
 
     private static final Logger LOG = LoggerFactory.getLogger(LegacyMongoDBContainer.class);
 
-    private static final String DOCKER_IMAGE_NAME = "mongo:5.0.2";
+    private static final String DOCKER_IMAGE_NAME =
+            "reg.docker.alibaba-inc.com/ververica/mongo:5.0.2-focal";
 
     public static final int MONGODB_PORT = 27017;
 

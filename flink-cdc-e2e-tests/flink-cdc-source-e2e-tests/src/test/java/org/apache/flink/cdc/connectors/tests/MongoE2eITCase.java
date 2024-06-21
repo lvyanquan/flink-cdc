@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -93,7 +94,10 @@ public class MongoE2eITCase extends FlinkContainerTestEnvironment {
         super.before();
 
         container =
-                new MongoDBContainer("mongo:6.0.9")
+                new MongoDBContainer(
+                                DockerImageName.parse(
+                                                "reg.docker.alibaba-inc.com/ververica/mongo:6.0.9-jammy")
+                                        .asCompatibleSubstituteFor("mongo"))
                         .withSharding()
                         .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_MONGO_ALIAS)

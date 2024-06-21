@@ -64,7 +64,8 @@ public class PostgresE2eITCase extends FlinkContainerTestEnvironment {
     private static final Pattern COMMENT_PATTERN = Pattern.compile("^(.*)--.*$");
 
     private static final DockerImageName PG_IMAGE =
-            DockerImageName.parse("debezium/postgres:9.6").asCompatibleSubstituteFor("postgres");
+            DockerImageName.parse("reg.docker.alibaba-inc.com/ververica/postgres:9.6")
+                    .asCompatibleSubstituteFor("postgres");
 
     private static final Path postgresCdcJar = TestUtils.getResource("postgres-cdc-connector.jar");
     private static final Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");

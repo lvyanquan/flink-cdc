@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.OutputFrame;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.net.URL;
@@ -53,6 +54,10 @@ public class MongoDBContainer extends org.testcontainers.containers.MongoDBConta
 
     public MongoDBContainer(String imageName) {
         super(imageName);
+    }
+
+    public MongoDBContainer(DockerImageName name) {
+        super(name);
     }
 
     @Override

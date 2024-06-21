@@ -85,7 +85,10 @@ public class KafkaUtil {
         if (!StringUtils.isNullOrWhitespaceOnly(loggerPrefix)) {
             logConsumer.withPrefix(loggerPrefix);
         }
-        return new KafkaContainer(DockerImageName.parse(dockerImageVersion))
+        return new KafkaContainer(
+                        DockerImageName.parse(dockerImageVersion)
+                                .asCompatibleSubstituteFor(
+                                        org.apache.flink.util.DockerImageVersions.KAFKA))
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                 .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")

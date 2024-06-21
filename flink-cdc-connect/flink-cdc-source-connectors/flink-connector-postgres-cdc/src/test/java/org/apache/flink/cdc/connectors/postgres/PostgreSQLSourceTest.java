@@ -85,7 +85,8 @@ public class PostgreSQLSourceTest extends PostgresTestBase {
     // These tests only passes at the docker postgres:9.6
     private static final PostgreSQLContainer<?> POSTGRES_CONTAINER_OLD =
             new PostgreSQLContainer<>(
-                            DockerImageName.parse("debezium/postgres:9.6")
+                            DockerImageName.parse(
+                                            "reg.docker.alibaba-inc.com/ververica/postgres:9.6")
                                     .asCompatibleSubstituteFor("postgres"))
                     .withDatabaseName(DEFAULT_DB)
                     .withUsername("postgres")
