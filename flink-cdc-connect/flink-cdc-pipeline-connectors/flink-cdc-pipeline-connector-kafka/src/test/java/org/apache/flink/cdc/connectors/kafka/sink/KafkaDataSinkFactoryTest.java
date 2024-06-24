@@ -22,8 +22,11 @@ import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
+import org.apache.flink.table.api.ValidationException;
 
-import org.junit.jupiter.api.Assertions;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -32,16 +35,61 @@ import java.util.HashMap;
 public class KafkaDataSinkFactoryTest {
 
     @Test
-    public void testCreateDataSink() {
+    void testCreateDataSink() {
         DataSinkFactory sinkFactory =
                 FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
-        Assertions.assertTrue(sinkFactory instanceof KafkaDataSinkFactory);
+        Assertions.assertThat(sinkFactory).isInstanceOf(KafkaDataSinkFactory.class);
 
         Configuration conf = Configuration.fromMap(new HashMap<>());
         DataSink dataSink =
                 sinkFactory.createDataSink(
                         new FactoryHelper.DefaultContext(
                                 conf, conf, Thread.currentThread().getContextClassLoader()));
-        Assertions.assertTrue(dataSink instanceof KafkaDataSink);
+        Assertions.assertThat(dataSink).isInstanceOf(KafkaDataSink.class);
+    }
+
+    @Test
+    void testUnsupportedOption() {
+
+        DataSinkFactory sinkFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
+        Assertions.assertThat(sinkFactory).isInstanceOf(KafkaDataSinkFactory.class);
+
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put("unsupported_key", "unsupported_value")
+                                .build());
+
+        Assertions.assertThatThrownBy(
+                        () ->
+                                sinkFactory.createDataSink(
+                                        new FactoryHelper.DefaultContext(
+                                                conf,
+                                                conf,
+                                                Thread.currentThread().getContextClassLoader())))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining(
+                        "Unsupported options found for 'kafka'.\n\n"
+                                + "Unsupported options:\n\n"
+                                + "unsupported_key");
+    }
+
+    @Test
+    void testPrefixRequireOption() {
+        DataSinkFactory sinkFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
+        Assertions.assertThat(sinkFactory).isInstanceOf(KafkaDataSinkFactory.class);
+
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put("properties.compression.type", "none")
+                                .build());
+        DataSink dataSink =
+                sinkFactory.createDataSink(
+                        new FactoryHelper.DefaultContext(
+                                conf, conf, Thread.currentThread().getContextClassLoader()));
+        Assertions.assertThat(dataSink).isInstanceOf(KafkaDataSink.class);
     }
 }

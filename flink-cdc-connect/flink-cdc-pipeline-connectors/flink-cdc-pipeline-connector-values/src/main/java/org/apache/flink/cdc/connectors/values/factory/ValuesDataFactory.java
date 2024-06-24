@@ -23,6 +23,7 @@ import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.Factory;
+import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.connectors.values.sink.ValuesDataSink;
@@ -42,6 +43,7 @@ public class ValuesDataFactory implements DataSourceFactory, DataSinkFactory {
 
     @Override
     public DataSource createDataSource(Context context) {
+        FactoryHelper.createFactoryHelper(this, context).validate();
         ValuesDataSourceHelper.EventSetId eventType =
                 context.getFactoryConfiguration().get(ValuesDataSourceOptions.EVENT_SET_ID);
         int failAtPos =
@@ -52,6 +54,7 @@ public class ValuesDataFactory implements DataSourceFactory, DataSinkFactory {
 
     @Override
     public DataSink createDataSink(Context context) {
+        FactoryHelper.createFactoryHelper(this, context).validate();
         Configuration config = context.getFactoryConfiguration();
         return new ValuesDataSink(
                 config.get(ValuesDataSinkOptions.MATERIALIZED_IN_MEMORY),
