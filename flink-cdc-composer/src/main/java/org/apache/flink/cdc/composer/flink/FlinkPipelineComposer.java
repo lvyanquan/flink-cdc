@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.composer.flink;
 
 import org.apache.flink.cdc.common.annotation.Internal;
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
@@ -197,5 +198,10 @@ public class FlinkPipelineComposer implements PipelineComposer {
             return Optional.empty();
         }
         return Optional.of(container);
+    }
+
+    @VisibleForTesting
+    public StreamExecutionEnvironment getEnv() {
+        return env;
     }
 }

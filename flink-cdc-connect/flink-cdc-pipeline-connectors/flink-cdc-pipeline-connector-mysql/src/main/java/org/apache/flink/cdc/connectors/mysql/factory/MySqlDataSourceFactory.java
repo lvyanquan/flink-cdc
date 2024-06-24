@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_META_GROUP_SIZE;
@@ -212,6 +213,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCHEMA_CHANGE_ENABLED);
+        options.add(VVR_START_TIME_MS);
         return options;
     }
 
@@ -236,6 +238,17 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
     }
 
     private static StartupOptions getStartupOptions(Configuration config) {
+        // If VVR_START_TIME_MS is set in options,
+        // startup mode should be overwritten to TIMESTAMP.
+        if (config.getOptional(VVR_START_TIME_MS).isPresent()) {
+            Long startupTimestampMillis = config.get(VVR_START_TIME_MS);
+            LOG.warn(
+                    "Overriding startup options with timestamp {} as option {} exists",
+                    startupTimestampMillis,
+                    VVR_START_TIME_MS.key());
+            return StartupOptions.timestamp(startupTimestampMillis);
+        }
+
         String modeString = config.get(SCAN_STARTUP_MODE);
 
         switch (modeString.toLowerCase()) {

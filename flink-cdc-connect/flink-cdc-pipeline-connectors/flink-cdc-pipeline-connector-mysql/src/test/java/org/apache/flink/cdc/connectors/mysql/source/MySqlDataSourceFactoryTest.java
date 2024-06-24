@@ -20,6 +20,7 @@ package org.apache.flink.cdc.connectors.mysql.source;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.connectors.mysql.factory.MySqlDataSourceFactory;
+import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 
 import org.junit.Test;
@@ -28,9 +29,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES_EXCLUDE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.USERNAME;
@@ -122,6 +125,27 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
                 .hasMessageContaining(
                         "Cannot find any table with by the option 'tables.exclude'  = "
                                 + tableExclude);
+    }
+
+    @Test
+    public void testSetStartTimeMs() {
+        inventoryDatabase.createAndInitialize();
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".\\.*");
+        String tableExclude = inventoryDatabase.getDatabaseName() + ".orders";
+        options.put(TABLES_EXCLUDE.key(), tableExclude);
+        options.put(SCAN_STARTUP_MODE.key(), "earliest-offset");
+        options.put(VVR_START_TIME_MS.key(), "1234");
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        assertThat(dataSource.getSourceConfig().getStartupOptions())
+                .isEqualTo(StartupOptions.timestamp(1234L));
     }
 
     class MockContext implements Factory.Context {

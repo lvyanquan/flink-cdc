@@ -26,11 +26,15 @@ import org.apache.flink.cdc.common.source.MetadataAccessor;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
+
 /** A dummy {@link DataSourceFactory} for testing. */
 public class DataSourceFactory1 implements DataSourceFactory {
     @Override
     public DataSource createDataSource(Context context) {
-        return new TestDataSource(context.getFactoryConfiguration().get(TestOptions.HOST));
+        return new TestDataSource(
+                context.getFactoryConfiguration().get(TestOptions.HOST),
+                context.getFactoryConfiguration().getOptional(VVR_START_TIME_MS).orElse(null));
     }
 
     @Override
@@ -47,6 +51,7 @@ public class DataSourceFactory1 implements DataSourceFactory {
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(TestOptions.HOST);
+        options.add(VVR_START_TIME_MS);
         return options;
     }
 
@@ -54,13 +59,19 @@ public class DataSourceFactory1 implements DataSourceFactory {
     public static class TestDataSource implements DataSource {
 
         private final String host;
+        private final Long startTimeMs;
 
-        public TestDataSource(String host) {
+        public TestDataSource(String host, Long startTimeMs) {
             this.host = host;
+            this.startTimeMs = startTimeMs;
         }
 
         public String getHost() {
             return host;
+        }
+
+        public Long getStartTimeMs() {
+            return startTimeMs;
         }
 
         @Override

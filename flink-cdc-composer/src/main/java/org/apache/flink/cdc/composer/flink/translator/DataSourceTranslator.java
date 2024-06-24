@@ -28,6 +28,7 @@ import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.common.source.EventSourceProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceFunctionProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
+import org.apache.flink.cdc.common.utils.OptionUtils;
 import org.apache.flink.cdc.composer.definition.SourceDef;
 import org.apache.flink.cdc.composer.flink.FlinkEnvironmentUtils;
 import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
@@ -35,6 +36,10 @@ import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
+import java.util.Map;
+
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 
 /** Translator used to build {@link DataSource} which will generate a {@link DataStream}. */
 @Internal
@@ -46,6 +51,11 @@ public class DataSourceTranslator {
         DataSourceFactory sourceFactory =
                 FactoryDiscoveryUtils.getFactoryByIdentifier(
                         sourceDef.getType(), DataSourceFactory.class);
+
+        String startTimeMs = OptionUtils.getStartTimeMs(env.getConfiguration());
+        if (startTimeMs != null) {
+            sourceDef = appendStartTimeMs(sourceDef, startTimeMs);
+        }
 
         // Create data source
         DataSource dataSource =
@@ -93,5 +103,12 @@ public class DataSourceTranslator {
 
     private String generateDefaultSourceName(SourceDef sourceDef) {
         return String.format("Flink CDC Event Source: %s", sourceDef.getType());
+    }
+
+    private SourceDef appendStartTimeMs(SourceDef sourceDef, String startTimeMs) {
+        Map<String, String> conf = sourceDef.getConfig().toMap();
+        conf.put(VVR_START_TIME_MS.key(), startTimeMs);
+        return new SourceDef(
+                sourceDef.getType(), sourceDef.getName().orElse(null), Configuration.fromMap(conf));
     }
 }

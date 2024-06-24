@@ -30,6 +30,8 @@ import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /** A test for the {@link DataSourceTranslator}. */
 public class DataSourceTranslatorTest {
 
@@ -57,5 +59,34 @@ public class DataSourceTranslatorTest {
 
         Assert.assertTrue(dataSource instanceof DataSourceFactory1.TestDataSource);
         Assert.assertEquals("0.0.0.0", ((DataSourceFactory1.TestDataSource) dataSource).getHost());
+    }
+
+    @Test
+    public void testCreateDataSourceWithVvrStartTimeMs() {
+        SourceDef sourceDef =
+                new SourceDef(
+                        "data-source-factory-1",
+                        "source-database",
+                        Configuration.fromMap(
+                                ImmutableMap.<String, String>builder()
+                                        .put("host", "0.0.0.0")
+                                        .put("startTimeMs", "1234")
+                                        .build()));
+
+        DataSourceFactory sourceFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier(
+                        sourceDef.getType(), DataSourceFactory.class);
+
+        DataSource dataSource =
+                sourceFactory.createDataSource(
+                        new FactoryHelper.DefaultContext(
+                                sourceDef.getConfig(),
+                                new Configuration(),
+                                Thread.currentThread().getContextClassLoader()));
+
+        Assert.assertTrue(dataSource instanceof DataSourceFactory1.TestDataSource);
+        assertThat(((DataSourceFactory1.TestDataSource) dataSource).getHost()).isEqualTo("0.0.0.0");
+        assertThat(((DataSourceFactory1.TestDataSource) dataSource).getStartTimeMs())
+                .isEqualTo(1234L);
     }
 }

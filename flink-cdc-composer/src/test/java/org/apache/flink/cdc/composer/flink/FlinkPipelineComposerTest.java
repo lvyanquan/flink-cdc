@@ -30,6 +30,13 @@ import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_DYNAMIC_START_TIME_MS;
+import static org.assertj.core.api.Assertions.assertThat;
+
 /** A test for the {@link FlinkPipelineComposer}. */
 public class FlinkPipelineComposerTest {
 
@@ -57,5 +64,23 @@ public class FlinkPipelineComposerTest {
 
         Assert.assertTrue(dataSink instanceof DataSinkFactory1.TestDataSink);
         Assert.assertEquals("0.0.0.0", ((DataSinkFactory1.TestDataSink) dataSink).getHost());
+    }
+
+    @Test
+    public void testSetVvrStartTimeConfig() {
+        Map<String, String> flinkConfig = new HashMap<>();
+        flinkConfig.put(VVR_DYNAMIC_START_TIME_MS, "123");
+        FlinkPipelineComposer composer =
+                FlinkPipelineComposer.ofRemoteCluster(
+                        org.apache.flink.configuration.Configuration.fromMap(flinkConfig),
+                        new ArrayList<>());
+        assertThat(composer.getEnv().getConfiguration())
+                .isInstanceOf(org.apache.flink.configuration.Configuration.class);
+        assertThat(
+                        ((org.apache.flink.configuration.Configuration)
+                                        composer.getEnv().getConfiguration())
+                                .toMap()
+                                .get(VVR_DYNAMIC_START_TIME_MS))
+                .isEqualTo(flinkConfig.get(VVR_DYNAMIC_START_TIME_MS));
     }
 }
