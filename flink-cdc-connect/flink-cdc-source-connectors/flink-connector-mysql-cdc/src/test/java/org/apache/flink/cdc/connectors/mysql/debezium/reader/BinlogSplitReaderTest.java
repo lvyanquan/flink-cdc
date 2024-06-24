@@ -746,13 +746,14 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
         // Set heartbeat interval to 500ms
         Duration heartbeatInterval = Duration.ofMillis(500);
 
-        // Set keep alive interval to 500ms in order to let MySQl send heartbeat event to debezium
+        Duration keepAliveInterval = Duration.ofMillis(10000);
+        // Set keep alive interval to 10000ms in order to let MySQL send heartbeat event to debezium
         // connector more frequently. Debezium MySQL connector only create heartbeat on receiving
         // events from MySQL.
         Properties dbzProps = new Properties();
         dbzProps.setProperty(
                 MySqlConnectorConfig.KEEP_ALIVE_INTERVAL_MS.name(),
-                String.valueOf(heartbeatInterval.toMillis()));
+                String.valueOf(keepAliveInterval.toMillis()));
 
         // Create config and initializer client and connections
         MySqlSourceConfig sourceConfig =

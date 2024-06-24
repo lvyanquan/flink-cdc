@@ -104,6 +104,13 @@ import java.util.logging.Logger;
  *
  * <p>Line 1183: add processInParallel check to decide whether to notify listeners and update binlog
  * position later.
+ *
+ * <p>line 207~214: add {@link #reconnectIntervalMultiple} and {@link #keepAliveExceptionReference}
+ * to control retry times and retry interval.
+ *
+ * <p>line 289~291: add {@link #getKeepAliveExceptionReference()} method.
+ *
+ * <p>line 983~992, 1004~1006: Throw exception when retry count retch limit times and add logs.
  */
 public class BinaryLogClient implements BinaryLogClientMXBean {
 
@@ -198,6 +205,15 @@ public class BinaryLogClient implements BinaryLogClientMXBean {
 
     private boolean processInParallel;
 
+    /** The multiple that reconnection needs to wait during the retry process. */
+    private int reconnectIntervalMultiple = 1;
+
+    /** max retry interval for reconnection attempt. */
+    public static final int MAX_RECONNECT_INTERVAL_MULTIPLE = 64;
+
+    /** Exception thrown by {@link #keepAliveThreadExecutor}. */
+    final AtomicReference<RuntimeException> keepAliveExceptionReference = new AtomicReference<>();
+
     /**
      * Alias for BinaryLogClient("localhost", 3306, &lt;no schema&gt; = null, username, password).
      *
@@ -269,6 +285,10 @@ public class BinaryLogClient implements BinaryLogClientMXBean {
 
     public SSLMode getSSLMode() {
         return sslMode;
+    }
+
+    public AtomicReference<RuntimeException> getKeepAliveExceptionReference() {
+        return keepAliveExceptionReference;
     }
 
     public void setSSLMode(SSLMode sslMode) {
@@ -960,12 +980,16 @@ public class BinaryLogClient implements BinaryLogClientMXBean {
                                     }
                                 }
                                 if (connectionLost) {
-                                    logger.info(
-                                            "Keepalive: Trying to restore lost connection to "
-                                                    + hostname
-                                                    + ":"
-                                                    + port);
+                                    if (reconnectIntervalMultiple
+                                            > MAX_RECONNECT_INTERVAL_MULTIPLE) {
+                                        keepAliveExceptionReference.set(
+                                                new RuntimeException(
+                                                        "Create connection failed after retry 3 times, please check the database is running and its load is okay."));
+                                        break;
+                                    }
                                     try {
+                                        Thread.sleep(connectTimeout * reconnectIntervalMultiple);
+                                        reconnectIntervalMultiple *= 4;
                                         terminateConnect();
                                         connect(connectTimeout);
                                     } catch (Exception ce) {
@@ -978,6 +1002,9 @@ public class BinaryLogClient implements BinaryLogClientMXBean {
                                                         + keepAliveInterval
                                                         + "ms");
                                     }
+                                } else {
+                                    // connection succeeded and reset keepAliveIntervalMultiple.
+                                    reconnectIntervalMultiple = 1;
                                 }
                             }
                         }

@@ -6,6 +6,8 @@
 
 package io.debezium.connector.mysql;
 
+import org.apache.flink.util.Preconditions;
+
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.BinaryLogClient.LifecycleListener;
 import com.github.shyiko.mysql.binlog.BinlogEventConsumer;
@@ -265,6 +267,9 @@ public class MySqlStreamingChangeEventSource
         client.setKeepAlive(configuration.getBoolean(MySqlConnectorConfig.KEEP_ALIVE));
         final long keepAliveInterval =
                 configuration.getLong(MySqlConnectorConfig.KEEP_ALIVE_INTERVAL_MS);
+        Preconditions.checkArgument(
+                keepAliveInterval >= 10_000,
+                "setting connect.keep.alive.interval.ms greater than 10000 (ms) is dangerous, When there are a large number of binlogs to be pulled, this can lead to frequent connection creation.");
         client.setKeepAliveInterval(keepAliveInterval);
         // Considering heartbeatInterval should be less than keepAliveInterval, we use the
         // heartbeatIntervalFactor
@@ -1460,6 +1465,9 @@ public class MySqlStreamingChangeEventSource
             }
             while (context.isRunning()) {
                 Thread.sleep(100);
+                if (client.getKeepAliveExceptionReference().get() != null) {
+                    throw client.getKeepAliveExceptionReference().get();
+                }
             }
         } finally {
             try {
