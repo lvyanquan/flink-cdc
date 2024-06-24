@@ -27,6 +27,14 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.Map;
+
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.ALIYUN_KAFKA_AK;
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.ALIYUN_KAFKA_ENDPOINT;
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.ALIYUN_KAFKA_INSTANCE_ID;
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.ALIYUN_KAFKA_REGION_ID;
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.ALIYUN_KAFKA_SK;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link UpsertKafkaDataSinkFactory}. */
 public class UpsertKafkaDataSinkFactoryTest {
@@ -43,5 +51,39 @@ public class UpsertKafkaDataSinkFactoryTest {
                         new FactoryHelper.DefaultContext(
                                 conf, conf, Thread.currentThread().getContextClassLoader()));
         Assertions.assertTrue(dataSink instanceof UpsertKafkaDataSink);
+    }
+
+    @Test
+    public void testCreateUpsertDataSinkInAliyun() {
+        DataSinkFactory sinkFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("upsert-kafka", DataSinkFactory.class);
+        Assertions.assertTrue(sinkFactory instanceof UpsertKafkaDataSinkFactory);
+
+        Configuration pipelineConfiguration = Configuration.fromMap(new HashMap<>());
+        Map<String, String> factoryOptions = new HashMap<>();
+        factoryOptions.put(ALIYUN_KAFKA_AK.key(), "1");
+        factoryOptions.put(ALIYUN_KAFKA_SK.key(), "2");
+        factoryOptions.put(ALIYUN_KAFKA_REGION_ID.key(), "3");
+        factoryOptions.put(ALIYUN_KAFKA_ENDPOINT.key(), "4");
+        factoryOptions.put(ALIYUN_KAFKA_INSTANCE_ID.key(), "5");
+        factoryOptions.put("properties.bootstrap.servers", "test1");
+        factoryOptions.put("properties.test", "test2");
+        Configuration factoryConfiguration = Configuration.fromMap(factoryOptions);
+        DataSink dataSink =
+                sinkFactory.createDataSink(
+                        new FactoryHelper.DefaultContext(
+                                factoryConfiguration,
+                                pipelineConfiguration,
+                                Thread.currentThread().getContextClassLoader()));
+        Assertions.assertTrue(dataSink instanceof UpsertKafkaDataSink);
+
+        KafkaMetadataApplier applier = (KafkaMetadataApplier) dataSink.getMetadataApplier();
+        assertThat(applier.getBootstrapServers()).isEqualTo("test1");
+        assertThat(applier.getKafkaProperties().getProperty("test")).isEqualTo("test2");
+        assertThat(applier.getAliyunKafkaParams().getAccessKeyId()).isEqualTo("1");
+        assertThat(applier.getAliyunKafkaParams().getAccessKeySecret()).isEqualTo("2");
+        assertThat(applier.getAliyunKafkaParams().getRegionId()).isEqualTo("3");
+        assertThat(applier.getAliyunKafkaParams().getEndpoint()).isEqualTo("4");
+        assertThat(applier.getAliyunKafkaParams().getInstanceId()).isEqualTo("5");
     }
 }

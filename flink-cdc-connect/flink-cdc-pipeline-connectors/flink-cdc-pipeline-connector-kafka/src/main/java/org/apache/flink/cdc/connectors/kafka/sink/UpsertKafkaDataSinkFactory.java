@@ -39,6 +39,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.flink.cdc.common.configuration.ConfigOptions.key;
+import static org.apache.flink.cdc.connectors.kafka.aliyun.AliyunKafkaClientParams.createAliyunKafkaClientParams;
 import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.PROPERTIES_PREFIX;
 import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
 import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
@@ -90,7 +92,8 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
                 valueSerialization,
                 topic,
                 addTableToHeaderEnabled,
-                customHeaders);
+                customHeaders,
+                createAliyunKafkaClientParams(context.getFactoryConfiguration()));
     }
 
     @Override
@@ -109,6 +112,12 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
         options.add(KafkaDataSinkOptions.DELIVERY_GUARANTEE);
         options.add(KafkaDataSinkOptions.TOPIC);
         options.add(KafkaDataSinkOptions.SINK_ADD_TABLEID_TO_HEADER_ENABLED);
+
+        options.add(KafkaDataSinkOptions.ALIYUN_KAFKA_AK);
+        options.add(KafkaDataSinkOptions.ALIYUN_KAFKA_SK);
+        options.add(KafkaDataSinkOptions.ALIYUN_KAFKA_INSTANCE_ID);
+        options.add(KafkaDataSinkOptions.ALIYUN_KAFKA_ENDPOINT);
+        options.add(KafkaDataSinkOptions.ALIYUN_KAFKA_REGION_ID);
         return options;
     }
 

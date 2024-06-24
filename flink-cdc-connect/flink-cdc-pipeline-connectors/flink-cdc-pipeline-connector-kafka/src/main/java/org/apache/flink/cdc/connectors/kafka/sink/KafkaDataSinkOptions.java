@@ -63,4 +63,31 @@ public class KafkaDataSinkOptions {
                     .defaultValue("")
                     .withDescription(
                             "custom headers for each kafka record. Each header are separated by ',', separate key and value by ':'. For example, we can set headers like 'key1:value1,key2:value2'.");
+
+    // Aliyun Kafka params
+    public static final ConfigOption<String> ALIYUN_KAFKA_AK =
+            key("aliyun.kafka.accessKeyId")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("User AccessKey ID.");
+    public static final ConfigOption<String> ALIYUN_KAFKA_SK =
+            key("aliyun.kafka.accessKeySecret")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("User AccessKey Secret.");
+    public static final ConfigOption<String> ALIYUN_KAFKA_INSTANCE_ID =
+            key("aliyun.kafka.instanceId")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The instance id of the aliyun kafka.");
+    public static final ConfigOption<String> ALIYUN_KAFKA_ENDPOINT =
+            key("aliyun.kafka.endpoint")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The endpoint of the aliyun kafka.");
+    public static final ConfigOption<String> ALIYUN_KAFKA_REGION_ID =
+            key("aliyun.kafka.regionId")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The region id of the aliyun kafka.");
 }

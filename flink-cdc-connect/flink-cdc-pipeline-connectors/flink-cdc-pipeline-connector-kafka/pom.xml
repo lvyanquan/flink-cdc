@@ -45,6 +45,13 @@ limitations under the License.
             <scope>provided</scope>
         </dependency>
 
+        <!-- Aliyun Kafka SDK  -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>alibabacloud-alikafka20190916</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.apache.flink</groupId>

@@ -28,6 +28,7 @@ import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
 import org.apache.flink.cdc.common.sink.FlinkDataStreamSinkProvider;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
+import org.apache.flink.cdc.connectors.kafka.aliyun.AliyunKafkaClientParams;
 import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.sink.KafkaSinkBuilder;
@@ -35,6 +36,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.util.Collector;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
+
+import javax.annotation.Nullable;
 
 import java.util.Properties;
 
@@ -57,6 +60,8 @@ public class UpsertKafkaDataSink implements DataSink {
 
     final boolean addTableToHeaderEnabled;
 
+    @Nullable private final AliyunKafkaClientParams aliyunKafkaParams;
+
     public UpsertKafkaDataSink(
             DeliveryGuarantee deliveryGuarantee,
             Properties kafkaProperties,
@@ -64,7 +69,8 @@ public class UpsertKafkaDataSink implements DataSink {
             SerializationSchema<Event> valueSerialization,
             String topic,
             boolean addTableToHeaderEnabled,
-            String customHeaders) {
+            String customHeaders,
+            @Nullable AliyunKafkaClientParams aliyunKafkaParams) {
         this.deliveryGuarantee = deliveryGuarantee;
         this.kafkaProperties = kafkaProperties;
         this.keySerialization = keySerialization;
@@ -72,6 +78,7 @@ public class UpsertKafkaDataSink implements DataSink {
         this.topic = topic;
         this.addTableToHeaderEnabled = addTableToHeaderEnabled;
         this.customHeaders = customHeaders;
+        this.aliyunKafkaParams = aliyunKafkaParams;
     }
 
     @Override
@@ -134,7 +141,6 @@ public class UpsertKafkaDataSink implements DataSink {
 
     @Override
     public MetadataApplier getMetadataApplier() {
-        // simply do nothing here because Kafka do not maintain the schemas.
-        return schemaChangeEvent -> {};
+        return new KafkaMetadataApplier(true, kafkaProperties, aliyunKafkaParams);
     }
 }
