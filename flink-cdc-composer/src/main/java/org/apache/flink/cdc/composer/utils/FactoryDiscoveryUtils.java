@@ -45,8 +45,16 @@ public class FactoryDiscoveryUtils {
     @SuppressWarnings("unchecked")
     public static <T extends Factory> T getFactoryByIdentifier(
             String identifier, Class<T> factoryClass) {
+        return getFactoryByIdentifier(
+                identifier, factoryClass, Thread.currentThread().getContextClassLoader());
+    }
 
-        final ServiceLoader<Factory> loader = ServiceLoader.load(Factory.class);
+    /** Returns the {@link Factory} for the given identifier. */
+    @SuppressWarnings("unchecked")
+    public static <T extends Factory> T getFactoryByIdentifier(
+            String identifier, Class<T> factoryClass, ClassLoader classLoader) {
+
+        final ServiceLoader<Factory> loader = ServiceLoader.load(Factory.class, classLoader);
         final List<Factory> factoryList = new ArrayList<>();
 
         for (Factory factory : loader) {
@@ -90,8 +98,14 @@ public class FactoryDiscoveryUtils {
      */
     public static <T extends Factory> Optional<URL> getJarPathByIdentifier(
             String identifier, Class<T> factoryClass) {
+        return getJarPathByIdentifier(
+                identifier, factoryClass, Thread.currentThread().getContextClassLoader());
+    }
+
+    public static <T extends Factory> Optional<URL> getJarPathByIdentifier(
+            String identifier, Class<T> factoryClass, ClassLoader classLoader) {
         try {
-            T factory = getFactoryByIdentifier(identifier, factoryClass);
+            T factory = getFactoryByIdentifier(identifier, factoryClass, classLoader);
             URL url = factory.getClass().getProtectionDomain().getCodeSource().getLocation();
             if (Files.isDirectory(Paths.get(url.toURI()))) {
                 LOG.warn(

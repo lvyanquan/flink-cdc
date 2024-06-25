@@ -183,7 +183,17 @@ class CliFrontendTest {
 
         @Override
         public PipelineExecution compose(PipelineDef pipelineDef) {
-            return () -> new PipelineExecution.ExecutionInfo("fake-id", "fake-description");
+            return new PipelineExecution() {
+                @Override
+                public ExecutionInfo execute() throws Exception {
+                    return new PipelineExecution.ExecutionInfo("fake-id", "fake-description");
+                }
+
+                @Override
+                public String getExecutionPlan() throws Exception {
+                    return "fake-plan";
+                }
+            };
         }
     }
 }

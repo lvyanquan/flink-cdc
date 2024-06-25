@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.composer.flink;
 
+import org.apache.flink.artifacts.ArtifactManager;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.configuration.Configuration;
@@ -40,12 +41,17 @@ import org.apache.flink.cdc.runtime.serializer.event.EventSerializer;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.table.artifacts.ArtifactIdentifier;
+import org.apache.flink.table.artifacts.ArtifactKind;
+
+import javax.annotation.Nullable;
 
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -57,6 +63,10 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
     private final StreamExecutionEnvironment env;
     private final boolean isBlocking;
+
+    private ClassLoader classLoader;
+
+    private @Nullable ArtifactManager artifactManager;
 
     public static FlinkPipelineComposer ofRemoteCluster(
             org.apache.flink.configuration.Configuration flinkConfig, List<Path> additionalJars) {
@@ -86,9 +96,41 @@ public class FlinkPipelineComposer implements PipelineComposer {
                 StreamExecutionEnvironment.getExecutionEnvironment(), true);
     }
 
+    public static FlinkPipelineComposer ofApplicationCluster(
+            org.apache.flink.configuration.Configuration flinkConfig,
+            List<Path> additionalJars,
+            ClassLoader classLoader,
+            ArtifactManager artifactManager) {
+        StreamExecutionEnvironment env =
+                StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
+        additionalJars.forEach(
+                jarPath -> {
+                    try {
+                        FlinkEnvironmentUtils.addJar(env, jarPath.toUri().toURL());
+                    } catch (Exception e) {
+                        throw new RuntimeException(
+                                String.format(
+                                        "Unable to convert JAR path \"%s\" to URL when adding JAR to Flink environment",
+                                        jarPath),
+                                e);
+                    }
+                });
+        return new FlinkPipelineComposer(env, false, classLoader, artifactManager);
+    }
+
     private FlinkPipelineComposer(StreamExecutionEnvironment env, boolean isBlocking) {
+        this(env, isBlocking, Thread.currentThread().getContextClassLoader(), null);
+    }
+
+    private FlinkPipelineComposer(
+            StreamExecutionEnvironment env,
+            boolean isBlocking,
+            ClassLoader classLoader,
+            @Nullable ArtifactManager artifactManager) {
         this.env = env;
         this.isBlocking = isBlocking;
+        this.classLoader = classLoader;
+        this.artifactManager = artifactManager;
     }
 
     @Override
@@ -97,7 +139,8 @@ public class FlinkPipelineComposer implements PipelineComposer {
         env.getConfig().setParallelism(parallelism);
 
         // Build Source Operator
-        DataSourceTranslator sourceTranslator = new DataSourceTranslator();
+        DataSourceTranslator sourceTranslator =
+                new DataSourceTranslator(artifactManager, classLoader);
         DataStream<Event> stream =
                 sourceTranslator.translate(pipelineDef.getSource(), env, pipelineDef.getConfig());
 
@@ -127,7 +170,8 @@ public class FlinkPipelineComposer implements PipelineComposer {
                         pipelineDef.getConfig().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
 
         // Build DataSink in advance as schema operator requires MetadataApplier
-        DataSink dataSink = createDataSink(pipelineDef.getSink(), pipelineDef.getConfig());
+        DataSink dataSink =
+                createDataSink(pipelineDef.getSink(), pipelineDef.getConfig(), artifactManager);
 
         stream =
                 schemaOperatorTranslator.translate(
@@ -151,14 +195,15 @@ public class FlinkPipelineComposer implements PipelineComposer {
                 env, pipelineDef.getConfig().get(PipelineOptions.PIPELINE_NAME), isBlocking);
     }
 
-    private DataSink createDataSink(SinkDef sinkDef, Configuration pipelineConfig) {
+    private DataSink createDataSink(
+            SinkDef sinkDef, Configuration pipelineConfig, ArtifactManager artifactManager) {
+
         // Search the data sink factory
-        DataSinkFactory sinkFactory =
-                FactoryDiscoveryUtils.getFactoryByIdentifier(
-                        sinkDef.getType(), DataSinkFactory.class);
+        DataSinkFactory sinkFactory = findSinkFactory(sinkDef.getType(), artifactManager);
 
         // Include sink connector JAR
-        FactoryDiscoveryUtils.getJarPathByIdentifier(sinkDef.getType(), DataSinkFactory.class)
+        FactoryDiscoveryUtils.getJarPathByIdentifier(
+                        sinkDef.getType(), DataSinkFactory.class, classLoader)
                 .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
 
         // Create data sink
@@ -198,6 +243,45 @@ public class FlinkPipelineComposer implements PipelineComposer {
             return Optional.empty();
         }
         return Optional.of(container);
+    }
+
+    private DataSinkFactory findSinkFactory(String identifier, ArtifactManager artifactManager) {
+        DataSinkFactory sinkFactory = null;
+        // try spi first to check if the classloader contains this connector jar
+        try {
+            sinkFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(identifier, DataSinkFactory.class);
+        } catch (Exception ignored) {
+            if (artifactManager == null) {
+                throw new RuntimeException("No DataSourceFactory is found.");
+            }
+        }
+
+        if (sinkFactory != null) {
+            return sinkFactory;
+        }
+
+        try {
+            // 3. get the remote uris about this connector
+            // although the remote uris may be empty, we also do step 4 and 5 to get full exception
+            ArtifactIdentifier artifactIdentifier =
+                    ArtifactIdentifier.of(ArtifactKind.PIPELINE_SINK, identifier);
+
+            List<URI> artifactRemoteUris =
+                    artifactManager.getArtifactRemoteUris(artifactIdentifier, new HashMap<>());
+
+            // 4. register these uris to classloader
+            artifactManager.registerArtifactResources(artifactRemoteUris);
+
+            // 5. try spi again and throw full error messages
+            sinkFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(
+                            identifier, DataSinkFactory.class, classLoader);
+
+            return sinkFactory;
+        } catch (Exception exception) {
+            throw new RuntimeException("fail to download and register sinkFactory.", exception);
+        }
     }
 
     @VisibleForTesting

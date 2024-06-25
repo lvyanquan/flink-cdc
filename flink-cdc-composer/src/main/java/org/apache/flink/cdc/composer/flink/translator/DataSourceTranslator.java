@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.composer.flink.translator;
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.artifacts.ArtifactManager;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
@@ -36,7 +37,15 @@ import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.table.artifacts.ArtifactIdentifier;
+import org.apache.flink.table.artifacts.ArtifactKind;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.URI;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
@@ -44,13 +53,20 @@ import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 /** Translator used to build {@link DataSource} which will generate a {@link DataStream}. */
 @Internal
 public class DataSourceTranslator {
+    private static final Logger LOG = LoggerFactory.getLogger(DataSourceTranslator.class);
+    private ArtifactManager artifactManager;
+
+    ClassLoader classLoader;
+
+    public DataSourceTranslator(ArtifactManager artifactManager, ClassLoader classLoader) {
+        this.artifactManager = artifactManager;
+        this.classLoader = classLoader;
+    }
 
     public DataStreamSource<Event> translate(
             SourceDef sourceDef, StreamExecutionEnvironment env, Configuration pipelineConfig) {
         // Search the data source factory
-        DataSourceFactory sourceFactory =
-                FactoryDiscoveryUtils.getFactoryByIdentifier(
-                        sourceDef.getType(), DataSourceFactory.class);
+        DataSourceFactory sourceFactory = findSourceFactory(sourceDef.getType(), pipelineConfig);
 
         String startTimeMs = OptionUtils.getStartTimeMs(env.getConfiguration());
         if (startTimeMs != null) {
@@ -61,12 +77,11 @@ public class DataSourceTranslator {
         DataSource dataSource =
                 sourceFactory.createDataSource(
                         new FactoryHelper.DefaultContext(
-                                sourceDef.getConfig(),
-                                pipelineConfig,
-                                Thread.currentThread().getContextClassLoader()));
+                                sourceDef.getConfig(), pipelineConfig, classLoader));
 
         // Add source JAR to environment
-        FactoryDiscoveryUtils.getJarPathByIdentifier(sourceDef.getType(), DataSourceFactory.class)
+        FactoryDiscoveryUtils.getJarPathByIdentifier(
+                        sourceDef.getType(), DataSourceFactory.class, classLoader)
                 .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
 
         // Get source provider
@@ -110,5 +125,46 @@ public class DataSourceTranslator {
         conf.put(VVR_START_TIME_MS.key(), startTimeMs);
         return new SourceDef(
                 sourceDef.getType(), sourceDef.getName().orElse(null), Configuration.fromMap(conf));
+    }
+
+    private DataSourceFactory findSourceFactory(String identifier, Configuration pipelineConfig) {
+        DataSourceFactory sourceFactory = null;
+        // try spi first to check if the classloader contains this connector jar
+        try {
+            sourceFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(
+                            identifier, DataSourceFactory.class);
+        } catch (Exception ignored) {
+            if (artifactManager == null) {
+                throw new RuntimeException("No DataSourceFactory is found.");
+            }
+        }
+
+        if (sourceFactory != null) {
+            return sourceFactory;
+        }
+
+        try {
+            // 3. get the remote uris about this connector
+            // although the remote uris may be empty, we also do step 4 and 5 to get full exception
+            ArtifactIdentifier artifactIdentifier =
+                    ArtifactIdentifier.of(ArtifactKind.PIPELINE_SOURCE, identifier);
+
+            List<URI> artifactRemoteUris =
+                    artifactManager.getArtifactRemoteUris(artifactIdentifier, new HashMap<>());
+
+            // 4. register these uris to classloader
+            artifactManager.registerArtifactResources(artifactRemoteUris);
+
+            // 5. try spi again and throw full error messages
+            sourceFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(
+                            identifier, DataSourceFactory.class, classLoader);
+
+            return sourceFactory;
+        } catch (Exception exception) {
+            LOG.error("fail to download and register sourceFactor", exception);
+            throw new RuntimeException("fail to download and register sourceFactory.", exception);
+        }
     }
 }

@@ -23,6 +23,8 @@ public interface PipelineExecution {
     /** Execute the pipeline. */
     ExecutionInfo execute() throws Exception;
 
+    String getExecutionPlan() throws Exception;
+
     /** Information of the execution. */
     class ExecutionInfo {
         private final String id;

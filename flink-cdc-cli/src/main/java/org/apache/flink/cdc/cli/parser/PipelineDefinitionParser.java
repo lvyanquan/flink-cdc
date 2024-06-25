@@ -30,4 +30,6 @@ public interface PipelineDefinitionParser {
      * the {@link PipelineDef}.
      */
     PipelineDef parse(Path pipelineDefPath, Configuration globalPipelineConfig) throws Exception;
+
+    PipelineDef parse(String pipelineDef, Configuration globalPipelineConfig) throws Exception;
 }

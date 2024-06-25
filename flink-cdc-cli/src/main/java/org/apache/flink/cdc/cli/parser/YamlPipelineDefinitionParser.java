@@ -75,8 +75,16 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
     @Override
     public PipelineDef parse(Path pipelineDefPath, Configuration globalPipelineConfig)
             throws Exception {
-        JsonNode root = mapper.readTree(pipelineDefPath.toFile());
+        return parse(mapper.readTree(pipelineDefPath.toFile()), globalPipelineConfig);
+    }
 
+    @Override
+    public PipelineDef parse(String pipelineDef, Configuration globalPipelineConfig)
+            throws Exception {
+        return parse(mapper.readTree(pipelineDef), globalPipelineConfig);
+    }
+
+    private PipelineDef parse(JsonNode root, Configuration globalPipelineConfig) {
         // Source is required
         SourceDef sourceDef =
                 toSourceDef(

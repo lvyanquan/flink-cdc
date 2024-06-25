@@ -18,14 +18,21 @@
 package org.apache.flink.cdc.composer.flink;
 
 import org.apache.flink.cdc.composer.PipelineExecution;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Field;
 
 /**
  * A pipeline execution that run the defined pipeline via Flink's {@link
  * StreamExecutionEnvironment}.
  */
 public class FlinkPipelineExecution implements PipelineExecution {
+    private static final Logger LOG = LoggerFactory.getLogger(FlinkPipelineExecution.class);
 
     private final StreamExecutionEnvironment env;
     private final String jobName;
@@ -40,10 +47,25 @@ public class FlinkPipelineExecution implements PipelineExecution {
 
     @Override
     public ExecutionInfo execute() throws Exception {
+        printConfig();
         JobClient jobClient = env.executeAsync(jobName);
         if (isBlocking) {
             jobClient.getJobExecutionResult().get();
         }
         return new ExecutionInfo(jobClient.getJobID().toString(), jobName);
+    }
+
+    @Override
+    public String getExecutionPlan() throws Exception {
+        printConfig();
+        return env.getExecutionPlan();
+    }
+
+    void printConfig() throws NoSuchFieldException, IllegalAccessException {
+        Class<StreamExecutionEnvironment> envClass = StreamExecutionEnvironment.class;
+        Field field = envClass.getDeclaredField("configuration");
+        field.setAccessible(true);
+        Configuration configuration = ((Configuration) field.get(env));
+        LOG.info("config is: " + configuration);
     }
 }
