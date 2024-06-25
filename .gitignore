@@ -26,3 +26,5 @@ docs/_build
 **/.flattened-pom.xml
 **/dependency-reduced-pom.xml
 .gitmodules
+tar-building-target
+flink-cdc-pipeline-connector-meta.yaml

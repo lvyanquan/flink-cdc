@@ -28,7 +28,6 @@ limitations under the License.
        <holo.client.version>2.3.0</holo.client.version>
     </properties>
 
-    <groupId>com.alibaba.ververica</groupId>
     <artifactId>flink-cdc-pipeline-connector-hologres</artifactId>
     <dependencies>
         <dependency>
