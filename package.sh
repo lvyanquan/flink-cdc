@@ -50,7 +50,7 @@ package() {
   scalaVersion=$2
   jdkVersion=$3
 
-  buildCmd="mvn clean -T 4C install -U -Dmaven.compile.fork=true -DskipTests --batch-mode --errors --show-version -Dcheckstyle.skip -Dgpg.skip -Dmaven.javadoc.skip -Drat.ignoreErrors -Dscala-${scalaVersion} -DskipTests -Prelease -Dververica.password=\"wRa9MVxNfg3@dNbXgpfE8_D?\" -Dververica.salt=\"alibaba-ververica\""
+  buildCmd="mvn clean install -U -Dmaven.compile.fork=true -DskipTests --batch-mode --errors --show-version -Dcheckstyle.skip -Dgpg.skip -Dmaven.javadoc.skip -Drat.ignoreErrors -Dscala-${scalaVersion} -DskipTests -Prelease -Dververica.password=\"wRa9MVxNfg3@dNbXgpfE8_D?\" -Dververica.salt=\"alibaba-ververica\""
 
   buildArmCmd="$buildCmd -Darch_classifier=aarch_64 "
   if [[ "${jdkVersion}" == "jdk11" ]]; then
