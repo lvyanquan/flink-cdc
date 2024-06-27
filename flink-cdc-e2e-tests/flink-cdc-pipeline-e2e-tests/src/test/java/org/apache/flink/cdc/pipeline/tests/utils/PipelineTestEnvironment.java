@@ -152,10 +152,33 @@ public abstract class PipelineTestEnvironment extends TestLogger {
      */
     public void submitPipelineJob(String pipelineJob, Path... jars)
             throws IOException, InterruptedException {
-        for (Path jar : jars) {
+        Path janinoPath = TestUtils.getResource("janino.jar");
+        Path commonsCliPath = TestUtils.getResource("commons-cli.jar");
+        Path calcitePath = TestUtils.getResource("calcite-core.jar");
+        Path slf4jPath = TestUtils.getResource("slf4j-api.jar");
+        Path flinkShadedGuavaPath = TestUtils.getResource("flink-shaded-guava.jar");
+        Path avaticaCorePath = TestUtils.getResource("avatica-core.jar");
+        Path calciteLinq4jPath = TestUtils.getResource("calcite-linq4j.jar");
+        Path jsonPathPath = TestUtils.getResource("json-path.jar");
+
+        List<Path> allJars =
+                new ArrayList<>(
+                        Arrays.asList(
+                                janinoPath,
+                                commonsCliPath,
+                                calcitePath,
+                                slf4jPath,
+                                flinkShadedGuavaPath,
+                                avaticaCorePath,
+                                calciteLinq4jPath,
+                                jsonPathPath));
+        allJars.addAll(Arrays.asList(jars));
+
+        for (Path jar : allJars) {
             jobManager.copyFileToContainer(
                     MountableFile.forHostPath(jar), "/tmp/flinkCDC/lib/" + jar.getFileName());
         }
+
         jobManager.copyFileToContainer(
                 MountableFile.forHostPath(
                         TestUtils.getResource("flink-cdc.sh", "flink-cdc-dist", "src"), 0777),
@@ -172,7 +195,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         jobManager.copyFileToContainer(
                 MountableFile.forHostPath(script), "/tmp/flinkCDC/conf/pipeline.yaml");
         StringBuilder sb = new StringBuilder();
-        for (Path jar : jars) {
+        for (Path jar : allJars) {
             sb.append(" --jar /tmp/flinkCDC/lib/").append(jar.getFileName());
         }
         String commands =

@@ -33,8 +33,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.flink.shaded.guava30.com.google.common.base.Preconditions.checkArgument;
-
 /**
  * Class for generating <code>flink-cdc-pipeline-connector-meta.yaml</code> under the build target.
  */
@@ -47,11 +45,14 @@ public class AssembledMetaFileGenerator {
     public static void main(String[] args) throws Exception {
         Path binaryPath = Paths.get(ParameterTool.fromArgs(args).get("binaryPath"));
         Path outputPath = Paths.get(ParameterTool.fromArgs(args).get("outputPath"));
-        checkArgument(Files.exists(binaryPath), "Cannot find binary target at %s", binaryPath);
-        checkArgument(
-                Files.isDirectory(binaryPath),
-                "The binary target at %s is not a directory",
-                binaryPath);
+        if (!Files.exists(binaryPath)) {
+            throw new IllegalArgumentException(
+                    String.format("Cannot find binary target at %s", binaryPath));
+        }
+        if (!Files.isDirectory(binaryPath)) {
+            throw new IllegalArgumentException(
+                    String.format("The binary target at %s is not a directory", binaryPath));
+        }
 
         // Paths of meta files and dependencies should be a relative one against "flink"
         Path relativeRoot = binaryPath.resolve("flink-cdc");
