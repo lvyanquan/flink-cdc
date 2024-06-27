@@ -60,7 +60,6 @@ import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOp
 import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.USERNAME;
 
 /** IT tests for {@link StarRocksMetadataApplier}. */
-@Ignore
 public class StarRocksMetadataApplierITCase extends StarRocksSinkTestBase {
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();

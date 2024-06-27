@@ -76,7 +76,6 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Integration test for validating specifying starting offset. */
-@Disabled
 public class SpecificStartingOffsetITCase {
     private static final Logger LOG = LoggerFactory.getLogger(SpecificStartingOffsetITCase.class);
     @RegisterExtension static MiniClusterExtension miniCluster = new MiniClusterExtension();
@@ -324,6 +323,7 @@ public class SpecificStartingOffsetITCase {
     }
 
     @Test
+    @Disabled
     void testStartingFromTimestampOffset() throws Exception {
         // Purge binary log at first
         purgeBinaryLogs();
