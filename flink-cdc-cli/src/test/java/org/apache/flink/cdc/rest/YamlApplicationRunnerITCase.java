@@ -224,7 +224,7 @@ public class YamlApplicationRunnerITCase {
         configuration.set(DeploymentOptions.SHUTDOWN_ON_APPLICATION_FINISH, false);
         configuration.set(DeploymentOptions.SUBMIT_FAILED_JOB_ON_APPLICATION_ERROR, true);
         configuration.set(PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID, jobId.toHexString());
-        DeployDraftCommandBase.addArtifactFetcherConfig(
+        DeployDraftCommandBase.addExecutionConfig(
                 DeploymentTarget.APPLICATION_CLUSTER, new JobID(), configuration);
         configuration.addAll(executionConfig);
 

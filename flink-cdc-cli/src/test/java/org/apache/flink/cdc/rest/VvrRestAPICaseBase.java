@@ -19,8 +19,9 @@
 package org.apache.flink.cdc.rest;
 
 import org.apache.flink.core.testutils.CommonTestUtils;
-import org.apache.flink.table.gateway.client.VvrSqlGatewayClient;
 import org.apache.flink.table.gateway.client.api.SqlGatewayClient;
+import org.apache.flink.table.gateway.client.api.config.CommonSqlGatewayClientConfigOptions;
+import org.apache.flink.table.gateway.client.api.utils.SqlGatewayClientUtils;
 import org.apache.flink.table.gateway.rest.SqlGatewayRestEndpoint;
 import org.apache.flink.table.gateway.rest.util.SqlGatewayRestEndpointExtension;
 import org.apache.flink.table.gateway.service.utils.IgnoreExceptionHandler;
@@ -41,7 +42,6 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -94,12 +94,18 @@ public class VvrRestAPICaseBase {
         targetAddress = serverAddress.getHostName();
         port = serverAddress.getPort();
 
-        okHttpClient =
-                new OkHttpClient.Builder()
-                        .readTimeout(Duration.ofSeconds(60))
-                        .writeTimeout(Duration.ofSeconds(60))
-                        .build();
-        client = new VvrSqlGatewayClient(targetAddress, port, okHttpClient);
+        Map<String, String> map = new HashMap<>();
+        map.put(CommonSqlGatewayClientConfigOptions.SQL_GATEWAY_CLIENT_IDENTIFIER.key(), "vvr");
+        map.put(
+                CommonSqlGatewayClientConfigOptions.SQL_GATEWAY_CLIENT_REST_ADDRESS.key(),
+                targetAddress);
+        map.put(
+                CommonSqlGatewayClientConfigOptions.SQL_GATEWAY_CLIENT_REST_PORT.key(),
+                String.valueOf(port));
+        okHttpClient = new OkHttpClient();
+        client =
+                SqlGatewayClientUtils.createClient(
+                        map, VvrRestAPICaseBase.class.getClassLoader(), okHttpClient);
 
         originalEnv = System.getenv();
         // prepare yaml
@@ -108,9 +114,9 @@ public class VvrRestAPICaseBase {
             throw new IOException("Can't create testing flink-conf.yaml file.");
         }
         // adjust the test environment for the purposes of this test
-        Map<String, String> map = new HashMap<>(System.getenv());
-        map.put(ENV_FLINK_CONF_DIR, flinkHome.getAbsolutePath());
-        CommonTestUtils.setEnv(map);
+        Map<String, String> map2 = new HashMap<>(System.getenv());
+        map2.put(ENV_FLINK_CONF_DIR, flinkHome.getAbsolutePath());
+        CommonTestUtils.setEnv(map2);
     }
 
     @AfterAll
