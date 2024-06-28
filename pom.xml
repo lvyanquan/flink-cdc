@@ -41,6 +41,7 @@ limitations under the License.
         <module>flink-cdc-runtime</module>
         <module>flink-cdc-e2e-tests</module>
         <module>flink-cdc-pipeline-connectors-dist</module>
+        <module>flink-cdc-cli-bundle</module>
     </modules>
 
     <licenses>
