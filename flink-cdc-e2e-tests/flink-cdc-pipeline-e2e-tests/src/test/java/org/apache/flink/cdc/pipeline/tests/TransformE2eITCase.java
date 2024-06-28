@@ -27,7 +27,6 @@ import org.apache.flink.cdc.runtime.operators.transform.TransformSchemaOperator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +43,6 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /** E2e tests for the {@link TransformSchemaOperator}. */
-@Ignore("unstable")
 public class TransformE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(TransformE2eITCase.class);
 
@@ -313,7 +311,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
 
     private void validateResult(List<String> expectedEvents) throws Exception {
         for (String event : expectedEvents) {
-            waitUntilSpecificEvent(event, 6000L);
+            waitUntilSpecificEvent(event, 20000L);
         }
     }
 
