@@ -284,14 +284,12 @@ limitations under the License.
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-shaded-guava</artifactId>
             <version>30.1.1-jre-${flink.shaded.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <dependency>

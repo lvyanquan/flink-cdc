@@ -38,13 +38,11 @@ limitations under the License.
             <!-- Used for code generation -->
             <groupId>org.codehaus.janino</groupId>
             <artifactId>janino</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <!-- Used for translation of expression -->
             <groupId>org.apache.calcite</groupId>
             <artifactId>calcite-core</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
