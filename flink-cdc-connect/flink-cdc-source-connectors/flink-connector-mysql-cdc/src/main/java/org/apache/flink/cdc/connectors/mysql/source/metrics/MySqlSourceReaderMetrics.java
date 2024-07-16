@@ -44,7 +44,10 @@ public class MySqlSourceReaderMetrics {
 
     // Constants
     public static final long UNDEFINED = -1;
-    public static final String DATABASE_GROUP_KEY = "database";
+
+    public static final String DEFAULT_GROUP_VALUE = "default";
+    public static final String NAMESPACE_GROUP_KEY = "namespace";
+    public static final String SCHEMA_GROUP_KEY = "schema";
     public static final String TABLE_GROUP_KEY = "table";
 
     // Metric names
@@ -183,7 +186,8 @@ public class MySqlSourceReaderMetrics {
         public TableMetrics(String databaseName, String tableName, MetricGroup parentGroup) {
             MetricGroup metricGroup =
                     parentGroup
-                            .addGroup(DATABASE_GROUP_KEY, databaseName)
+                            .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
+                            .addGroup(SCHEMA_GROUP_KEY, databaseName)
                             .addGroup(TABLE_GROUP_KEY, tableName);
             recordsCounter = metricGroup.counter(MetricNames.IO_NUM_RECORDS_IN);
             snapshotCounter = metricGroup.counter(NUM_SNAPSHOT_RECORDS);

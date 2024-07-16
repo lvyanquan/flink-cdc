@@ -28,7 +28,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.DATABASE_GROUP_KEY;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.DEFAULT_GROUP_VALUE;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NAMESPACE_GROUP_KEY;
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.SCHEMA_GROUP_KEY;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.TABLE_GROUP_KEY;
 
 /** A collection class for handling metrics in {@link MySqlSourceEnumerator}. */
@@ -111,7 +113,8 @@ public class MySqlSourceEnumeratorMetrics {
         public TableMetrics(String databaseName, String tableName, MetricGroup parentGroup) {
             MetricGroup metricGroup =
                     parentGroup
-                            .addGroup(DATABASE_GROUP_KEY, databaseName)
+                            .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
+                            .addGroup(SCHEMA_GROUP_KEY, databaseName)
                             .addGroup(TABLE_GROUP_KEY, tableName);
             metricGroup.gauge(
                     NUM_SNAPSHOT_SPLITS_PROCESSED, () -> numSnapshotSplitsProcessed.intValue());
