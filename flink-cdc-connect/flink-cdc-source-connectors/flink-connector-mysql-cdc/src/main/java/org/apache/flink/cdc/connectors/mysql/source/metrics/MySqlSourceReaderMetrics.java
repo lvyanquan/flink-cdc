@@ -46,7 +46,7 @@ public class MySqlSourceReaderMetrics {
     public static final long UNDEFINED = -1;
 
     public static final String DEFAULT_GROUP_VALUE = "default";
-    public static final String NAMESPACE_GROUP_KEY = "namespace";
+    public static final String NAMESPACE_GROUP_KEY = "cdcns";
     public static final String SCHEMA_GROUP_KEY = "schema";
     public static final String TABLE_GROUP_KEY = "table";
 
