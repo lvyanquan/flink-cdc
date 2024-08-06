@@ -20,6 +20,7 @@ package org.apache.flink.cdc.connectors.mysql.source;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.testutils.MySqlContainer;
@@ -272,6 +273,7 @@ public class SpecificStartingOffsetITCase {
                         customers.getTableId()));
         Thread.sleep(1000);
         long t1 = System.currentTimeMillis();
+        String servedId1 = "5401";
         flushLogs();
 
         executeStatements(
@@ -280,6 +282,7 @@ public class SpecificStartingOffsetITCase {
                         customers.getTableId()));
         Thread.sleep(1000);
         long t2 = System.currentTimeMillis();
+        String servedId2 = "5402";
         flushLogs();
 
         executeStatements(
@@ -288,6 +291,7 @@ public class SpecificStartingOffsetITCase {
                         customers.getTableId()));
         Thread.sleep(1000);
         long t3 = System.currentTimeMillis();
+        String servedId3 = "5403";
         flushLogs();
 
         executeStatements(
@@ -296,6 +300,7 @@ public class SpecificStartingOffsetITCase {
                         customers.getTableId()));
         Thread.sleep(1000);
         long t4 = System.currentTimeMillis();
+        String servedId4 = "5404";
         flushLogs();
 
         executeStatements(
@@ -304,6 +309,7 @@ public class SpecificStartingOffsetITCase {
                         customers.getTableId()));
         Thread.sleep(1000);
         long t5 = System.currentTimeMillis();
+        String servedId5 = "5405";
         flushLogs();
 
         assertThat(DebeziumUtils.findBinlogOffset(t1, connection))
@@ -432,6 +438,15 @@ public class SpecificStartingOffsetITCase {
         io.debezium.config.Configuration configuration =
                 io.debezium.config.Configuration.from(properties);
         return DebeziumUtils.createMySqlConnection(configuration, new Properties());
+    }
+
+    private MySqlSourceConfig getMySqlSourceConfig(Long timestamp, String serverId) {
+        return getSourceBuilder()
+                .startupOptions(StartupOptions.timestamp(timestamp))
+                .serverId(serverId)
+                .build()
+                .getConfigFactory()
+                .createConfig(0);
     }
 
     private void executeStatements(String... statements) throws Exception {

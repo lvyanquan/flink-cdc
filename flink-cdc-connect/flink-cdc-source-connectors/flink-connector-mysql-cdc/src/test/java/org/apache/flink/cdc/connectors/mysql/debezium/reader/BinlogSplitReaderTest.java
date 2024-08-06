@@ -1266,7 +1266,8 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
                             ? BinlogOffset.ofEarliest()
                             : initializeEffectiveOffset(
                                     mySqlSplit.asBinlogSplit().getStartingOffset(),
-                                    getConnection());
+                                    getConnection(),
+                                    getSourceConfig());
 
             LOG.info("Starting offset is initialized to {}", offset);
 
