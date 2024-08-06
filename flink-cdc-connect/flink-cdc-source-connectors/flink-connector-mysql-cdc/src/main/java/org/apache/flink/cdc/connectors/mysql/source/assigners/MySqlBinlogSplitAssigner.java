@@ -22,12 +22,14 @@ import org.apache.flink.cdc.connectors.mysql.source.assigners.state.BinlogPendin
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
+import org.apache.flink.cdc.connectors.mysql.source.connection.JdbcConnectionPools;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 import org.apache.flink.util.CollectionUtil;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -141,7 +143,10 @@ public class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
     public void onBinlogSplitUpdated() {}
 
     @Override
-    public void close() {}
+    public void close() throws IOException {
+        // clear jdbc connection pools
+        JdbcConnectionPools.getInstance().clear();
+    }
 
     // ------------------------------------------------------------------------------------------
 
