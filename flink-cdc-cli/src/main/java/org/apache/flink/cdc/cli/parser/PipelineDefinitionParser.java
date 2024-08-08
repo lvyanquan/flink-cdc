@@ -31,5 +31,9 @@ public interface PipelineDefinitionParser {
      */
     PipelineDef parse(Path pipelineDefPath, Configuration globalPipelineConfig) throws Exception;
 
-    PipelineDef parse(String pipelineDef, Configuration globalPipelineConfig) throws Exception;
+    /**
+     * Parse the specified pipeline definition string, merge global configurations, then generate
+     * the {@link PipelineDef}.
+     */
+    PipelineDef parse(String pipelineDefText, Configuration globalPipelineConfig) throws Exception;
 }
