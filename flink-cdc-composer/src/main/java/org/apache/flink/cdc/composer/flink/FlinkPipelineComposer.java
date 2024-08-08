@@ -20,29 +20,22 @@ package org.apache.flink.cdc.composer.flink;
 import org.apache.flink.artifacts.ArtifactManager;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
-import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
-import org.apache.flink.cdc.common.factories.DataSinkFactory;
-import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.composer.PipelineComposer;
 import org.apache.flink.cdc.composer.PipelineExecution;
 import org.apache.flink.cdc.composer.definition.PipelineDef;
-import org.apache.flink.cdc.composer.definition.SinkDef;
 import org.apache.flink.cdc.composer.flink.coordination.OperatorIDGenerator;
 import org.apache.flink.cdc.composer.flink.translator.DataSinkTranslator;
 import org.apache.flink.cdc.composer.flink.translator.DataSourceTranslator;
 import org.apache.flink.cdc.composer.flink.translator.PartitioningTranslator;
 import org.apache.flink.cdc.composer.flink.translator.SchemaOperatorTranslator;
 import org.apache.flink.cdc.composer.flink.translator.TransformTranslator;
-import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
 import org.apache.flink.cdc.runtime.serializer.event.EventSerializer;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.table.artifacts.ArtifactIdentifier;
-import org.apache.flink.table.artifacts.ArtifactKind;
 
 import javax.annotation.Nullable;
 
@@ -51,7 +44,6 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -170,8 +162,9 @@ public class FlinkPipelineComposer implements PipelineComposer {
                         pipelineDef.getConfig().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
 
         // Build DataSink in advance as schema operator requires MetadataApplier
+        DataSinkTranslator sinkTranslator = new DataSinkTranslator(artifactManager, classLoader);
         DataSink dataSink =
-                createDataSink(pipelineDef.getSink(), pipelineDef.getConfig(), artifactManager);
+                sinkTranslator.createDataSink(pipelineDef.getSink(), pipelineDef.getConfig(), env);
 
         stream =
                 schemaOperatorTranslator.translate(
@@ -184,7 +177,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
                         stream, parallelism, parallelism, schemaOperatorIDGenerator.generate());
 
         // Build Sink Operator
-        DataSinkTranslator sinkTranslator = new DataSinkTranslator();
+
         sinkTranslator.translate(
                 pipelineDef.getSink(), stream, dataSink, schemaOperatorIDGenerator.generate());
 
@@ -193,25 +186,6 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
         return new FlinkPipelineExecution(
                 env, pipelineDef.getConfig().get(PipelineOptions.PIPELINE_NAME), isBlocking);
-    }
-
-    private DataSink createDataSink(
-            SinkDef sinkDef, Configuration pipelineConfig, ArtifactManager artifactManager) {
-
-        // Search the data sink factory
-        DataSinkFactory sinkFactory = findSinkFactory(sinkDef.getType(), artifactManager);
-
-        // Include sink connector JAR
-        FactoryDiscoveryUtils.getJarPathByIdentifier(
-                        sinkDef.getType(), DataSinkFactory.class, classLoader)
-                .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
-
-        // Create data sink
-        return sinkFactory.createDataSink(
-                new FactoryHelper.DefaultContext(
-                        sinkDef.getConfig(),
-                        pipelineConfig,
-                        Thread.currentThread().getContextClassLoader()));
     }
 
     private void addFrameworkJars() {
@@ -243,45 +217,6 @@ public class FlinkPipelineComposer implements PipelineComposer {
             return Optional.empty();
         }
         return Optional.of(container);
-    }
-
-    private DataSinkFactory findSinkFactory(String identifier, ArtifactManager artifactManager) {
-        DataSinkFactory sinkFactory = null;
-        // try spi first to check if the classloader contains this connector jar
-        try {
-            sinkFactory =
-                    FactoryDiscoveryUtils.getFactoryByIdentifier(identifier, DataSinkFactory.class);
-        } catch (Exception ignored) {
-            if (artifactManager == null) {
-                throw new RuntimeException("No DataSourceFactory is found.");
-            }
-        }
-
-        if (sinkFactory != null) {
-            return sinkFactory;
-        }
-
-        try {
-            // 3. get the remote uris about this connector
-            // although the remote uris may be empty, we also do step 4 and 5 to get full exception
-            ArtifactIdentifier artifactIdentifier =
-                    ArtifactIdentifier.of(ArtifactKind.PIPELINE_SINK, identifier);
-
-            List<URI> artifactRemoteUris =
-                    artifactManager.getArtifactRemoteUris(artifactIdentifier, new HashMap<>());
-
-            // 4. register these uris to classloader
-            artifactManager.registerArtifactResources(artifactRemoteUris);
-
-            // 5. try spi again and throw full error messages
-            sinkFactory =
-                    FactoryDiscoveryUtils.getFactoryByIdentifier(
-                            identifier, DataSinkFactory.class, classLoader);
-
-            return sinkFactory;
-        } catch (Exception exception) {
-            throw new RuntimeException("fail to download and register sinkFactory.", exception);
-        }
     }
 
     @VisibleForTesting

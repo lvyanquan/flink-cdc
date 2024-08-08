@@ -43,6 +43,8 @@ import org.apache.flink.table.artifacts.ArtifactKind;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +56,7 @@ import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 @Internal
 public class DataSourceTranslator {
     private static final Logger LOG = LoggerFactory.getLogger(DataSourceTranslator.class);
-    private ArtifactManager artifactManager;
+    private @Nullable ArtifactManager artifactManager;
 
     ClassLoader classLoader;
 
@@ -65,8 +67,6 @@ public class DataSourceTranslator {
 
     public DataStreamSource<Event> translate(
             SourceDef sourceDef, StreamExecutionEnvironment env, Configuration pipelineConfig) {
-        // Search the data source factory
-        DataSourceFactory sourceFactory = findSourceFactory(sourceDef.getType(), pipelineConfig);
 
         String startTimeMs = OptionUtils.getStartTimeMs(env.getConfiguration());
         if (startTimeMs != null) {
@@ -74,15 +74,7 @@ public class DataSourceTranslator {
         }
 
         // Create data source
-        DataSource dataSource =
-                sourceFactory.createDataSource(
-                        new FactoryHelper.DefaultContext(
-                                sourceDef.getConfig(), pipelineConfig, classLoader));
-
-        // Add source JAR to environment
-        FactoryDiscoveryUtils.getJarPathByIdentifier(
-                        sourceDef.getType(), DataSourceFactory.class, classLoader)
-                .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
+        DataSource dataSource = createDataSource(sourceDef, env, pipelineConfig);
 
         // Get source provider
         final int sourceParallelism = pipelineConfig.get(PipelineOptions.PIPELINE_PARALLELISM);
@@ -116,6 +108,17 @@ public class DataSourceTranslator {
         }
     }
 
+    private DataSource createDataSource(
+            SourceDef sourceDef, StreamExecutionEnvironment env, Configuration pipelineConfig) {
+        // Search the data source factory
+        DataSourceFactory sourceFactory = findSourceFactory(sourceDef.getType(), env);
+        DataSource dataSource =
+                sourceFactory.createDataSource(
+                        new FactoryHelper.DefaultContext(
+                                sourceDef.getConfig(), pipelineConfig, classLoader));
+        return dataSource;
+    }
+
     private String generateDefaultSourceName(SourceDef sourceDef) {
         return String.format("Flink CDC Event Source: %s", sourceDef.getType());
     }
@@ -127,19 +130,20 @@ public class DataSourceTranslator {
                 sourceDef.getType(), sourceDef.getName().orElse(null), Configuration.fromMap(conf));
     }
 
-    private DataSourceFactory findSourceFactory(String identifier, Configuration pipelineConfig) {
+    private DataSourceFactory findSourceFactory(String identifier, StreamExecutionEnvironment env) {
         DataSourceFactory sourceFactory = null;
         // try spi first to check if the classloader contains this connector jar
         try {
             sourceFactory =
                     FactoryDiscoveryUtils.getFactoryByIdentifier(
-                            identifier, DataSourceFactory.class);
+                            identifier, DataSourceFactory.class, classLoader);
         } catch (Exception ignored) {
             if (artifactManager == null) {
                 throw new RuntimeException("No DataSourceFactory is found.");
             }
         }
 
+        /** the dependency already in flink image is no need to add to classloader and add-jar. */
         if (sourceFactory != null) {
             return sourceFactory;
         }
@@ -155,6 +159,10 @@ public class DataSourceTranslator {
 
             // 4. register these uris to classloader
             artifactManager.registerArtifactResources(artifactRemoteUris);
+            // Add source JAR to environment.
+            FactoryDiscoveryUtils.getJarPathByIdentifier(
+                            identifier, DataSourceFactory.class, classLoader)
+                    .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
 
             // 5. try spi again and throw full error messages
             sourceFactory =
