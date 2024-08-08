@@ -28,7 +28,7 @@ limitations under the License.
     <artifactId>flink-cdc-cli</artifactId>
 
     <properties>
-        <commons-cli.version>1.6.0</commons-cli.version>
+        <commons-cli.version>1.7.0</commons-cli.version>
         <snakeyaml.version>2.6</snakeyaml.version>
         <!-- In order to use the HttpClient provided by VVP, align its version with VVP  -->
         <okhttp.version>4.10.0</okhttp.version>
@@ -58,7 +58,6 @@ limitations under the License.
             <artifactId>commons-cli</artifactId>
             <version>${commons-cli.version}</version>
         </dependency>
-
 
         <!-- flink-clients and flink-sql-gateway-api are already included in flink-sql-gateway, thus provided scope is enough. -->
         <dependency>
