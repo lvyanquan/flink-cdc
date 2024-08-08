@@ -56,6 +56,8 @@ public class ValuesDataSink implements DataSink, Serializable {
 
     private final SinkApi sinkApi;
 
+    private final boolean errorOnSchemaChange;
+
     private final boolean stdErr;
 
     private final boolean logger;
@@ -66,12 +68,14 @@ public class ValuesDataSink implements DataSink, Serializable {
             boolean materializedInMemory,
             boolean print,
             SinkApi sinkApi,
+            boolean errorOnSchemaChange,
             boolean stdErr,
             boolean logger,
             long limit) {
         this.materializedInMemory = materializedInMemory;
         this.print = print;
         this.sinkApi = sinkApi;
+        this.errorOnSchemaChange = errorOnSchemaChange;
         this.stdErr = stdErr;
         this.logger = logger;
         this.limit = limit;
@@ -90,7 +94,11 @@ public class ValuesDataSink implements DataSink, Serializable {
 
     @Override
     public MetadataApplier getMetadataApplier() {
-        return new ValuesDatabase.ValuesMetadataApplier();
+        if (errorOnSchemaChange) {
+            return new ValuesDatabase.ErrorOnChangeMetadataApplier();
+        } else {
+            return new ValuesDatabase.ValuesMetadataApplier();
+        }
     }
 
     /** an e2e {@link Sink} implementation that print all {@link DataChangeEvent} out. */

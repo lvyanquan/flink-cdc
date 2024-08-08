@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
+import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.composer.PipelineComposer;
 import org.apache.flink.cdc.composer.PipelineExecution;
@@ -130,6 +131,9 @@ public class FlinkPipelineComposer implements PipelineComposer {
         int parallelism = pipelineDef.getConfig().get(PipelineOptions.PIPELINE_PARALLELISM);
         env.getConfig().setParallelism(parallelism);
 
+        SchemaChangeBehavior schemaChangeBehavior =
+                pipelineDef.getConfig().get(PipelineOptions.PIPELINE_SCHEMA_CHANGE_BEHAVIOR);
+
         // Build Source Operator
         DataSourceTranslator sourceTranslator =
                 new DataSourceTranslator(artifactManager, classLoader);
@@ -143,9 +147,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
         // Schema operator
         SchemaOperatorTranslator schemaOperatorTranslator =
                 new SchemaOperatorTranslator(
-                        pipelineDef
-                                .getConfig()
-                                .get(PipelineOptions.PIPELINE_SCHEMA_CHANGE_BEHAVIOR),
+                        schemaChangeBehavior,
                         pipelineDef.getConfig().get(PipelineOptions.PIPELINE_SCHEMA_OPERATOR_UID),
                         pipelineDef
                                 .getConfig()
@@ -168,7 +170,12 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
         stream =
                 schemaOperatorTranslator.translate(
-                        stream, parallelism, dataSink.getMetadataApplier(), pipelineDef.getRoute());
+                        stream,
+                        parallelism,
+                        dataSink.getMetadataApplier()
+                                .setAcceptedSchemaEvolutionTypes(
+                                        pipelineDef.getSink().getIncludedSchemaEvolutionTypes()),
+                        pipelineDef.getRoute());
 
         // Build Partitioner used to shuffle Event
         PartitioningTranslator partitioningTranslator = new PartitioningTranslator();
