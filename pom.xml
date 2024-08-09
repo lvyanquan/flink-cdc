@@ -42,6 +42,7 @@ limitations under the License.
         <module>flink-cdc-e2e-tests</module>
         <module>flink-cdc-pipeline-connectors-dist</module>
         <module>flink-cdc-cli-bundle</module>
+        <module>flink-cdc-pipeline-udf-examples</module>
     </modules>
 
     <licenses>
@@ -101,6 +102,8 @@ limitations under the License.
         at the same time minimum 3.1.x Janino version passing Flink tests without WAs is 3.1.10,
         more details are in FLINK-27995 -->
         <janino.version>3.0.11</janino.version>
+        <!-- This is for Scala UDF testing purposes only. -->
+        <scala.version>2.12.16</scala.version>
     </properties>
 
     <dependencyManagement>
