@@ -137,6 +137,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         Duration connectTimeout = config.get(CONNECT_TIMEOUT);
         int connectMaxRetries = config.get(CONNECT_MAX_RETRIES);
         int connectionPoolSize = config.get(CONNECTION_POOL_SIZE);
+        boolean scanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
 
         validateIntegerOption(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
         validateIntegerOption(CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
@@ -173,7 +174,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .includeSchemaChanges(includeSchemaChanges)
                         .scanNewlyAddedTableEnabled(config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED))
                         .debeziumProperties(getDebeziumProperties(configMap))
-                        .jdbcProperties(getJdbcProperties(configMap));
+                        .jdbcProperties(getJdbcProperties(configMap))
+                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled);
 
         // Apply chunk key to all tables
         if (config.getOptional(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN).isPresent()) {
@@ -245,7 +247,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CONNECTION_POOL_SIZE);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
-
+        options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(CHUNK_META_GROUP_SIZE);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
