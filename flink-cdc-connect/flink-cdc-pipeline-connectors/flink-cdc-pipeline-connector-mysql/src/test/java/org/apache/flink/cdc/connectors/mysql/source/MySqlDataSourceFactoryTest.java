@@ -134,6 +134,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
                 .isEqualTo(
                         Arrays.asList(
                                 inventoryDatabase.getDatabaseName() + ".customers",
+                                inventoryDatabase.getDatabaseName() + ".multi_max_table",
                                 inventoryDatabase.getDatabaseName() + ".products"));
     }
 
@@ -264,6 +265,44 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
         assertThat(dataSource.getSourceConfig().getTableList())
                 .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+    }
+
+    @Test
+    public void testAddChunkKeyColumns() {
+        inventoryDatabase.createAndInitialize();
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".\\.*");
+
+        options.put(
+                SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
+                inventoryDatabase.getDatabaseName()
+                        + ".multi_max_\\.*:order_id;"
+                        + inventoryDatabase.getDatabaseName()
+                        + ".products:id;");
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        assertThat(dataSource.getSourceConfig().getStartupOptions())
+                .isEqualTo(StartupOptions.timestamp(1234L));
+
+        ObjectPath multiMaxTable =
+                new ObjectPath(inventoryDatabase.getDatabaseName(), "multi_max_table");
+        ObjectPath productsTable = new ObjectPath(inventoryDatabase.getDatabaseName(), "products");
+
+        assertThat(dataSource.getSourceConfig().getChunkKeyColumns())
+                .isNotEmpty()
+                .isEqualTo(
+                        new HashMap<ObjectPath, String>() {
+                            {
+                                put(multiMaxTable, "order_id");
+                                put(productsTable, "id");
+                            }
+                        });
     }
 
     @Test

@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -212,6 +213,35 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         }
         configFactory.enableReadingRdsArchivedBinlog(rdsConfig);
 
+        String chunkKeyColumns = config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+        if (chunkKeyColumns != null) {
+            Map<ObjectPath, String> chunkKeyColumnMap = new HashMap<>();
+            List<TableId> tableIds =
+                    MySqlSchemaUtils.listTables(configFactory.createConfig(0), null);
+            for (String chunkKeyColumn : chunkKeyColumns.split(";")) {
+                String[] splits = chunkKeyColumn.split(":");
+                if (splits.length == 2) {
+                    Selectors chunkKeySelector =
+                            new Selectors.SelectorsBuilder().includeTables(splits[0]).build();
+                    List<ObjectPath> tableList =
+                            getChunkKeyColumnTableList(tableIds, chunkKeySelector);
+                    for (ObjectPath table : tableList) {
+                        chunkKeyColumnMap.put(table, splits[1]);
+                    }
+                } else {
+                    throw new IllegalArgumentException(
+                            SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()
+                                    + " = "
+                                    + chunkKeyColumns
+                                    + " failed to be parsed in this part '"
+                                    + chunkKeyColumn
+                                    + "'.");
+                }
+            }
+            LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);
+            configFactory.chunkKeyColumn(chunkKeyColumnMap);
+        }
+
         return new MySqlDataSource(configFactory);
     }
 
@@ -247,6 +277,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CONNECTION_POOL_SIZE);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(CHUNK_META_GROUP_SIZE);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
@@ -284,6 +315,14 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         return MySqlSchemaUtils.listTables(sourceConfig, null).stream()
                 .filter(selectors::isMatch)
                 .map(TableId::toString)
+                .collect(Collectors.toList());
+    }
+
+    private static List<ObjectPath> getChunkKeyColumnTableList(
+            List<TableId> tableIds, Selectors selectors) {
+        return tableIds.stream()
+                .filter(selectors::isMatch)
+                .map(tableId -> new ObjectPath(tableId.getSchemaName(), tableId.getTableName()))
                 .collect(Collectors.toList());
     }
 
