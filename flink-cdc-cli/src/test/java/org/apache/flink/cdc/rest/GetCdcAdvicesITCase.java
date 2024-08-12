@@ -77,7 +77,7 @@ public class GetCdcAdvicesITCase extends VvrRestAPICaseBase {
     private GetAdvicesResponseBody sendGetCdcAdviceRequest(
             String yamlContent, Map<String, String> config) throws Exception {
         return GetAdvicesResponseBody.from(
-                client.getCdcAdvices(
+                client.getCdcYamlAdvices(
                                 yamlContent,
                                 ExecutionEnvironment.builder().withConfig(config).build())
                         .get());
