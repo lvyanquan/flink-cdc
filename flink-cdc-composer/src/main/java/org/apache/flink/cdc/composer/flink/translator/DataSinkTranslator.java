@@ -21,15 +21,21 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.artifacts.ArtifactManager;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.factories.DataSinkFactory;
+import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
 import org.apache.flink.cdc.common.sink.FlinkDataStreamSinkProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkFunctionProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.composer.definition.SinkDef;
+import org.apache.flink.cdc.composer.flink.FlinkEnvironmentUtils;
+import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
 import org.apache.flink.cdc.runtime.operators.sink.DataSinkFunctionOperator;
 import org.apache.flink.cdc.runtime.operators.sink.DataSinkWriterOperatorFactory;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
@@ -45,8 +51,15 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.transformations.LegacySinkTransformation;
 import org.apache.flink.streaming.api.transformations.PhysicalTransformation;
+import org.apache.flink.table.artifacts.ArtifactIdentifier;
+import org.apache.flink.table.artifacts.ArtifactKind;
+
+import javax.annotation.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
+import java.net.URI;
+import java.util.HashMap;
+import java.util.List;
 
 /** Translator used to build {@link DataSink} for given {@link DataStream}. */
 @Internal
@@ -54,6 +67,33 @@ public class DataSinkTranslator {
 
     private static final String SINK_WRITER_PREFIX = "Sink Writer: ";
     private static final String SINK_COMMITTER_PREFIX = "Sink Committer: ";
+
+    private @Nullable ArtifactManager artifactManager;
+
+    ClassLoader classLoader;
+
+    public DataSinkTranslator(ArtifactManager artifactManager, ClassLoader classLoader) {
+        this.artifactManager = artifactManager;
+        this.classLoader = classLoader;
+    }
+
+    public DataSinkTranslator() {
+        this(null, Thread.currentThread().getContextClassLoader());
+    }
+
+    public DataSink createDataSink(
+            SinkDef sinkDef, Configuration pipelineConfig, StreamExecutionEnvironment env) {
+
+        // Search the data sink factory
+        DataSinkFactory sinkFactory = findSinkFactory(sinkDef.getType(), env);
+
+        // Create data sink
+        return sinkFactory.createDataSink(
+                new FactoryHelper.DefaultContext(
+                        sinkDef.getConfig(),
+                        pipelineConfig,
+                        Thread.currentThread().getContextClassLoader()));
+    }
 
     public void translate(
             SinkDef sinkDef,
@@ -192,6 +232,52 @@ public class DataSinkTranslator {
                 | IllegalAccessException
                 | InvocationTargetException e) {
             throw new RuntimeException("Failed to create CommitterOperatorFactory", e);
+        }
+    }
+
+    private DataSinkFactory findSinkFactory(String identifier, StreamExecutionEnvironment env) {
+        DataSinkFactory sinkFactory = null;
+        // try spi first to check if the classloader contains this connector jar
+        try {
+            sinkFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(
+                            identifier, DataSinkFactory.class, classLoader);
+        } catch (Exception ignored) {
+            if (artifactManager == null) {
+                throw new RuntimeException("No DataSourceFactory is found.");
+            }
+        }
+
+        /** the dependency already in flink image is no need to add to classloader and add-jar. */
+        if (sinkFactory != null) {
+            return sinkFactory;
+        }
+
+        try {
+            // 3. get the remote uris about this connector
+            // although the remote uris may be empty, we also do step 4 and 5 to get full exception
+            ArtifactIdentifier artifactIdentifier =
+                    ArtifactIdentifier.of(ArtifactKind.PIPELINE_SINK, identifier);
+
+            List<URI> artifactRemoteUris =
+                    artifactManager.getArtifactRemoteUris(artifactIdentifier, new HashMap<>());
+
+            // 4. register these uris to classloader
+            artifactManager.registerArtifactResources(artifactRemoteUris);
+
+            // Include sink connector JAR
+            FactoryDiscoveryUtils.getJarPathByIdentifier(
+                            identifier, DataSinkFactory.class, classLoader)
+                    .ifPresent(jar -> FlinkEnvironmentUtils.addJar(env, jar));
+
+            // 5. try spi again and throw full error messages
+            sinkFactory =
+                    FactoryDiscoveryUtils.getFactoryByIdentifier(
+                            identifier, DataSinkFactory.class, classLoader);
+
+            return sinkFactory;
+        } catch (Exception exception) {
+            throw new RuntimeException("fail to download and register sinkFactory.", exception);
         }
     }
 }
