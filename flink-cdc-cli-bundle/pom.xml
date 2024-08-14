@@ -55,6 +55,17 @@ limitations under the License.
                                     <include>org.apache.flink:flink-cdc-*</include>
                                     <include>commons-cli:commons-cli</include>
                                     <include>org.snakeyaml:snakeyaml-engine</include>
+
+                                    <!-- Calcite's dependencies -->
+                                    <include>org.apache.calcite:*</include>
+                                    <include>org.apache.calcite.avatica:*</include>
+                                    <include>commons-codec:commons-codec</include>
+                                    <include>commons-io:commons-io</include>
+                                    <include>org.checkerframework:checker-qual</include>
+                                    <include>com.jayway.jsonpath:json-path</include>
+
+                                    <!-- Used for code generation -->
+                                    <include>org.codehaus.janino:*</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -66,6 +77,45 @@ limitations under the License.
                                     <pattern>org.apache.commons.cli</pattern>
                                     <shadedPattern>org.apache.flink.cdc.shaded.com.apache.commons.cli</shadedPattern>
                                 </relocation>
+
+                                <!-- Calcite's dependencies -->
+                                <relocation>
+                                    <pattern>org.apache.calcite</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.apache.calcite</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.commons.codec</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.apache.commons.codec</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.commons.io</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.apache.commons.io</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.checkerframework</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.checkerframework</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.jayway</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.com.jayway</shadedPattern>
+                                </relocation>
+
+                                <!-- Used for code generation -->
+                                <relocation>
+                                    <pattern>org.codehaus</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.shaded.org.codehaus</shadedPattern>
+                                </relocation>
+                                <!-- These are relocated to match package names, but not included in this jar -->
+                                <relocation>
+                                    <pattern>com.fasterxml</pattern>
+                                    <!-- From flink-shaded-jackson -->
+                                    <shadedPattern>org.apache.flink.shaded.jackson2.com.fasterxml</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.google</pattern>
+                                    <shadedPattern>org.apache.flink.shaded.guava30.com.google</shadedPattern>
+                                </relocation>
+
                             </relocations>
                         </configuration>
                     </execution>
