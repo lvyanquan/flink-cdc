@@ -17,12 +17,14 @@
 
 package org.apache.flink.cdc.connectors.hologres.sink.v2;
 
+import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.api.AbstractHologresWriter;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.api.HologresJDBCWriter;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParam;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.events.HologresSchemaFlushRecord;
+import org.apache.flink.metrics.Counter;
 
 import com.alibaba.hologres.client.model.Record;
 import org.slf4j.Logger;
@@ -40,20 +42,22 @@ public class HologresSinkWriter<INPUT> implements SinkWriter<INPUT> {
     private AbstractHologresWriter hologresWriter;
 
     private final HologresConnectionParam param;
-    private final Integer subtaskId;
+
+    private final Counter numRecordsOutCounter;
+    private final Counter numBytesSendCounter;
 
     public HologresSinkWriter(
             HologresRecordSerializer<INPUT> serializer,
             HologresConnectionParam param,
-            Integer subtaskId) {
+            Sink.InitContext initContext) {
         this.serializer = serializer;
         this.param = param;
-        this.subtaskId = subtaskId;
+        this.numRecordsOutCounter = initContext.metricGroup().getNumRecordsSendCounter();
+        this.numBytesSendCounter = initContext.metricGroup().getNumBytesSendCounter();
     }
 
     @Override
     public void write(INPUT input, Context context) throws IOException, InterruptedException {
-
         Record record = serializer.serialize(input);
         if (hologresWriter == null) {
             hologresWriter = getHologresWriter();
@@ -61,7 +65,9 @@ public class HologresSinkWriter<INPUT> implements SinkWriter<INPUT> {
         if (record instanceof HologresSchemaFlushRecord) {
             hologresWriter.flush();
         } else if (record != null) {
-            hologresWriter.write(record);
+            long byteSize = hologresWriter.write(record);
+            numRecordsOutCounter.inc();
+            numBytesSendCounter.inc(byteSize);
         }
     }
 

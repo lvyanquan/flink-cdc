@@ -40,7 +40,6 @@ public class HologresSink<InputT> implements Sink<InputT> {
 
     @Override
     public SinkWriter<InputT> createWriter(InitContext initContext) throws IOException {
-        return new HologresSinkWriter<>(
-                serializer, hologresConnectionParam, initContext.getSubtaskId());
+        return new HologresSinkWriter<>(serializer, hologresConnectionParam, initContext);
     }
 }
