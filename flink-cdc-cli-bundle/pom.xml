@@ -59,6 +59,7 @@ limitations under the License.
                                     <!-- Calcite's dependencies -->
                                     <include>org.apache.calcite:*</include>
                                     <include>org.apache.calcite.avatica:*</include>
+                                    <include>com.esri.geometry:esri-geometry-api</include>
                                     <include>commons-codec:commons-codec</include>
                                     <include>commons-io:commons-io</include>
                                     <include>org.checkerframework:checker-qual</include>
@@ -98,6 +99,10 @@ limitations under the License.
                                 <relocation>
                                     <pattern>com.jayway</pattern>
                                     <shadedPattern>org.apache.flink.cdc.calcite.shaded.com.jayway</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.esri.core.geometry</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.com.esri.core.geometry</shadedPattern>
                                 </relocation>
 
                                 <!-- Used for code generation -->
