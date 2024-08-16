@@ -38,6 +38,13 @@ limitations under the License.
         </dependencySet>
 
         <dependencySet>
+            <outputDirectory>flink-cdc/opt/pipeline-connectors/upsert-kafka</outputDirectory>
+            <includes>
+                <include>org.apache.flink:flink-cdc-pipeline-connector-kafka:jar:${project.version}</include>
+            </includes>
+        </dependencySet>
+
+        <dependencySet>
             <outputDirectory>flink-cdc/opt/pipeline-connectors/mysql</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-mysql:jar:${project.version}</include>
