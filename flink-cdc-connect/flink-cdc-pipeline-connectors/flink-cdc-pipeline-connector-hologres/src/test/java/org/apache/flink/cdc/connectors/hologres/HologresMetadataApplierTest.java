@@ -27,7 +27,8 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
-import org.apache.flink.cdc.connectors.hologres.schema.HologresTypeHelper;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
+import org.apache.flink.cdc.connectors.hologres.schema.HologresTypes;
 import org.apache.flink.cdc.connectors.hologres.sink.HologresMetadataApplier;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParam;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParamBuilder;
@@ -208,116 +209,98 @@ public class HologresMetadataApplierTest extends HologresTestBase {
         Object[][] allTypeMapping =
                 new Object[][] {
                     new Object[] {
-                        "a", DataTypes.CHAR(10).notNull(), HologresTypeHelper.PG_CHAR, Types.CHAR
+                        "a", DataTypes.CHAR(10).notNull(), HologresTypes.PG_CHAR, Types.CHAR
                     },
                     new Object[] {
                         "b",
                         DataTypes.VARCHAR(10),
-                        HologresTypeHelper.PG_CHARACTER_VARYING,
+                        HologresTypes.PG_CHARACTER_VARYING,
                         Types.VARCHAR
                     },
-                    new Object[] {
-                        "c", DataTypes.STRING(), HologresTypeHelper.PG_TEXT, Types.VARCHAR
-                    },
+                    new Object[] {"c", DataTypes.STRING(), HologresTypes.PG_TEXT, Types.VARCHAR},
                     // PG_BOOLEAN -> Types.BIT
+                    new Object[] {"d", DataTypes.BOOLEAN(), HologresTypes.PG_BOOLEAN, Types.BIT},
+                    new Object[] {"e", DataTypes.BINARY(10), HologresTypes.PG_BYTEA, Types.BINARY},
                     new Object[] {
-                        "d", DataTypes.BOOLEAN(), HologresTypeHelper.PG_BOOLEAN, Types.BIT
+                        "f", DataTypes.VARBINARY(10), HologresTypes.PG_BYTEA, Types.BINARY
                     },
-                    new Object[] {
-                        "e", DataTypes.BINARY(10), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
-                    new Object[] {
-                        "f", DataTypes.VARBINARY(10), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
-                    new Object[] {
-                        "g", DataTypes.BYTES(), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
+                    new Object[] {"g", DataTypes.BYTES(), HologresTypes.PG_BYTEA, Types.BINARY},
                     // PG_NUMERIC -> Types.NUMERIC
                     new Object[] {
-                        "h", DataTypes.DECIMAL(5, 2), HologresTypeHelper.PG_NUMERIC, Types.NUMERIC
+                        "h", DataTypes.DECIMAL(5, 2), HologresTypes.PG_NUMERIC, Types.NUMERIC
                     },
                     new Object[] {
-                        "i", DataTypes.TINYINT(), HologresTypeHelper.PG_SMALLINT, Types.SMALLINT
+                        "i", DataTypes.TINYINT(), HologresTypes.PG_SMALLINT, Types.SMALLINT
                     },
                     new Object[] {
-                        "j", DataTypes.SMALLINT(), HologresTypeHelper.PG_SMALLINT, Types.SMALLINT
+                        "j", DataTypes.SMALLINT(), HologresTypes.PG_SMALLINT, Types.SMALLINT
+                    },
+                    new Object[] {"k", DataTypes.INT(), HologresTypes.PG_INTEGER, Types.INTEGER},
+                    new Object[] {"l", DataTypes.BIGINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"m", DataTypes.FLOAT(), HologresTypes.PG_REAL, Types.REAL},
+                    new Object[] {
+                        "n", DataTypes.DOUBLE(), HologresTypes.PG_DOUBLE_PRECISION, Types.DOUBLE
+                    },
+                    new Object[] {"o", DataTypes.DATE(), HologresTypes.PG_DATE, Types.DATE},
+                    new Object[] {"p", DataTypes.TIME(5), HologresTypes.PG_TIME, Types.TIME},
+                    new Object[] {
+                        "q", DataTypes.TIMESTAMP(), HologresTypes.PG_TIMESTAMP, Types.TIMESTAMP
                     },
                     new Object[] {
-                        "k", DataTypes.INT(), HologresTypeHelper.PG_INTEGER, Types.INTEGER
-                    },
-                    new Object[] {
-                        "l", DataTypes.BIGINT(), HologresTypeHelper.PG_BIGINT, Types.BIGINT
-                    },
-                    new Object[] {"m", DataTypes.FLOAT(), HologresTypeHelper.PG_REAL, Types.REAL},
-                    new Object[] {
-                        "n",
-                        DataTypes.DOUBLE(),
-                        HologresTypeHelper.PG_DOUBLE_PRECISION,
-                        Types.DOUBLE
-                    },
-                    new Object[] {"o", DataTypes.DATE(), HologresTypeHelper.PG_DATE, Types.DATE},
-                    new Object[] {"p", DataTypes.TIME(5), HologresTypeHelper.PG_TIME, Types.TIME},
-                    new Object[] {
-                        "q", DataTypes.TIMESTAMP(), HologresTypeHelper.PG_TIMESTAMP, Types.TIMESTAMP
-                    },
-                    new Object[] {
-                        "r",
-                        DataTypes.TIMESTAMP_TZ(),
-                        HologresTypeHelper.PG_TIMESTAMPTZ,
-                        Types.TIMESTAMP
+                        "r", DataTypes.TIMESTAMP_TZ(), HologresTypes.PG_TIMESTAMPTZ, Types.TIMESTAMP
                     },
                     new Object[] {
                         "s",
                         DataTypes.TIMESTAMP_LTZ(),
-                        HologresTypeHelper.PG_TIMESTAMPTZ,
+                        HologresTypes.PG_TIMESTAMPTZ,
                         Types.TIMESTAMP
                     },
                     new Object[] {
                         "boolean_array",
                         DataTypes.ARRAY(DataTypes.BOOLEAN()),
-                        HologresTypeHelper.PG_BOOLEAN_ARRAY,
+                        HologresTypes.PG_BOOLEAN_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "int_array",
                         DataTypes.ARRAY(DataTypes.INT()),
-                        HologresTypeHelper.PG_INTEGER_ARRAY,
+                        HologresTypes.PG_INTEGER_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "bigint_array",
                         DataTypes.ARRAY(DataTypes.BIGINT()),
-                        HologresTypeHelper.PG_BIGINT_ARRAY,
+                        HologresTypes.PG_BIGINT_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "float_array",
                         DataTypes.ARRAY(DataTypes.FLOAT()),
-                        HologresTypeHelper.PG_REAL_ARRAY,
+                        HologresTypes.PG_REAL_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "double_array",
                         DataTypes.ARRAY(DataTypes.DOUBLE()),
-                        HologresTypeHelper.PG_DOUBLE_PRECISION_ARRAY,
+                        HologresTypes.PG_DOUBLE_PRECISION_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "char_array",
                         DataTypes.ARRAY(DataTypes.CHAR(2)),
-                        HologresTypeHelper.PG_CHAR_ARRAY,
+                        HologresTypes.PG_CHAR_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "varchar_array",
                         DataTypes.ARRAY(DataTypes.VARCHAR(2)),
-                        HologresTypeHelper.PG_CHARACTER_VARYING_ARRAY,
+                        HologresTypes.PG_CHARACTER_VARYING_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "text_array",
                         DataTypes.ARRAY(DataTypes.STRING()),
-                        HologresTypeHelper.PG_TEXT_ARRAY,
+                        HologresTypes.PG_TEXT_ARRAY,
                         Types.ARRAY
                     }
                 };
@@ -440,7 +423,8 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             tableOptions.put("distribution_key", "b");
             tableOptions.put("orientation", "row");
             tableOptions.put("CLUSTERING_KEY", "a");
-            HologresMetadataApplier applier = getHologresMetadataApplier(tableOptions, false);
+            HologresMetadataApplier applier =
+                    getHologresMetadataApplier(tableOptions, TypeNormalizationStrategy.NORMAL);
 
             // 1. create table
             Schema schema =
@@ -637,123 +621,103 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testCreateTableAllTypeWithEnableTypeNormalization() {
+    public void testCreateTableAllTypeInTolerance() {
         Object[][] allTypeMapping =
                 new Object[][] {
                     new Object[] {
-                        "a", DataTypes.CHAR(10).notNull(), HologresTypeHelper.PG_TEXT, Types.VARCHAR
+                        "a", DataTypes.CHAR(10).notNull(), HologresTypes.PG_TEXT, Types.VARCHAR
                     },
-                    new Object[] {
-                        "b", DataTypes.VARCHAR(10), HologresTypeHelper.PG_TEXT, Types.VARCHAR
-                    },
-                    new Object[] {
-                        "c", DataTypes.STRING(), HologresTypeHelper.PG_TEXT, Types.VARCHAR
-                    },
+                    new Object[] {"b", DataTypes.VARCHAR(10), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"c", DataTypes.STRING(), HologresTypes.PG_TEXT, Types.VARCHAR},
                     // PG_BOOLEAN -> Types.BIT
+                    new Object[] {"d", DataTypes.BOOLEAN(), HologresTypes.PG_BOOLEAN, Types.BIT},
+                    new Object[] {"e", DataTypes.BINARY(10), HologresTypes.PG_BYTEA, Types.BINARY},
                     new Object[] {
-                        "d", DataTypes.BOOLEAN(), HologresTypeHelper.PG_BOOLEAN, Types.BIT
+                        "f", DataTypes.VARBINARY(10), HologresTypes.PG_BYTEA, Types.BINARY
                     },
-                    new Object[] {
-                        "e", DataTypes.BINARY(10), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
-                    new Object[] {
-                        "f", DataTypes.VARBINARY(10), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
-                    new Object[] {
-                        "g", DataTypes.BYTES(), HologresTypeHelper.PG_BYTEA, Types.BINARY
-                    },
+                    new Object[] {"g", DataTypes.BYTES(), HologresTypes.PG_BYTEA, Types.BINARY},
                     // PG_NUMERIC -> Types.NUMERIC
                     new Object[] {
-                        "h", DataTypes.DECIMAL(5, 2), HologresTypeHelper.PG_NUMERIC, Types.NUMERIC
+                        "h", DataTypes.DECIMAL(5, 2), HologresTypes.PG_NUMERIC, Types.NUMERIC
+                    },
+                    new Object[] {"i", DataTypes.TINYINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"j", DataTypes.SMALLINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"k", DataTypes.INT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"l", DataTypes.BIGINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {
+                        "m", DataTypes.FLOAT(), HologresTypes.PG_DOUBLE_PRECISION, Types.DOUBLE
                     },
                     new Object[] {
-                        "i", DataTypes.TINYINT(), HologresTypeHelper.PG_BIGINT, Types.BIGINT
+                        "n", DataTypes.DOUBLE(), HologresTypes.PG_DOUBLE_PRECISION, Types.DOUBLE
+                    },
+                    new Object[] {"o", DataTypes.DATE(), HologresTypes.PG_DATE, Types.DATE},
+                    new Object[] {"p", DataTypes.TIME(5), HologresTypes.PG_TIME, Types.TIME},
+                    new Object[] {
+                        "q", DataTypes.TIMESTAMP(), HologresTypes.PG_TIMESTAMP, Types.TIMESTAMP
                     },
                     new Object[] {
-                        "j", DataTypes.SMALLINT(), HologresTypeHelper.PG_BIGINT, Types.BIGINT
-                    },
-                    new Object[] {"k", DataTypes.INT(), HologresTypeHelper.PG_BIGINT, Types.BIGINT},
-                    new Object[] {
-                        "l", DataTypes.BIGINT(), HologresTypeHelper.PG_BIGINT, Types.BIGINT
-                    },
-                    new Object[] {
-                        "m", DataTypes.FLOAT(), HologresTypeHelper.PG_DOUBLE_PRECISION, Types.DOUBLE
-                    },
-                    new Object[] {
-                        "n",
-                        DataTypes.DOUBLE(),
-                        HologresTypeHelper.PG_DOUBLE_PRECISION,
-                        Types.DOUBLE
-                    },
-                    new Object[] {"o", DataTypes.DATE(), HologresTypeHelper.PG_DATE, Types.DATE},
-                    new Object[] {"p", DataTypes.TIME(5), HologresTypeHelper.PG_TIME, Types.TIME},
-                    new Object[] {
-                        "q", DataTypes.TIMESTAMP(), HologresTypeHelper.PG_TIMESTAMP, Types.TIMESTAMP
-                    },
-                    new Object[] {
-                        "r",
-                        DataTypes.TIMESTAMP_TZ(),
-                        HologresTypeHelper.PG_TIMESTAMPTZ,
-                        Types.TIMESTAMP
+                        "r", DataTypes.TIMESTAMP_TZ(), HologresTypes.PG_TIMESTAMPTZ, Types.TIMESTAMP
                     },
                     new Object[] {
                         "s",
                         DataTypes.TIMESTAMP_LTZ(),
-                        HologresTypeHelper.PG_TIMESTAMPTZ,
+                        HologresTypes.PG_TIMESTAMPTZ,
                         Types.TIMESTAMP
                     },
                     new Object[] {
                         "boolean_array",
                         DataTypes.ARRAY(DataTypes.BOOLEAN()),
-                        HologresTypeHelper.PG_BOOLEAN_ARRAY,
+                        HologresTypes.PG_BOOLEAN_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "int_array",
                         DataTypes.ARRAY(DataTypes.INT()),
-                        HologresTypeHelper.PG_BIGINT_ARRAY,
+                        HologresTypes.PG_BIGINT_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "bigint_array",
                         DataTypes.ARRAY(DataTypes.BIGINT()),
-                        HologresTypeHelper.PG_BIGINT_ARRAY,
+                        HologresTypes.PG_BIGINT_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "float_array",
                         DataTypes.ARRAY(DataTypes.FLOAT()),
-                        HologresTypeHelper.PG_DOUBLE_PRECISION_ARRAY,
+                        HologresTypes.PG_DOUBLE_PRECISION_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "double_array",
                         DataTypes.ARRAY(DataTypes.DOUBLE()),
-                        HologresTypeHelper.PG_DOUBLE_PRECISION_ARRAY,
+                        HologresTypes.PG_DOUBLE_PRECISION_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "char_array",
                         DataTypes.ARRAY(DataTypes.CHAR(2)),
-                        HologresTypeHelper.PG_TEXT_ARRAY,
+                        HologresTypes.PG_TEXT_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "varchar_array",
                         DataTypes.ARRAY(DataTypes.VARCHAR(2)),
-                        HologresTypeHelper.PG_TEXT_ARRAY,
+                        HologresTypes.PG_TEXT_ARRAY,
                         Types.ARRAY
                     },
                     new Object[] {
                         "text_array",
                         DataTypes.ARRAY(DataTypes.STRING()),
-                        HologresTypeHelper.PG_TEXT_ARRAY,
+                        HologresTypes.PG_TEXT_ARRAY,
                         Types.ARRAY
                     }
                 };
 
         try (HoloClient holoClient = getHoloClient()) {
-            HologresMetadataApplier applier = getHologresMetadataApplier(new HashMap<>(), true);
+            HologresMetadataApplier applier =
+                    getHologresMetadataApplier(
+                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
 
             // 1. create table
             Schema.Builder builder = Schema.newBuilder();
@@ -786,9 +750,11 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testAddColumnWithEnableTypeNormalization() throws HoloClientException {
+    public void testAddColumnInTolerance() throws HoloClientException {
         try (HoloClient holoClient = getHoloClient()) {
-            HologresMetadataApplier applier = getHologresMetadataApplier(new HashMap<>(), true);
+            HologresMetadataApplier applier =
+                    getHologresMetadataApplier(
+                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
             Schema schema =
                     Schema.newBuilder()
                             .physicalColumn("a", DataTypes.INT().notNull())
@@ -815,14 +781,13 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             // TINYINT -> PG_BIGINT
             Assert.assertEquals(tableSchema.getColumn(2).getName(), "c");
             Assert.assertEquals(tableSchema.getColumn(2).getType(), Types.BIGINT);
-            Assert.assertEquals(
-                    tableSchema.getColumn(2).getTypeName(), HologresTypeHelper.PG_BIGINT);
+            Assert.assertEquals(tableSchema.getColumn(2).getTypeName(), HologresTypes.PG_BIGINT);
             Assert.assertTrue(tableSchema.getColumn(2).getAllowNull());
 
             // CHAR -> PG_TEXT
             Assert.assertEquals(tableSchema.getColumn(3).getName(), "d");
             Assert.assertEquals(tableSchema.getColumn(3).getType(), Types.VARCHAR);
-            Assert.assertEquals(tableSchema.getColumn(3).getTypeName(), HologresTypeHelper.PG_TEXT);
+            Assert.assertEquals(tableSchema.getColumn(3).getTypeName(), HologresTypes.PG_TEXT);
             Assert.assertTrue(tableSchema.getColumn(3).getAllowNull());
         } finally {
             dropTable(sinkTable);
@@ -830,10 +795,12 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testAlterColumnWithEnableTypeNormalization() {
+    public void testAlterColumnInTolerance() {
 
         try (HoloClient holoClient = getHoloClient()) {
-            HologresMetadataApplier applier = getHologresMetadataApplier(new HashMap<>(), true);
+            HologresMetadataApplier applier =
+                    getHologresMetadataApplier(
+                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
 
             // 1. create table
             Schema schema =
@@ -850,19 +817,18 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             // INT -> PG_BIGINT
             Assert.assertEquals(tableSchema.getColumn(0).getName(), "a");
             Assert.assertEquals(tableSchema.getColumn(0).getType(), Types.BIGINT);
-            Assert.assertEquals(
-                    tableSchema.getColumn(0).getTypeName(), HologresTypeHelper.PG_BIGINT);
+            Assert.assertEquals(tableSchema.getColumn(0).getTypeName(), HologresTypes.PG_BIGINT);
 
             // STRING -> PG_TEXT
             Assert.assertEquals(tableSchema.getColumn(1).getName(), "b");
             Assert.assertEquals(tableSchema.getColumn(1).getType(), Types.VARCHAR);
-            Assert.assertEquals(tableSchema.getColumn(1).getTypeName(), HologresTypeHelper.PG_TEXT);
+            Assert.assertEquals(tableSchema.getColumn(1).getTypeName(), HologresTypes.PG_TEXT);
             Assert.assertTrue(tableSchema.getColumn(1).getAllowNull());
             // FLOAT -> PG_DOUBLE_PRECISION
             Assert.assertEquals(tableSchema.getColumn(2).getName(), "c");
             Assert.assertEquals(tableSchema.getColumn(2).getType(), Types.DOUBLE);
             Assert.assertEquals(
-                    tableSchema.getColumn(2).getTypeName(), HologresTypeHelper.PG_DOUBLE_PRECISION);
+                    tableSchema.getColumn(2).getTypeName(), HologresTypes.PG_DOUBLE_PRECISION);
             Assert.assertTrue(tableSchema.getColumn(2).getAllowNull());
 
             // 2. alter column
@@ -876,16 +842,15 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             tableSchema = holoClient.getTableSchema(sinkTable, true);
             Assert.assertEquals(tableSchema.getColumn(0).getName(), "a");
             Assert.assertEquals(tableSchema.getColumn(0).getType(), Types.BIGINT);
-            Assert.assertEquals(
-                    tableSchema.getColumn(0).getTypeName(), HologresTypeHelper.PG_BIGINT);
+            Assert.assertEquals(tableSchema.getColumn(0).getTypeName(), HologresTypes.PG_BIGINT);
             Assert.assertEquals(tableSchema.getColumn(1).getName(), "b");
             Assert.assertEquals(tableSchema.getColumn(1).getType(), Types.VARCHAR);
-            Assert.assertEquals(tableSchema.getColumn(1).getTypeName(), HologresTypeHelper.PG_TEXT);
+            Assert.assertEquals(tableSchema.getColumn(1).getTypeName(), HologresTypes.PG_TEXT);
             Assert.assertTrue(tableSchema.getColumn(1).getAllowNull());
             Assert.assertEquals(tableSchema.getColumn(2).getName(), "c");
             Assert.assertEquals(tableSchema.getColumn(2).getType(), Types.DOUBLE);
             Assert.assertEquals(
-                    tableSchema.getColumn(2).getTypeName(), HologresTypeHelper.PG_DOUBLE_PRECISION);
+                    tableSchema.getColumn(2).getTypeName(), HologresTypes.PG_DOUBLE_PRECISION);
             Assert.assertTrue(tableSchema.getColumn(2).getAllowNull());
 
             // 3. alter column which is not compatibility in TypeNormalization.
@@ -897,6 +862,124 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             Assertions.assertThat(ex)
                     .hasMessageContaining("Hologres not support alter columnType now");
 
+        } finally {
+            dropTable(sinkTable);
+        }
+    }
+
+    @Test
+    public void testCreateTableAllTypeInStringOrBigint() {
+        Object[][] allTypeMapping =
+                new Object[][] {
+                    new Object[] {
+                        "a", DataTypes.CHAR(10).notNull(), HologresTypes.PG_TEXT, Types.VARCHAR
+                    },
+                    new Object[] {"b", DataTypes.VARCHAR(10), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"c", DataTypes.STRING(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"d", DataTypes.BOOLEAN(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"e", DataTypes.BINARY(10), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {
+                        "f", DataTypes.VARBINARY(10), HologresTypes.PG_TEXT, Types.VARCHAR
+                    },
+                    new Object[] {"g", DataTypes.BYTES(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {
+                        "h", DataTypes.DECIMAL(5, 2), HologresTypes.PG_TEXT, Types.VARCHAR
+                    },
+                    new Object[] {"i", DataTypes.TINYINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"j", DataTypes.SMALLINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"k", DataTypes.INT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"l", DataTypes.BIGINT(), HologresTypes.PG_BIGINT, Types.BIGINT},
+                    new Object[] {"m", DataTypes.FLOAT(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"n", DataTypes.DOUBLE(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"o", DataTypes.DATE(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"p", DataTypes.TIME(5), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {"q", DataTypes.TIMESTAMP(), HologresTypes.PG_TEXT, Types.VARCHAR},
+                    new Object[] {
+                        "r", DataTypes.TIMESTAMP_TZ(), HologresTypes.PG_TEXT, Types.VARCHAR
+                    },
+                    new Object[] {
+                        "s", DataTypes.TIMESTAMP_LTZ(), HologresTypes.PG_TEXT, Types.VARCHAR
+                    },
+                    new Object[] {
+                        "boolean_array",
+                        DataTypes.ARRAY(DataTypes.BOOLEAN()),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "int_array",
+                        DataTypes.ARRAY(DataTypes.INT()),
+                        HologresTypes.PG_BIGINT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "bigint_array",
+                        DataTypes.ARRAY(DataTypes.BIGINT()),
+                        HologresTypes.PG_BIGINT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "float_array",
+                        DataTypes.ARRAY(DataTypes.FLOAT()),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "double_array",
+                        DataTypes.ARRAY(DataTypes.DOUBLE()),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "char_array",
+                        DataTypes.ARRAY(DataTypes.CHAR(2)),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "varchar_array",
+                        DataTypes.ARRAY(DataTypes.VARCHAR(2)),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    },
+                    new Object[] {
+                        "text_array",
+                        DataTypes.ARRAY(DataTypes.STRING()),
+                        HologresTypes.PG_TEXT_ARRAY,
+                        Types.ARRAY
+                    }
+                };
+
+        try (HoloClient holoClient = getHoloClient()) {
+            HologresMetadataApplier applier =
+                    getHologresMetadataApplier(
+                            new HashMap<>(), TypeNormalizationStrategy.STRING_OR_BIGINT);
+
+            // 1. create table
+            Schema.Builder builder = Schema.newBuilder();
+            for (int i = 0; i < allTypeMapping.length; i++) {
+                builder.physicalColumn(
+                        (String) allTypeMapping[i][0], (DataType) allTypeMapping[i][1]);
+            }
+
+            Schema schema = builder.build();
+            TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+            CreateTableEvent createTableEvent = new CreateTableEvent(tableId, schema);
+            applier.applySchemaChange(createTableEvent);
+
+            TableSchema tableSchema = holoClient.getTableSchema(sinkTable);
+            Assert.assertEquals(sinkTable, tableSchema.getTableName());
+            Assert.assertEquals("public", tableSchema.getSchemaName());
+            for (int i = 0; i < allTypeMapping.length; i++) {
+                Assert.assertEquals(allTypeMapping[i][0], tableSchema.getColumn(i).getName());
+                Assert.assertEquals(allTypeMapping[i][2], tableSchema.getColumn(i).getTypeName());
+                Assert.assertEquals(allTypeMapping[i][3], tableSchema.getColumn(i).getType());
+            }
+
+            // apply change when enable TypeNormalization
+
+        } catch (HoloClientException e) {
+            throw new RuntimeException(e);
         } finally {
             dropTable(sinkTable);
         }
@@ -1052,11 +1135,11 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     private HologresMetadataApplier getHologresMetadataApplier() {
-        return getHologresMetadataApplier(new HashMap<>(), false);
+        return getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.NORMAL);
     }
 
     private HologresMetadataApplier getHologresMetadataApplier(
-            Map<String, String> tableOptions, Boolean enableTypeNormalization) {
+            Map<String, String> tableOptions, TypeNormalizationStrategy typeNormalizationStrategy) {
         HologresConnectionParamBuilder hologresConnectionParamBuilder =
                 HologresConnectionParam.builder();
         HologresConnectionParam hologresConnectionParam =
@@ -1066,7 +1149,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
                         .setUsername(username)
                         .setPassword(password)
                         .setTableOptions(tableOptions)
-                        .setEnableTypeNormalization(enableTypeNormalization)
+                        .setTypeNormalizationStrategy(typeNormalizationStrategy)
                         .build();
         return new HologresMetadataApplier(hologresConnectionParam);
     }

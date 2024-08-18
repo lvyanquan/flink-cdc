@@ -19,12 +19,14 @@ package org.apache.flink.cdc.connectors.hologres.sink.v2.config;
 
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
 
 import com.alibaba.hologres.client.HoloConfig;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.time.ZoneId;
 import java.util.Map;
 
 /** Param of hologres sink. */
@@ -50,7 +52,9 @@ public class HologresConnectionParam implements Serializable {
 
     private final Map<String, String> tableOptions;
 
-    private final boolean enableTypeNormalization;
+    private final TypeNormalizationStrategy typeNormalizationStrategy;
+
+    private final ZoneId zoneId;
 
     public HologresConnectionParam(
             String endpoint,
@@ -60,7 +64,8 @@ public class HologresConnectionParam implements Serializable {
             @Nullable String jdbcSharedConnectionPoolName,
             Boolean ignoreNullWhenUpdate,
             DeleteStrategy deleteStrategy,
-            boolean enableTypeNormalization,
+            TypeNormalizationStrategy typeNormalizationStrategy,
+            ZoneId zoneId,
             Map<String, String> tableOptions,
             HoloConfig holoConfig) {
         this.endpoint = endpoint;
@@ -71,8 +76,9 @@ public class HologresConnectionParam implements Serializable {
         this.jdbcSharedConnectionPoolName = jdbcSharedConnectionPoolName;
         this.ignoreNullWhenUpdate = ignoreNullWhenUpdate;
         this.deleteStrategy = deleteStrategy;
-        this.enableTypeNormalization = enableTypeNormalization;
+        this.typeNormalizationStrategy = typeNormalizationStrategy;
         this.tableOptions = tableOptions;
+        this.zoneId = zoneId;
     }
 
     public String getEndpoint() {
@@ -112,8 +118,12 @@ public class HologresConnectionParam implements Serializable {
         return deleteStrategy;
     }
 
-    public boolean isEnableTypeNormalization() {
-        return enableTypeNormalization;
+    public TypeNormalizationStrategy getTypeNormalizationStrategy() {
+        return typeNormalizationStrategy;
+    }
+
+    public ZoneId getZoneId() {
+        return zoneId;
     }
 
     /**
@@ -144,8 +154,8 @@ public class HologresConnectionParam implements Serializable {
                 + ", deleteStrategy="
                 + deleteStrategy
                 + '\''
-                + ", enableTypeNormalization="
-                + enableTypeNormalization
+                + ", typeNormalizationStrategy="
+                + typeNormalizationStrategy
                 + '\''
                 + ", holoConfig="
                 + printHoloConfig(holoConfig)
@@ -155,6 +165,9 @@ public class HologresConnectionParam implements Serializable {
                 + '\''
                 + ", tableOptions="
                 + tableOptions
+                + '\''
+                + ", zoneId="
+                + zoneId
                 + '}';
     }
 

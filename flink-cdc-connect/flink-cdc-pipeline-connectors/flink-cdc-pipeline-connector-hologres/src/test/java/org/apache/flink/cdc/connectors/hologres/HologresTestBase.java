@@ -18,7 +18,7 @@
 package org.apache.flink.cdc.connectors.hologres;
 
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.cdc.connectors.hologres.schema.HologresTypeHelper;
+import org.apache.flink.cdc.connectors.hologres.schema.HologresTypes;
 import org.apache.flink.cdc.connectors.hologres.utils.JDBCUtils;
 import org.apache.flink.table.api.EnvironmentSettings;
 
@@ -213,31 +213,31 @@ public class HologresTestBase {
 
     public static List<Tuple2<String, Integer>> holoTypes =
             Arrays.asList(
-                    new Tuple2<>(HologresTypeHelper.PG_SMALLINT, Types.SMALLINT),
-                    new Tuple2<>(HologresTypeHelper.PG_INTEGER, Types.INTEGER),
-                    new Tuple2<>(HologresTypeHelper.PG_BIGINT, Types.BIGINT),
-                    new Tuple2<>(HologresTypeHelper.PG_BOOLEAN, Types.BOOLEAN),
-                    new Tuple2<>(HologresTypeHelper.PG_REAL, Types.FLOAT),
-                    new Tuple2<>(HologresTypeHelper.PG_DOUBLE_PRECISION, Types.DOUBLE),
-                    new Tuple2<>(HologresTypeHelper.PG_NUMERIC, Types.DECIMAL),
-                    new Tuple2<>(HologresTypeHelper.PG_TEXT, Types.VARCHAR),
-                    new Tuple2<>(HologresTypeHelper.PG_JSON, Types.OTHER),
-                    new Tuple2<>(HologresTypeHelper.PG_JSONB, Types.OTHER),
-                    new Tuple2<>(HologresTypeHelper.PG_BYTEA, Types.BINARY),
-                    new Tuple2<>(HologresTypeHelper.PG_ROARING_BITMAP, Types.OTHER),
-                    new Tuple2<>(HologresTypeHelper.PG_TIME, Types.TIME),
-                    new Tuple2<>(HologresTypeHelper.PG_DATE, Types.DATE),
-                    new Tuple2<>(HologresTypeHelper.PG_TIMESTAMP, Types.TIMESTAMP),
-                    new Tuple2<>(HologresTypeHelper.PG_TIMESTAMPTZ, Types.TIMESTAMP_WITH_TIMEZONE));
+                    new Tuple2<>(HologresTypes.PG_SMALLINT, Types.SMALLINT),
+                    new Tuple2<>(HologresTypes.PG_INTEGER, Types.INTEGER),
+                    new Tuple2<>(HologresTypes.PG_BIGINT, Types.BIGINT),
+                    new Tuple2<>(HologresTypes.PG_BOOLEAN, Types.BOOLEAN),
+                    new Tuple2<>(HologresTypes.PG_REAL, Types.FLOAT),
+                    new Tuple2<>(HologresTypes.PG_DOUBLE_PRECISION, Types.DOUBLE),
+                    new Tuple2<>(HologresTypes.PG_NUMERIC, Types.DECIMAL),
+                    new Tuple2<>(HologresTypes.PG_TEXT, Types.VARCHAR),
+                    new Tuple2<>(HologresTypes.PG_JSON, Types.OTHER),
+                    new Tuple2<>(HologresTypes.PG_JSONB, Types.OTHER),
+                    new Tuple2<>(HologresTypes.PG_BYTEA, Types.BINARY),
+                    new Tuple2<>(HologresTypes.PG_ROARING_BITMAP, Types.OTHER),
+                    new Tuple2<>(HologresTypes.PG_TIME, Types.TIME),
+                    new Tuple2<>(HologresTypes.PG_DATE, Types.DATE),
+                    new Tuple2<>(HologresTypes.PG_TIMESTAMP, Types.TIMESTAMP),
+                    new Tuple2<>(HologresTypes.PG_TIMESTAMPTZ, Types.TIMESTAMP_WITH_TIMEZONE));
 
     public static List<Tuple2<String, Integer>> holoArrayTypes =
             Arrays.asList(
-                    new Tuple2<>(HologresTypeHelper.PG_INTEGER_ARRAY, Types.ARRAY),
-                    new Tuple2<>(HologresTypeHelper.PG_BIGINT_ARRAY, Types.ARRAY),
-                    new Tuple2<>(HologresTypeHelper.PG_REAL_ARRAY, Types.ARRAY),
-                    new Tuple2<>(HologresTypeHelper.PG_DOUBLE_PRECISION_ARRAY, Types.ARRAY),
-                    new Tuple2<>(HologresTypeHelper.PG_BOOLEAN_ARRAY, Types.ARRAY),
-                    new Tuple2<>(HologresTypeHelper.PG_TEXT_ARRAY, Types.ARRAY));
+                    new Tuple2<>(HologresTypes.PG_INTEGER_ARRAY, Types.ARRAY),
+                    new Tuple2<>(HologresTypes.PG_BIGINT_ARRAY, Types.ARRAY),
+                    new Tuple2<>(HologresTypes.PG_REAL_ARRAY, Types.ARRAY),
+                    new Tuple2<>(HologresTypes.PG_DOUBLE_PRECISION_ARRAY, Types.ARRAY),
+                    new Tuple2<>(HologresTypes.PG_BOOLEAN_ARRAY, Types.ARRAY),
+                    new Tuple2<>(HologresTypes.PG_TEXT_ARRAY, Types.ARRAY));
 
     protected void executeBatchSql(List<String> sqlList, boolean ignoreException, int timeout) {
         for (String sql : sqlList) {

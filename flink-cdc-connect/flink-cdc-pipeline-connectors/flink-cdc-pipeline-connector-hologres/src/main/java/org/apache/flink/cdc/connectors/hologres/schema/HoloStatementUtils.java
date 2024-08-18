@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.hologres.schema;
 
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Column;
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.HologresTypeNormalizer;
 import org.apache.flink.util.StringUtils;
 
 import com.alibaba.hologres.client.HoloClient;
@@ -138,7 +139,7 @@ public class HoloStatementUtils {
             List<String> partitionKeys,
             String tableComment,
             boolean ignoreIfNotExists,
-            boolean enableTypeNormalization) {
+            HologresTypeNormalizer hologresTypeNormalizer) {
         String qualifiedPath = getQualifiedPath(tableId);
 
         List<String> content =
@@ -151,7 +152,7 @@ public class HoloStatementUtils {
                                                 HologresTypeHelper.toPostgresType(
                                                         column.getType(),
                                                         primaryKeys.contains(column.getName()),
-                                                        enableTypeNormalization)))
+                                                        hologresTypeNormalizer)))
                         .collect(Collectors.toList());
 
         if (CollectionUtils.isNotEmpty(primaryKeys)) {

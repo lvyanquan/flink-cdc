@@ -105,10 +105,10 @@ public class HologresDataSinkOption {
                     .defaultValue(false)
                     .withDescription("Whether to use a fixed frontend for writing and reading");
 
-    public static final ConfigOption<Boolean> ENABLE_TYPE_NORMALIZATION =
+    public static final ConfigOption<TypeNormalizationStrategy> TYPE_NORMALIZATION_STRATEGY =
             ConfigOptions.key("enableTypeNormalization".toLowerCase())
-                    .booleanType()
-                    .defaultValue(false)
+                    .enumType(TypeNormalizationStrategy.class)
+                    .defaultValue(TypeNormalizationStrategy.NORMAL)
                     .withDescription(
                             "Whether to enable type normalization. If type normalization is enabled, TINYINT, SMALLINT, INT, and BIGINT types From CDC DataTypes will be converted to BIGINT type in Hologres; CHAR, VARCHAR, and STRING From CDC DataTypes will be converted to TEXT type in Hologres; FLOAT and DOUBLE From CDC DataTypes will be converted to DOUBLE PRECISION in Hologres.");
 

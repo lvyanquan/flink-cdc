@@ -36,6 +36,7 @@ import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.connectors.hologres.HologresTestBase;
 import org.apache.flink.cdc.connectors.hologres.HologresTestUtils;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
 import org.apache.flink.cdc.connectors.hologres.sink.HologresRecordEventSerializer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.HologresRecordSerializer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.HologresSink;
@@ -58,8 +59,8 @@ import java.util.HashMap;
 import java.util.List;
 
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.CREATE_MISSING_PARTITION_TABLE;
-import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.ENABLE_TYPE_NORMALIZATION;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.SINK_DELETE_STRATEGY;
+import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.TYPE_NORMALIZATION_STRATEGY;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** ITCase for holo sink. */
@@ -249,8 +250,9 @@ public class HologresSinkITCase extends HologresTestBase {
                     expected,
                     true,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    false,
-                    partitionKeys);
+                    TypeNormalizationStrategy.NORMAL,
+                    partitionKeys,
+                    ZoneId.systemDefault());
         } finally {
             dropTable(partitionSinkTable);
         }
@@ -427,7 +429,12 @@ public class HologresSinkITCase extends HologresTestBase {
                         table1dataGenerator.generate(
                                 new Object[] {1, BinaryStringData.fromString("Alice")})));
 
-        submitJob(events, false, DeleteStrategy.IGNORE_DELETE, false);
+        submitJob(
+                events,
+                false,
+                DeleteStrategy.IGNORE_DELETE,
+                TypeNormalizationStrategy.NORMAL,
+                ZoneId.systemDefault());
         String[] expected = new String[] {"1,Alice", "2,Bob"};
         String[] fieldNames = {"h", "c"};
         HologresTestUtils.checkResultWithTimeout(
@@ -490,7 +497,7 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
-    public void testEnableTypeNormalization() throws Exception {
+    public void testInsertWithTolerateTypeNormalizationStrategy() throws Exception {
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME( "
                         + "tiny_int_type bigint, "
@@ -503,7 +510,7 @@ public class HologresSinkITCase extends HologresTestBase {
                         + "float_type float8, "
                         + "double_type float8, "
                         + "primary key(tiny_int_type)); ";
-        String typeNormalizationTable = "partition_" + sinkTable;
+        String typeNormalizationTable = "tolerate_1_" + sinkTable;
 
         String[] fieldNames =
                 new String[] {
@@ -561,16 +568,17 @@ public class HologresSinkITCase extends HologresTestBase {
                     expected,
                     false,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    true,
-                    new String[0]);
+                    TypeNormalizationStrategy.TOLERANCE,
+                    new String[0],
+                    ZoneId.systemDefault());
         } finally {
             dropTable("test." + typeNormalizationTable);
         }
     }
 
     @Test
-    public void testUpdateEnableTypeNormalization() throws Exception {
-        String typeNormalizationTable = "partition_" + sinkTable;
+    public void testUpdateWithTolerateTypeNormalizationStrategy() throws Exception {
+        String typeNormalizationTable = "tolerate_2_" + sinkTable;
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME( "
                         + "a bigint, "
@@ -664,7 +672,249 @@ public class HologresSinkITCase extends HologresTestBase {
                                         })));
         try {
             createTable(prepareCreateTableSql.replace("TABLE_NAME", typeNormalizationTable));
-            submitJob(events, false, DeleteStrategy.DELETE_ROW_ON_PK, true);
+            submitJob(
+                    events,
+                    false,
+                    DeleteStrategy.DELETE_ROW_ON_PK,
+                    TypeNormalizationStrategy.TOLERANCE,
+                    ZoneId.systemDefault());
+
+            String[] expected =
+                    new String[] {
+                        "1,a,20.125",
+                        "32767,test character,8.58965",
+                        "32768,test char,8.58965",
+                        "652482,test string,20.125"
+                    };
+            String[] fieldNames = {"a", "b", "c"};
+            HologresTestUtils.checkResultWithTimeout(
+                    expected,
+                    typeNormalizationTable,
+                    fieldNames,
+                    JDBCUtils.getDbUrl(endpoint, database),
+                    username,
+                    password,
+                    10000);
+        } finally {
+            dropTable(typeNormalizationTable);
+        }
+    }
+
+    @Test
+    public void testInsertWithStringOrBigIntTypeNormalizationStrategy() throws Exception {
+        String prepareCreateTableSql =
+                "CREATE TABLE TABLE_NAME(\n"
+                        + "    a text,\n"
+                        + "    b text,\n"
+                        + "    c text,\n"
+                        + "    d text,\n"
+                        + "    e text,\n"
+                        + "    f bigint,\n"
+                        + "    g bigint,\n"
+                        + "    h bigint NOT NULL,\n"
+                        + "    i bigint,\n"
+                        + "    j text,\n"
+                        + "    k text,\n"
+                        + "    l text,\n"
+                        + "    m text,\n"
+                        + "    n text,\n"
+                        + "    o text,\n"
+                        + "    p text,\n"
+                        + "    q text[],\n"
+                        + "    r bigint[],\n"
+                        + "    s bigint[],\n"
+                        + "    t text[],\n"
+                        + "    u text[],\n"
+                        + "    v text[],\n"
+                        + "    w text[],\n"
+                        + "   PRIMARY KEY (h)\n"
+                        + ");";
+
+        String typeNormalizationTable = "string_or_bigint_1_" + sinkTable;
+
+        String[] fieldNames =
+                new String[] {
+                    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"
+                };
+        String[] pkFieldNames = new String[] {"h"};
+
+        DataType[] dataTypes =
+                new DataType[] {
+                    DataTypes.CHAR(1),
+                    DataTypes.VARCHAR(20),
+                    DataTypes.STRING().notNull(),
+                    DataTypes.BOOLEAN(),
+                    DataTypes.DECIMAL(6, 2),
+                    DataTypes.TINYINT(),
+                    DataTypes.SMALLINT(),
+                    DataTypes.INT(),
+                    DataTypes.BIGINT(),
+                    DataTypes.FLOAT(),
+                    DataTypes.DOUBLE(),
+                    DataTypes.DATE(),
+                    DataTypes.TIME(),
+                    DataTypes.TIMESTAMP(),
+                    DataTypes.TIMESTAMP_TZ(6),
+                    DataTypes.TIMESTAMP_LTZ()
+                };
+
+        Object[][] insertedValues =
+                new Object[][] {
+                    new Object[] {
+                        BinaryStringData.fromString("a"),
+                        BinaryStringData.fromString("test character"),
+                        BinaryStringData.fromString("test text"),
+                        false,
+                        DecimalData.fromBigDecimal(new BigDecimal("8119.21"), 6, 2),
+                        Byte.valueOf("1"),
+                        Short.valueOf("32767"),
+                        32768,
+                        652482L,
+                        20.2007F,
+                        8.58965,
+                        //  2023-11-12 - 1970-01-01 = 19673 days
+                        19673,
+                        (8 * 3600 + 30 * 60 + 15) * 1000,
+                        TimestampData.fromLocalDateTime(
+                                LocalDateTime.of(2023, 11, 11, 11, 11, 11, 11)),
+                        ZonedTimestampData.fromZonedDateTime(
+                                LocalDateTime.of(2023, 11, 11, 11, 11, 11, 11)
+                                        .atZone(ZoneId.of("+05:00"))),
+                        LocalZonedTimestampData.fromInstant(
+                                LocalDateTime.of(2023, 11, 11, 11, 11, 11, 11)
+                                        .atZone(ZoneId.of("+05:00"))
+                                        .toInstant())
+                    }
+                };
+        // default timezone is asian/shanghai and pipeline time-zone is GMT+06:00
+        String[] expected =
+                new String[] {
+                    "a,test character,test text,false,8119.21,1,32767,32768,652482,20.2007,8.58965,2023-11-12,08:30:15,2023-11-11T11:11:11.000000011,2023-11-11T11:11:11.000000011+05:00,2023-11-11T12:11:11.000000011+06:00"
+                };
+        TableId tableId = TableId.tableId("default_namespace", "test", typeNormalizationTable);
+
+        try {
+            createTable(
+                    prepareCreateTableSql.replace("TABLE_NAME", "test." + typeNormalizationTable));
+            testaInsertSingleTable(
+                    tableId,
+                    fieldNames,
+                    pkFieldNames,
+                    dataTypes,
+                    insertedValues,
+                    expected,
+                    false,
+                    DeleteStrategy.DELETE_ROW_ON_PK,
+                    TypeNormalizationStrategy.STRING_OR_BIGINT,
+                    new String[0],
+                    ZoneId.of("+06:00"));
+        } finally {
+            dropTable("test." + typeNormalizationTable);
+        }
+    }
+
+    @Test
+    public void testUpdateWithStringOrBigIntTypeNormalizationStrategy() throws Exception {
+        String typeNormalizationTable = "string_or_bigint_2_" + sinkTable;
+        String prepareCreateTableSql =
+                "CREATE TABLE TABLE_NAME( "
+                        + "a bigint, "
+                        + "b text, "
+                        + "c text, "
+                        + "primary key(a)); ";
+
+        TableId myTable1 = TableId.tableId("default_namespace", "public", typeNormalizationTable);
+        Schema table1Schema =
+                Schema.newBuilder()
+                        .physicalColumn("a", DataTypes.TINYINT())
+                        .physicalColumn("b", DataTypes.CHAR(2))
+                        .physicalColumn("c", DataTypes.FLOAT())
+                        .primaryKey("a")
+                        .build();
+        // 1. create table then insert
+        List<Event> events = new ArrayList<>();
+        BinaryRecordDataGenerator table1dataGenerator =
+                new BinaryRecordDataGenerator(
+                        table1Schema.getColumnDataTypes().toArray(new DataType[0]));
+        events.add(new CreateTableEvent(myTable1, table1Schema));
+        events.add(
+                DataChangeEvent.insertEvent(
+                        myTable1,
+                        table1dataGenerator.generate(
+                                new Object[] {
+                                    Byte.valueOf("1"), BinaryStringData.fromString("a"), 20.125F
+                                })));
+        // 2. alter column then insert
+        HashMap<String, DataType> alterMap1 = new HashMap<>();
+        alterMap1.put("a", DataTypes.SMALLINT());
+        alterMap1.put("b", DataTypes.VARCHAR(15));
+        alterMap1.put("c", DataTypes.DOUBLE());
+        events.add(new AlterColumnTypeEvent(myTable1, alterMap1));
+
+        events.add(
+                DataChangeEvent.insertEvent(
+                        myTable1,
+                        new BinaryRecordDataGenerator(
+                                        new DataType[] {
+                                            DataTypes.SMALLINT(),
+                                            DataTypes.VARCHAR(15),
+                                            DataTypes.DOUBLE()
+                                        })
+                                .generate(
+                                        new Object[] {
+                                            Short.valueOf("32767"),
+                                            BinaryStringData.fromString("test character"),
+                                            8.58965
+                                        })));
+        // 3. alter column then insert
+        HashMap<String, DataType> alterMap2 = new HashMap<>();
+        alterMap2.put("a", DataTypes.INT());
+        alterMap2.put("b", DataTypes.VARCHAR(10));
+        alterMap2.put("c", DataTypes.DOUBLE());
+        events.add(new AlterColumnTypeEvent(myTable1, alterMap2));
+        events.add(
+                DataChangeEvent.insertEvent(
+                        myTable1,
+                        new BinaryRecordDataGenerator(
+                                        new DataType[] {
+                                            DataTypes.INT(),
+                                            DataTypes.VARCHAR(10),
+                                            DataTypes.DOUBLE()
+                                        })
+                                .generate(
+                                        new Object[] {
+                                            32768, BinaryStringData.fromString("test char"), 8.58965
+                                        })));
+
+        // 4. alter column then insert
+        HashMap<String, DataType> alterMap3 = new HashMap<>();
+        alterMap3.put("a", DataTypes.BIGINT());
+        alterMap3.put("b", DataTypes.STRING());
+        alterMap3.put("c", DataTypes.FLOAT());
+        events.add(new AlterColumnTypeEvent(myTable1, alterMap3));
+        events.add(
+                DataChangeEvent.insertEvent(
+                        myTable1,
+                        new BinaryRecordDataGenerator(
+                                        new DataType[] {
+                                            DataTypes.BIGINT(),
+                                            DataTypes.STRING(),
+                                            DataTypes.FLOAT()
+                                        })
+                                .generate(
+                                        new Object[] {
+                                            652482L,
+                                            BinaryStringData.fromString("test string"),
+                                            20.125F
+                                        })));
+        try {
+            createTable(prepareCreateTableSql.replace("TABLE_NAME", typeNormalizationTable));
+            submitJob(
+                    events,
+                    false,
+                    DeleteStrategy.DELETE_ROW_ON_PK,
+                    TypeNormalizationStrategy.TOLERANCE,
+                    ZoneId.systemDefault());
 
             String[] expected =
                     new String[] {
@@ -925,8 +1175,9 @@ public class HologresSinkITCase extends HologresTestBase {
                 expected,
                 CREATE_MISSING_PARTITION_TABLE.defaultValue(),
                 SINK_DELETE_STRATEGY.defaultValue(),
-                ENABLE_TYPE_NORMALIZATION.defaultValue(),
-                new String[0]);
+                TYPE_NORMALIZATION_STRATEGY.defaultValue(),
+                new String[0],
+                ZoneId.systemDefault());
     }
 
     private void testaInsertSingleTable(
@@ -938,8 +1189,9 @@ public class HologresSinkITCase extends HologresTestBase {
             String[] expected,
             boolean createPartitionTable,
             DeleteStrategy deleteStrategy,
-            Boolean enableTypeNormalization,
-            String[] partitionKeys)
+            TypeNormalizationStrategy enableTypeNormalization,
+            String[] partitionKeys,
+            ZoneId zoneId)
             throws Exception {
 
         List<Event> events =
@@ -950,7 +1202,7 @@ public class HologresSinkITCase extends HologresTestBase {
                         dataTypes,
                         insertedValues,
                         partitionKeys);
-        submitJob(events, createPartitionTable, deleteStrategy, enableTypeNormalization);
+        submitJob(events, createPartitionTable, deleteStrategy, enableTypeNormalization, zoneId);
         HologresTestUtils.checkResultWithTimeout(
                 expected,
                 tableId.getSchemaName() + "." + tableId.getTableName(),
@@ -998,14 +1250,16 @@ public class HologresSinkITCase extends HologresTestBase {
                 events,
                 CREATE_MISSING_PARTITION_TABLE.defaultValue(),
                 SINK_DELETE_STRATEGY.defaultValue(),
-                ENABLE_TYPE_NORMALIZATION.defaultValue());
+                TYPE_NORMALIZATION_STRATEGY.defaultValue(),
+                ZoneId.systemDefault());
     }
 
     private void submitJob(
             List<Event> events,
             boolean createPartitionTable,
             DeleteStrategy deleteStrategy,
-            Boolean enableTypeNormalization)
+            TypeNormalizationStrategy typeNormalizationStrategy,
+            ZoneId zoneId)
             throws Exception {
 
         StreamExecutionEnvironment environment =
@@ -1024,7 +1278,8 @@ public class HologresSinkITCase extends HologresTestBase {
                         .setPassword(password)
                         .setCreatePartitionTable(createPartitionTable)
                         .setDeleteStrategy(deleteStrategy)
-                        .setEnableTypeNormalization(enableTypeNormalization)
+                        .setTypeNormalizationStrategy(typeNormalizationStrategy)
+                        .setZoneId(zoneId)
                         .build();
 
         HologresRecordSerializer<Event> serializer =
