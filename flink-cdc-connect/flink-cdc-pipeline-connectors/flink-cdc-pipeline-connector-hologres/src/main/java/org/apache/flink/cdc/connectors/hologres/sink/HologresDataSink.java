@@ -207,6 +207,8 @@ public class HologresDataSink implements DataSink {
                         .setSslMode(sslMode)
                         .setSslRootCertLocation(sslRootCertLocation)
                         .setTableOptions(tableOptions)
+                        .setZoneId(zoneId)
+                        .setTypeNormalizationStrategy(typeNormalizationStrategy)
                         .build();
         return new HologresMetadataApplier(hologresConnectionParam);
     }
