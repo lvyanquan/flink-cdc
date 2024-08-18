@@ -37,8 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
-import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getMessageTimestamp;
-
 /**
  * The {@link RecordEmitter} implementation for {@link MySqlSourceReader}.
  *

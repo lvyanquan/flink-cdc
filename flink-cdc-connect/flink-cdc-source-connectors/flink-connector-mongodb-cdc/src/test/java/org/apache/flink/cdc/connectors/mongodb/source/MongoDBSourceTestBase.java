@@ -42,9 +42,9 @@ public class MongoDBSourceTestBase {
     public MongoDBSourceTestBase(String mongoVersion) {
         this.mongoContainer =
                 new MongoDBContainer(
-                        DockerImageName.parse(
-                                        "reg.docker.alibaba-inc.com/ververica/mongo:6.0.9-jammy")
-                                .asCompatibleSubstituteFor("mongo"))
+                                DockerImageName.parse(
+                                                "reg.docker.alibaba-inc.com/ververica/mongo:6.0.9-jammy")
+                                        .asCompatibleSubstituteFor("mongo"))
                         .withSharding()
                         .withLogConsumer(new Slf4jLogConsumer(LOG));
     }

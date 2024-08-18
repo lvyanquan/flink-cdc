@@ -149,6 +149,6 @@ public class CanalJsonSerializationSchemaTest {
         assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
                 .isEqualTo(
                         mapper.readTree(
-                                "{\"old\":null,\"data\":[{\"col2\":\"20\"}],\"type\":\"INSERT\"}"));
+                                "{\"old\":null,\"data\":[{\"col2\":\"20\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}"));
     }
 }

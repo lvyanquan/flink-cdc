@@ -60,8 +60,7 @@ public class ValuesDataFactory implements DataSourceFactory, DataSinkFactory {
                 config.get(ValuesDataSinkOptions.MATERIALIZED_IN_MEMORY),
                 config.get(ValuesDataSinkOptions.PRINT_ENABLED),
                 config.get(ValuesDataSinkOptions.SINK_API),
-                context.getFactoryConfiguration()
-                        .get(ValuesDataSinkOptions.ERROR_ON_SCHEMA_CHANGE),
+                context.getFactoryConfiguration().get(ValuesDataSinkOptions.ERROR_ON_SCHEMA_CHANGE),
                 config.get(ValuesDataSinkOptions.SINK_STANDARD_ERROR),
                 config.get(ValuesDataSinkOptions.SINK_LOGGER),
                 config.get(ValuesDataSinkOptions.SINK_LIMIT));

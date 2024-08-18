@@ -145,7 +145,8 @@ class ValuesDataSinkAsPrintSinkTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("parameters")
     void testPrintSinkStdOut(ValuesDataSink.SinkApi sinkType) throws Exception {
-        ValuesDataSink valuesDataSink = new ValuesDataSink(false, true, sinkType, false, true, 100);
+        ValuesDataSink valuesDataSink =
+                new ValuesDataSink(false, true, sinkType, false, false, true, 100);
         if (sinkType == SINK_V2) {
             Sink<Event> printSink =
                     ((FlinkSinkProvider) valuesDataSink.getEventSinkProvider()).getSink();
@@ -175,7 +176,8 @@ class ValuesDataSinkAsPrintSinkTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("parameters")
     void testPrintSinkStdErr(ValuesDataSink.SinkApi sinkType) throws Exception {
-        ValuesDataSink valuesDataSink = new ValuesDataSink(false, true, sinkType, true, true, 100);
+        ValuesDataSink valuesDataSink =
+                new ValuesDataSink(false, true, sinkType, false, true, true, 100);
         if (sinkType == SINK_V2) {
             Sink<Event> printSink =
                     ((FlinkSinkProvider) valuesDataSink.getEventSinkProvider()).getSink();

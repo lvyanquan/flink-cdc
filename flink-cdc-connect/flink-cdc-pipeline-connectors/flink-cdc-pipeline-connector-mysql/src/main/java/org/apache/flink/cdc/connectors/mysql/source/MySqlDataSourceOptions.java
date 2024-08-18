@@ -261,22 +261,4 @@ public class MySqlDataSourceOptions {
                                     + "If there is a need to use a dot (.) in a regular expression to match any character, "
                                     + "it is necessary to escape the dot with a backslash."
                                     + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
-
-    @Experimental
-    public static final ConfigOption<Boolean> SCAN_NEWLY_ADDED_TABLE_ENABLED =
-            ConfigOptions.key("scan.newly-added-table.enabled")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription(
-                            "Whether capture the scan the newly added tables or not, by default is false. This option is only useful when we start the job from a savepoint/checkpoint.");
-
-    @Experimental
-    public static final ConfigOption<String> SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN =
-            ConfigOptions.key("scan.incremental.snapshot.chunk.key-column")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription(
-                            "The chunk key of table snapshot, captured tables are split into multiple chunks by a chunk key when read the snapshot of table."
-                                    + "By default, the chunk key is the first column of the primary key."
-                                    + "This column must be a column of the primary key.");
 }

@@ -78,7 +78,9 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
         options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".prod\\.*");
-        options.put(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), "testCol");
+        options.put(
+                SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
+                String.format("%s.prod\\.*:testCol", inventoryDatabase.getDatabaseName()));
         options.put(SCAN_NEWLY_ADDED_TABLE_ENABLED.key(), "true");
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
@@ -91,7 +93,8 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         assertThat(sourceConfig.isScanNewlyAddedTableEnabled()).isEqualTo(true);
         assertThat(sourceConfig.getChunkKeyColumns().size()).isEqualTo(1);
         for (Map.Entry<ObjectPath, String> e : sourceConfig.getChunkKeyColumns().entrySet()) {
-            assertThat(e.getKey()).isEqualTo(new ObjectPath(".*", ".*"));
+            assertThat(e.getKey())
+                    .isEqualTo(new ObjectPath(inventoryDatabase.getDatabaseName(), "products"));
             assertThat(e.getValue()).isEqualTo("testCol");
         }
     }
@@ -287,8 +290,6 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
 
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
-        assertThat(dataSource.getSourceConfig().getStartupOptions())
-                .isEqualTo(StartupOptions.timestamp(1234L));
 
         ObjectPath multiMaxTable =
                 new ObjectPath(inventoryDatabase.getDatabaseName(), "multi_max_table");

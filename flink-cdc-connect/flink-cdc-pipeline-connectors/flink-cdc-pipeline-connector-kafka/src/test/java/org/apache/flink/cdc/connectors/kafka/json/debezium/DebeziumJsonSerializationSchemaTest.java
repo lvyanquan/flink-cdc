@@ -144,6 +144,6 @@ public class DebeziumJsonSerializationSchemaTest {
         assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
                 .isEqualTo(
                         mapper.readTree(
-                                "{\"before\":null,\"after\":{\"col2\":\"20\"},\"op\":\"c\"}"));
+                                "{\"before\":null,\"after\":{\"col2\":\"20\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}"));
     }
 }

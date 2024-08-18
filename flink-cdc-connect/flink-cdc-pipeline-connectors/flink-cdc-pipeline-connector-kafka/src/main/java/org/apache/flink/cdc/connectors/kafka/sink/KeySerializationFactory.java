@@ -29,6 +29,7 @@ import org.apache.flink.formats.json.JsonFormatOptionsUtil;
 import java.time.ZoneId;
 
 import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
+import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
 import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
 /**
@@ -54,12 +55,14 @@ public class KeySerializationFactory {
 
                     final boolean encodeDecimalAsPlainNumber =
                             formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+                    final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
                     return new JsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
                             zoneId,
-                            encodeDecimalAsPlainNumber);
+                            encodeDecimalAsPlainNumber,
+                            writeNullProperties);
                 }
             case CSV:
                 {

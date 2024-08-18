@@ -178,13 +178,6 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .jdbcProperties(getJdbcProperties(configMap))
                         .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled);
 
-        // Apply chunk key to all tables
-        if (config.getOptional(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN).isPresent()) {
-            configFactory.chunkKeyColumn(
-                    new ObjectPath(".*", ".*"),
-                    config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
-        }
-
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         List<String> capturedTables = getTableList(configFactory.createConfig(0), selectors);
         if (capturedTables.isEmpty()) {

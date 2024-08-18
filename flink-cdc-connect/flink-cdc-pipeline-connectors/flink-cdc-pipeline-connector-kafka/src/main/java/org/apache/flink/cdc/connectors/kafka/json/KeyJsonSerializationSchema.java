@@ -125,7 +125,8 @@ public class KeyJsonSerializationSchema implements SerializationSchema<Event> {
             }
             jsonSerializers.put(
                     schemaChangeEvent.tableId(),
-                    new TableSchemaInfo(schema, jsonSerializer, zoneId));
+                    new TableSchemaInfo(
+                            schemaChangeEvent.tableId(), schema, jsonSerializer, zoneId));
             return null;
         }
 

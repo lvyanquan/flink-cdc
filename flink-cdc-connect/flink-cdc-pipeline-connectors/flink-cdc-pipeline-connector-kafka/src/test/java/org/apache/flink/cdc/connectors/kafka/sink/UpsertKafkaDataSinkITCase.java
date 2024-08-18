@@ -75,6 +75,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -416,7 +417,7 @@ class UpsertKafkaDataSinkITCase extends TestLogger {
     private List<ConsumerRecord<byte[], byte[]>> drainAllRecordsFromTopic(
             String topic, boolean committed) {
         Properties properties = getKafkaClientConfiguration();
-        return KafkaUtil.drainAllRecordsFromTopic(topic, properties, committed);
+        return KafkaUtil.drainAllRecordsFromTopic(topic, properties, new HashSet<>());
     }
 
     private List<Row> collectRows(Table table, int expectedSize) throws Exception {
