@@ -31,6 +31,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import java.util.Map;
+
 /**
  * Send {@link SourceRecord} to {@link EventDispatcher.StreamingChangeRecordReceiver}, this should
  * be called sequentially.
@@ -67,7 +69,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                             event.getCreateEnvelope(),
                             event.getChangeRecordEmitter().getOffset(),
                             null,
-                            event.getDataCollectionId());
+                            event.getDataCollectionId(),
+                            event.getOffset());
                 }
                 break;
             case READ:
@@ -80,7 +83,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                             event.getReadEnvelope(),
                             event.getChangeRecordEmitter().getOffset(),
                             null,
-                            event.getDataCollectionId());
+                            event.getDataCollectionId(),
+                            event.getOffset());
                 }
                 break;
             case UPDATE:
@@ -99,7 +103,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                                 event.getDeleteEnvelope(),
                                 event.getChangeRecordEmitter().getOffset(),
                                 headers,
-                                event.dataCollectionId);
+                                event.dataCollectionId,
+                                event.getOffset());
                         headers = new ConnectHeaders();
                         headers.add(
                                 RelationalChangeRecordEmitter.PK_UPDATE_OLDKEY_FIELD,
@@ -113,7 +118,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                                 event.getCreateEnvelope(),
                                 event.getChangeRecordEmitter().getOffset(),
                                 headers,
-                                event.dataCollectionId);
+                                event.dataCollectionId,
+                                event.getOffset());
                     } else {
                         changeRecord(
                                 event.partition,
@@ -123,7 +129,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                                 event.getUpdateEnvelope(),
                                 event.getChangeRecordEmitter().getOffset(),
                                 null,
-                                event.dataCollectionId);
+                                event.dataCollectionId,
+                                event.getOffset());
                     }
                 }
                 break;
@@ -137,7 +144,8 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
                             event.getDeleteEnvelope(),
                             event.getChangeRecordEmitter().getOffset(),
                             null,
-                            event.getDataCollectionId());
+                            event.getDataCollectionId(),
+                            event.getOffset());
                 }
                 break;
             case TRUNCATE:
@@ -160,31 +168,30 @@ public class ChangeRecordEventConsumer<T extends DataCollectionId>
             Envelope.Operation operation,
             Object key,
             Struct value,
-            OffsetContext offset,
+            OffsetContext offsetContext,
             ConnectHeaders headers,
-            DataCollectionId dataCollectionId)
+            DataCollectionId dataCollectionId,
+            Map<String, ?> offset)
             throws InterruptedException {
         if (operation == Envelope.Operation.CREATE
                 && eventDispatcher.signal.isSignal(dataCollectionId)) {
-            eventDispatcher.signal.process(partition, value, offset);
+            eventDispatcher.signal.process(partition, value, offsetContext);
         }
 
         if (eventDispatcher.neverSkip || !eventDispatcher.skippedOperations.contains(operation)) {
             eventDispatcher.transactionMonitor.dataEvent(
-                    partition, dataCollectionId, offset, key, value);
+                    partition, dataCollectionId, offsetContext, key, value);
             eventDispatcher.eventListener.onEvent(
-                    partition, dataCollectionId, offset, key, value, operation);
+                    partition, dataCollectionId, offsetContext, key, value, operation);
             if (eventDispatcher.incrementalSnapshotChangeEventSource != null) {
                 eventDispatcher.incrementalSnapshotChangeEventSource.processMessage(
-                        partition, dataCollectionId, key, offset);
+                        partition, dataCollectionId, key, offsetContext);
             }
             eventDispatcher.streamingReceiver.changeRecord(
                     partition, schema, operation, key, value, offset, headers);
         }
 
         eventDispatcher.heartbeat.heartbeat(
-                partition.getSourcePartition(),
-                offset.getOffset(),
-                eventDispatcher::enqueueHeartbeat);
+                partition.getSourcePartition(), offset, eventDispatcher::enqueueHeartbeat);
     }
 }

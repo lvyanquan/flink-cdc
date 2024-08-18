@@ -288,6 +288,8 @@ public class EventDispatcherImpl<T extends DataCollectionId>
                         event.setDataCollectionId(dataCollectionId);
                         event.setPartition(partition);
                         event.setTableSchema((TableSchema) schema.schemaFor(dataCollectionId));
+                        event.setSourceInfo(changeRecordEmitter.getOffset().getSourceInfo());
+                        event.setOffset(changeRecordEmitter.getOffset().getOffset());
                         event.setChangeRecordEmitter(
                                 (MySqlChangeRecordEmitter) changeRecordEmitter);
                     });

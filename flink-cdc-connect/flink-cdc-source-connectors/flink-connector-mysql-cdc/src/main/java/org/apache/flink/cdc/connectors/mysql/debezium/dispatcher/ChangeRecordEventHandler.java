@@ -72,7 +72,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                         .getEnvelopeSchema()
                                         .create(
                                                 tableSchema.valueFromColumnData(newColumnValues),
-                                                changeRecordEmitter.getOffset().getSourceInfo(),
+                                                changeRecordEvent.getSourceInfo(),
                                                 changeRecordEmitter
                                                         .getClock()
                                                         .currentTimeAsInstant());
@@ -86,7 +86,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                         .getEnvelopeSchema()
                                         .read(
                                                 tableSchema.valueFromColumnData(newColumnValues),
-                                                changeRecordEmitter.getOffset().getSourceInfo(),
+                                                changeRecordEvent.getSourceInfo(),
                                                 changeRecordEmitter
                                                         .getClock()
                                                         .currentTimeAsInstant());
@@ -105,7 +105,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                             .delete(
                                                     tableSchema.valueFromColumnData(
                                                             oldColumnValues),
-                                                    changeRecordEmitter.getOffset().getSourceInfo(),
+                                                    changeRecordEvent.getSourceInfo(),
                                                     changeRecordEmitter
                                                             .getClock()
                                                             .currentTimeAsInstant());
@@ -116,7 +116,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                             .create(
                                                     tableSchema.valueFromColumnData(
                                                             newColumnValues),
-                                                    changeRecordEmitter.getOffset().getSourceInfo(),
+                                                    changeRecordEvent.getSourceInfo(),
                                                     changeRecordEmitter
                                                             .getClock()
                                                             .currentTimeAsInstant());
@@ -130,7 +130,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                                             oldColumnValues),
                                                     tableSchema.valueFromColumnData(
                                                             newColumnValues),
-                                                    changeRecordEmitter.getOffset().getSourceInfo(),
+                                                    changeRecordEvent.getSourceInfo(),
                                                     changeRecordEmitter
                                                             .getClock()
                                                             .currentTimeAsInstant());
@@ -145,7 +145,7 @@ public class ChangeRecordEventHandler<T extends DataCollectionId>
                                         .getEnvelopeSchema()
                                         .delete(
                                                 tableSchema.valueFromColumnData(oldColumnValues),
-                                                changeRecordEmitter.getOffset().getSourceInfo(),
+                                                changeRecordEvent.getSourceInfo(),
                                                 changeRecordEmitter
                                                         .getClock()
                                                         .currentTimeAsInstant());

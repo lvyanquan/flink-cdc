@@ -22,12 +22,15 @@ import io.debezium.relational.TableSchema;
 import io.debezium.schema.DataCollectionId;
 import org.apache.kafka.connect.data.Struct;
 
+import java.util.Map;
+
 /**
  * Class for parallel processing of {@link ChangeRecordEventHandler} and Single threaded processing
  * of {@link ChangeRecordEventConsumer}.
  */
 public class ChangeRecordEvent<T extends DataCollectionId> {
     MySqlChangeRecordEmitter changeRecordEmitter;
+    Map<String, ?> offset;
     TableSchema tableSchema;
     T dataCollectionId;
     Struct newKey;
@@ -39,6 +42,18 @@ public class ChangeRecordEvent<T extends DataCollectionId> {
     Struct deleteEnvelope;
     Struct updateEnvelope;
 
+    Struct sourceInfo;
+
+    MySqlPartition partition;
+
+    public Struct getSourceInfo() {
+        return sourceInfo;
+    }
+
+    public void setSourceInfo(Struct sourceInfo) {
+        this.sourceInfo = sourceInfo;
+    }
+
     public MySqlPartition getPartition() {
         return partition;
     }
@@ -46,8 +61,6 @@ public class ChangeRecordEvent<T extends DataCollectionId> {
     public void setPartition(MySqlPartition partition) {
         this.partition = partition;
     }
-
-    MySqlPartition partition;
 
     public MySqlChangeRecordEmitter getChangeRecordEmitter() {
         return changeRecordEmitter;
@@ -137,9 +150,18 @@ public class ChangeRecordEvent<T extends DataCollectionId> {
         this.updateEnvelope = updateEnvelope;
     }
 
+    public Map<String, ?> getOffset() {
+        return offset;
+    }
+
+    public void setOffset(Map<String, ?> offset) {
+        this.offset = offset;
+    }
+
     /** Clear schema info and others for GC purpose. */
     public void clearAll() {
         this.changeRecordEmitter = null;
+        this.offset = null;
         this.tableSchema = null;
         this.oldKey = null;
         this.newKey = null;
@@ -149,5 +171,6 @@ public class ChangeRecordEvent<T extends DataCollectionId> {
         this.createEnvelope = null;
         this.deleteEnvelope = null;
         this.updateEnvelope = null;
+        this.sourceInfo = null;
     }
 }

@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -73,6 +74,8 @@ import java.util.function.Supplier;
  * <p>Line 381: Change visibility of {@link #dispatchFilteredEvent} to public.
  *
  * <p>Line 477: Change visibility of {@link #enqueueHeartbeat} to public.
+ *
+ * <p>Line 511~563: pass offset to changeRecord directly to support parallel processing.
  */
 public class EventDispatcher<P extends Partition, T extends DataCollectionId>
         implements AutoCloseable {
@@ -504,6 +507,58 @@ public class EventDispatcher<P extends Partition, T extends DataCollectionId>
 
     /** Put {@link SourceRecord} to {@link ChangeEventQueue}. */
     public final class StreamingChangeRecordReceiver implements ChangeRecordEmitter.Receiver<P> {
+
+        public void changeRecord(
+                P partition,
+                DataCollectionSchema dataCollectionSchema,
+                Operation operation,
+                Object key,
+                Struct value,
+                Map<String, ?> offset,
+                ConnectHeaders headers)
+                throws InterruptedException {
+
+            Objects.requireNonNull(value, "value must not be null");
+
+            LOGGER.trace("Received change record for {} operation on key {}", operation, key);
+
+            // Truncate events must have null key schema as they are sent to table topics without
+            // keys
+            Schema keySchema =
+                    (key == null && operation == Operation.TRUNCATE)
+                            ? null
+                            : dataCollectionSchema.keySchema();
+            String topicName = topicSelector.topicNameFor((T) dataCollectionSchema.id());
+
+            SourceRecord record =
+                    new SourceRecord(
+                            partition.getSourcePartition(),
+                            offset,
+                            topicName,
+                            null,
+                            keySchema,
+                            key,
+                            dataCollectionSchema.getEnvelopeSchema().schema(),
+                            value,
+                            null,
+                            headers);
+            queue.enqueue(changeEventCreator.createDataChangeEvent(record));
+
+            if (emitTombstonesOnDelete && operation == Operation.DELETE) {
+                SourceRecord tombStone =
+                        record.newRecord(
+                                record.topic(),
+                                record.kafkaPartition(),
+                                record.keySchema(),
+                                record.key(),
+                                null, // value schema
+                                null, // value
+                                record.timestamp(),
+                                record.headers());
+
+                queue.enqueue(changeEventCreator.createDataChangeEvent(tombStone));
+            }
+        }
 
         @Override
         public void changeRecord(
