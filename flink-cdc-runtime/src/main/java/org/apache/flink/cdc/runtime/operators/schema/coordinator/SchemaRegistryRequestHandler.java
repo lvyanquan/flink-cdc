@@ -97,8 +97,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
 
     /** Status of the execution of current schema change request. */
     private volatile boolean isSchemaChangeApplying;
-    /** Actual exception if failed to apply schema change. */
-    private Exception schemaChangeException;
+
     /** Executor service to execute schema change. */
     private final ExecutorService schemaChangeThreadPool;
 
@@ -436,10 +435,6 @@ public class SchemaRegistryRequestHandler implements Closeable {
                     }
                     return events;
                 }
-            case DROP_TABLE:
-                // We don't drop any tables in Lenient mode.
-                LOG.info("A drop table event {} has been ignored in Lenient mode.", event);
-                return Collections.emptyList();
             default:
                 return Collections.singletonList(event);
         }
