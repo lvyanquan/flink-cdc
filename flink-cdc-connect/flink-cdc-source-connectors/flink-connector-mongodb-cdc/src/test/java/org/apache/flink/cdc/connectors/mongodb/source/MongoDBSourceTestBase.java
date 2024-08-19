@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.lifecycle.Startables;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.stream.Stream;
 
@@ -41,10 +40,7 @@ public class MongoDBSourceTestBase {
 
     public MongoDBSourceTestBase(String mongoVersion) {
         this.mongoContainer =
-                new MongoDBContainer(
-                                DockerImageName.parse(
-                                                "reg.docker.alibaba-inc.com/ververica/mongo:6.0.9-jammy")
-                                        .asCompatibleSubstituteFor("mongo"))
+                new MongoDBContainer("mongo:" + mongoVersion)
                         .withSharding()
                         .withLogConsumer(new Slf4jLogConsumer(LOG));
     }
