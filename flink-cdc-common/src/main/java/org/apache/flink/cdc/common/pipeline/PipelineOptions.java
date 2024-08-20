@@ -100,5 +100,11 @@ public class PipelineOptions {
                     .withDescription(
                             "The timeout time for SchemaOperator to wait downstream SchemaChangeEvent applying finished, the default value is 3 minutes.");
 
+    public static final ConfigOption<Boolean> IGNORE_PIPELINE_PARALLELISM =
+            ConfigOptions.key("ignorePipelineParallelism")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Whether to ignore pipeline parallelism in yaml.");
+
     private PipelineOptions() {}
 }

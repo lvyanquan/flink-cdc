@@ -20,6 +20,8 @@ package org.apache.flink.cdc.gateway.service;
 import org.apache.flink.artifacts.ArtifactManager;
 import org.apache.flink.cdc.cli.parser.PipelineDefinitionParser;
 import org.apache.flink.cdc.cli.parser.YamlPipelineDefinitionParser;
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
+import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.composer.PipelineComposer;
 import org.apache.flink.cdc.composer.PipelineExecution;
 import org.apache.flink.cdc.composer.definition.PipelineDef;
@@ -78,7 +80,8 @@ public class YamlServiceImpl implements YamlService {
         pipelineExecution.execute();
     }
 
-    private static PipelineExecution composeExecution(
+    @VisibleForTesting
+    public static PipelineExecution composeExecution(
             String yamlContent,
             org.apache.flink.configuration.Configuration flinkConfig,
             MutableURLClassLoader mutableURLClassLoader,
@@ -94,6 +97,8 @@ public class YamlServiceImpl implements YamlService {
         org.apache.flink.cdc.common.configuration.Configuration cdcConfiguration =
                 org.apache.flink.cdc.common.configuration.Configuration.fromMap(
                         flinkConfig.toMap());
+        // if used in vvr, ignore pipeline parallelism in yaml
+        cdcConfiguration.set(PipelineOptions.IGNORE_PIPELINE_PARALLELISM, true);
 
         // Parse pipeline definition file
         PipelineDefinitionParser pipelineDefinitionParser = new YamlPipelineDefinitionParser();

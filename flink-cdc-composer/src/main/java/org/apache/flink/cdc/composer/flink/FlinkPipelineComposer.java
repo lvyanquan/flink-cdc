@@ -38,6 +38,9 @@ import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 
 import java.net.URI;
@@ -54,6 +57,7 @@ import java.util.Set;
 @Internal
 public class FlinkPipelineComposer implements PipelineComposer {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(FlinkPipelineComposer.class);
     private final StreamExecutionEnvironment env;
     private final boolean isBlocking;
 
@@ -128,8 +132,23 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
     @Override
     public PipelineExecution compose(PipelineDef pipelineDef) {
-        int parallelism = pipelineDef.getConfig().get(PipelineOptions.PIPELINE_PARALLELISM);
-        env.getConfig().setParallelism(parallelism);
+        // When use cdc pipeline in vvp, parallelism which set in yaml is ignored and user can only
+        // control parallelism by vvp.
+        int parallelism;
+        if (pipelineDef.getConfig().get(PipelineOptions.IGNORE_PIPELINE_PARALLELISM)) {
+            parallelism = env.getConfig().getParallelism();
+            if (pipelineDef
+                    .getConfig()
+                    .getOptional(PipelineOptions.PIPELINE_PARALLELISM)
+                    .isPresent()) {
+                LOGGER.warn(
+                        "pipeline.parallilism is ignored and the parallelism {} in env is used.",
+                        parallelism);
+            }
+        } else {
+            parallelism = pipelineDef.getConfig().get(PipelineOptions.PIPELINE_PARALLELISM);
+            env.getConfig().setParallelism(parallelism);
+        }
 
         SchemaChangeBehavior schemaChangeBehavior =
                 pipelineDef.getConfig().get(PipelineOptions.PIPELINE_SCHEMA_CHANGE_BEHAVIOR);
@@ -138,7 +157,8 @@ public class FlinkPipelineComposer implements PipelineComposer {
         DataSourceTranslator sourceTranslator =
                 new DataSourceTranslator(artifactManager, classLoader);
         DataStream<Event> stream =
-                sourceTranslator.translate(pipelineDef.getSource(), env, pipelineDef.getConfig());
+                sourceTranslator.translate(
+                        pipelineDef.getSource(), env, pipelineDef.getConfig(), parallelism);
 
         // Build PreTransformOperator for processing Schema Event
         TransformTranslator transformTranslator = new TransformTranslator();
