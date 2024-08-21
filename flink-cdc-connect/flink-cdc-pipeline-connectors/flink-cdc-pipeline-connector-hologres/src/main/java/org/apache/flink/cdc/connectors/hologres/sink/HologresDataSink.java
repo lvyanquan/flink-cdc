@@ -24,6 +24,7 @@ import org.apache.flink.cdc.common.sink.EventSinkProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.HologresRecordSerializer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.HologresSink;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParam;
@@ -33,6 +34,7 @@ import com.alibaba.hologres.client.model.SSLMode;
 import com.alibaba.hologres.client.model.WriteMode;
 import com.esotericsoftware.minlog.Log;
 
+import java.time.ZoneId;
 import java.util.Map;
 
 /** A {@link DataSink} for Hologres connector that supports schema evolution. */
@@ -88,7 +90,9 @@ public class HologresDataSink implements DataSink {
 
     private final boolean useFixedFe;
 
-    private final Boolean enableTypeNormalization;
+    private final TypeNormalizationStrategy typeNormalizationStrategy;
+
+    private final ZoneId zoneId;
 
     public HologresDataSink(
             String endpoint,
@@ -106,7 +110,7 @@ public class HologresDataSink implements DataSink {
             WriteMode writeMode,
             Boolean createPartitionTable,
             DeleteStrategy deleteStrategy,
-            Boolean enableTypeNormalization,
+            TypeNormalizationStrategy typeNormalizationStrategy,
             Integer connectionPoolSize,
             Integer jdbcWriteBatchSize,
             Long jdbcWriteBatchByteSize,
@@ -117,6 +121,7 @@ public class HologresDataSink implements DataSink {
             Boolean enableDeduplication,
             String jdbcSharedConnectionPoolName,
             Boolean useFixedFe,
+            ZoneId zoneId,
             Map<String, String> tableOptions) {
         this.endpoint = endpoint;
         this.database = database;
@@ -133,7 +138,7 @@ public class HologresDataSink implements DataSink {
         this.writeMode = writeMode;
         this.createPartitionTable = createPartitionTable;
         this.deleteStrategy = deleteStrategy;
-        this.enableTypeNormalization = enableTypeNormalization;
+        this.typeNormalizationStrategy = typeNormalizationStrategy;
         this.connectionPoolSize = connectionPoolSize;
         this.jdbcWriteBatchSize = jdbcWriteBatchSize;
         this.jdbcWriteBatchByteSize = jdbcWriteBatchByteSize;
@@ -145,6 +150,7 @@ public class HologresDataSink implements DataSink {
         this.jdbcSharedConnectionPoolName = jdbcSharedConnectionPoolName;
         this.tableOptions = tableOptions;
         this.useFixedFe = useFixedFe;
+        this.zoneId = zoneId;
     }
 
     @Override
@@ -168,7 +174,7 @@ public class HologresDataSink implements DataSink {
                         .setWriteMode(writeMode)
                         .setCreatePartitionTable(createPartitionTable)
                         .setDeleteStrategy(deleteStrategy)
-                        .setEnableTypeNormalization(enableTypeNormalization)
+                        .setTypeNormalizationStrategy(typeNormalizationStrategy)
                         .setConnectionPoolSize(connectionPoolSize)
                         .setJdbcWriteBatchSize(jdbcWriteBatchSize)
                         .setJdbcWriteBatchByteSize(jdbcWriteBatchByteSize)
@@ -180,6 +186,7 @@ public class HologresDataSink implements DataSink {
                         .setEnableDeduplication(enableDeduplication)
                         .setUseFixedFe(useFixedFe)
                         .setTableOptions(tableOptions)
+                        .setZoneId(zoneId)
                         .build();
         Log.info("param is: " + hologresConnectionParam);
         HologresRecordSerializer serializer =
@@ -200,6 +207,8 @@ public class HologresDataSink implements DataSink {
                         .setSslMode(sslMode)
                         .setSslRootCertLocation(sslRootCertLocation)
                         .setTableOptions(tableOptions)
+                        .setZoneId(zoneId)
+                        .setTypeNormalizationStrategy(typeNormalizationStrategy)
                         .build();
         return new HologresMetadataApplier(hologresConnectionParam);
     }

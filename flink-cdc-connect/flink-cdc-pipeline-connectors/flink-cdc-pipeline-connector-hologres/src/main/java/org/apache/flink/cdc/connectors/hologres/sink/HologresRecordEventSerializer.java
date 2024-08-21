@@ -29,7 +29,7 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.utils.Preconditions;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
-import org.apache.flink.cdc.connectors.hologres.schema.HologresTypeHelper;
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.HologresTypeNormalizer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.HologresRecordSerializer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParam;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.events.HologresSchemaFlushRecord;
@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.DISTRIBUTION_KEY;
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypeHelper.inferTableSchema;
 
@@ -55,10 +56,13 @@ public class HologresRecordEventSerializer implements HologresRecordSerializer<E
     private final Map<TableId, TableInfo> tableInfoMap;
 
     private final HologresConnectionParam param;
+    private final HologresTypeNormalizer hologresTypeNormalizer;
 
     public HologresRecordEventSerializer(HologresConnectionParam param) {
         tableInfoMap = new HashMap<>();
         this.param = param;
+        this.hologresTypeNormalizer =
+                getHologresTypeNormalizer(param.getTypeNormalizationStrategy());
     }
 
     @Override
@@ -89,18 +93,10 @@ public class HologresRecordEventSerializer implements HologresRecordSerializer<E
         tableInfo.schema = newSchema;
         String shardKeys = param.getTableOptions().get(DISTRIBUTION_KEY);
         TableSchema newHoloTableSchema =
-                inferTableSchema(
-                        tableInfo.schema, tableId, shardKeys, param.isEnableTypeNormalization());
+                inferTableSchema(tableInfo.schema, tableId, shardKeys, hologresTypeNormalizer);
         tableInfo.holoTableSchema = newHoloTableSchema;
-        tableInfo.fieldGetters = new RecordData.FieldGetter[newSchema.getColumnCount()];
-        for (int i = 0; i < newSchema.getColumnCount(); i++) {
-            Column column = newSchema.getColumns().get(i);
-            tableInfo.fieldGetters[i] =
-                    HologresTypeHelper.createDataTypeToRecordFieldGetter(
-                            column.getType(),
-                            i,
-                            newSchema.primaryKeys().contains(column.getName()));
-        }
+        tableInfo.fieldGetters =
+                hologresTypeNormalizer.getNormalizedFieldGetters(newSchema, param.getZoneId());
         tableInfoMap.put(tableId, tableInfo);
         return new HologresSchemaFlushRecord(newHoloTableSchema);
     }

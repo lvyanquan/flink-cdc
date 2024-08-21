@@ -20,12 +20,14 @@ package org.apache.flink.cdc.connectors.hologres.sink.v2.config;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
 import org.apache.flink.cdc.connectors.hologres.utils.JDBCUtils;
 
 import com.alibaba.hologres.client.HoloConfig;
 import com.alibaba.hologres.client.model.SSLMode;
 import com.alibaba.hologres.client.model.WriteMode;
 
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,15 +79,16 @@ public class HologresConnectionParamBuilder {
 
     private Boolean ignoreNullWhenUpdate = false;
 
-    private Boolean enablePartialInsert = false;
-
     private Boolean enableDeduplication = true;
 
-    private Boolean enableTypeNormalization = false;
+    private TypeNormalizationStrategy typeNormalizationStrategy =
+            TypeNormalizationStrategy.STANDARD;
 
     private String jdbcSharedConnectionPoolName = "cdc-default";
 
     private boolean useFixedFe = false;
+
+    private ZoneId zoneId = ZoneId.systemDefault();
 
     private Map<String, String> tableOptions = new HashMap<>();
 
@@ -196,11 +199,6 @@ public class HologresConnectionParamBuilder {
         return this;
     }
 
-    public HologresConnectionParamBuilder setEnablePartialInsert(Boolean enablePartialInsert) {
-        this.enablePartialInsert = enablePartialInsert;
-        return this;
-    }
-
     public HologresConnectionParamBuilder setEnableDeduplication(Boolean enableDeduplication) {
         this.enableDeduplication = enableDeduplication;
         return this;
@@ -227,9 +225,14 @@ public class HologresConnectionParamBuilder {
         return this;
     }
 
-    public HologresConnectionParamBuilder setEnableTypeNormalization(
-            Boolean enableTypeNormalization) {
-        this.enableTypeNormalization = enableTypeNormalization;
+    public HologresConnectionParamBuilder setTypeNormalizationStrategy(
+            TypeNormalizationStrategy typeNormalizationStrategy) {
+        this.typeNormalizationStrategy = typeNormalizationStrategy;
+        return this;
+    }
+
+    public HologresConnectionParamBuilder setZoneId(ZoneId zoneId) {
+        this.zoneId = zoneId;
         return this;
     }
 
@@ -293,7 +296,8 @@ public class HologresConnectionParamBuilder {
                 jdbcSharedConnectionPoolName,
                 ignoreNullWhenUpdate,
                 deleteStrategy,
-                enableTypeNormalization,
+                typeNormalizationStrategy,
+                zoneId,
                 tableOptions,
                 generateHoloConfig());
     }

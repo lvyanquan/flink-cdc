@@ -22,17 +22,21 @@ import org.apache.flink.cdc.common.configuration.ConfigOption;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
+import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.connectors.hologres.config.DeleteStrategy;
 import org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption;
+import org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy;
 import org.apache.flink.cdc.connectors.hologres.sink.HologresDataSink;
 
 import com.alibaba.hologres.client.model.SSLMode;
 import com.alibaba.hologres.client.model.WriteMode;
 
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.flink.cdc.connectors.hologres.config.HologresCommonOption.DATABASE;
@@ -50,7 +54,6 @@ import static org.apache.flink.cdc.connectors.hologres.config.HologresCommonOpti
 import static org.apache.flink.cdc.connectors.hologres.config.HologresCommonOption.PASSWORD;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresCommonOption.USERNAME;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.CREATE_MISSING_PARTITION_TABLE;
-import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.ENABLE_TYPE_NORMALIZATION;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.IGNORE_NULL_WHEN_UPDATE;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.MUTATE_TYPE;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.OPTIONAL_ENABLE_DEDUPLICATION;
@@ -61,6 +64,7 @@ import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOp
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.OPTIONAL_JDBC_WRITE_BATCH_TOTAL_BYTE_SIZE;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.OPTIONAL_JDBC_WRITE_FLUSH_INTERVAL;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.SINK_DELETE_STRATEGY;
+import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.TYPE_NORMALIZATION_STRATEGY;
 import static org.apache.flink.cdc.connectors.hologres.config.HologresDataSinkOption.USE_FIXED_FE;
 
 /** A {@link DataSinkFactory} to create {@link HologresDataSink}. */
@@ -104,7 +108,8 @@ public class HologresDataSinkFactory implements DataSinkFactory {
 
         WriteMode writeMode = configuration.get(MUTATE_TYPE);
         DeleteStrategy deleteStrategy = configuration.get(SINK_DELETE_STRATEGY);
-        Boolean enableTypeNormalization = configuration.get(ENABLE_TYPE_NORMALIZATION);
+        TypeNormalizationStrategy typeNormalizationStrategy =
+                configuration.get(TYPE_NORMALIZATION_STRATEGY);
 
         Boolean ignoreNullWhenUpdate = configuration.get(IGNORE_NULL_WHEN_UPDATE);
         Boolean createPartitionTable = configuration.get(CREATE_MISSING_PARTITION_TABLE);
@@ -116,6 +121,17 @@ public class HologresDataSinkFactory implements DataSinkFactory {
         Boolean removeU0000InText = configuration.get(OPTIONAL_ENABLE_REMOVE_U0000_IN_TEXT);
         Boolean enableDeduplication = configuration.get(OPTIONAL_ENABLE_DEDUPLICATION);
         Boolean useFixedFe = configuration.get(USE_FIXED_FE);
+
+        // get ZoneId from pipeline config
+        ZoneId zoneId = ZoneId.systemDefault();
+        if (!Objects.equals(
+                context.getPipelineConfiguration().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),
+                PipelineOptions.PIPELINE_LOCAL_TIME_ZONE.defaultValue())) {
+            zoneId =
+                    ZoneId.of(
+                            context.getPipelineConfiguration()
+                                    .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
+        }
 
         return new HologresDataSink(
                 endpoint,
@@ -133,7 +149,7 @@ public class HologresDataSinkFactory implements DataSinkFactory {
                 writeMode,
                 createPartitionTable,
                 deleteStrategy,
-                enableTypeNormalization,
+                typeNormalizationStrategy,
                 connectionPoolSize,
                 jdbcWriteBatchSize,
                 jdbcWriteBatchByteSize,
@@ -144,6 +160,7 @@ public class HologresDataSinkFactory implements DataSinkFactory {
                 enableDeduplication,
                 jdbcShardConnectionPoolName,
                 useFixedFe,
+                zoneId,
                 tableOptions);
     }
 
@@ -188,7 +205,7 @@ public class HologresDataSinkFactory implements DataSinkFactory {
         options.add(OPTIONAL_JDBC_WRITE_FLUSH_INTERVAL);
         options.add(OPTIONAL_JDBC_ENABLE_DEFAULT_FOR_NOT_NULL_COLUMN);
         options.add(OPTIONAL_ENABLE_REMOVE_U0000_IN_TEXT);
-        options.add(ENABLE_TYPE_NORMALIZATION);
+        options.add(TYPE_NORMALIZATION_STRATEGY);
         options.add(SINK_DELETE_STRATEGY);
         return options;
     }

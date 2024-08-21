@@ -32,6 +32,7 @@ import org.apache.flink.cdc.connectors.hologres.HologresJDBCClientProvider;
 import org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils;
 import org.apache.flink.cdc.connectors.hologres.schema.HologresTableSchema;
 import org.apache.flink.cdc.connectors.hologres.schema.HologresTypeHelper;
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.HologresTypeNormalizer;
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParam;
 import org.apache.flink.cdc.connectors.hologres.utils.JDBCUtils;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -50,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.executeDDL;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.getQualifiedPath;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.preparePersistedOptionsStatement;
@@ -61,10 +63,14 @@ public class HologresMetadataApplier implements MetadataApplier {
 
     private final HologresConnectionParam param;
 
+    private final HologresTypeNormalizer hologresTypeNormalizer;
+
     private transient HologresJDBCClientProvider hologresJDBCClientProvider;
 
     public HologresMetadataApplier(HologresConnectionParam param) {
         this.param = param;
+        this.hologresTypeNormalizer =
+                getHologresTypeNormalizer(param.getTypeNormalizationStrategy());
     }
 
     @Override
@@ -149,7 +155,7 @@ public class HologresMetadataApplier implements MetadataApplier {
                                 HologresTypeHelper.toNullablePostgresType(
                                         addColumn.getAddColumn().getType(),
                                         false,
-                                        param.isEnableTypeNormalization()));
+                                        hologresTypeNormalizer));
                 addColumnList.add(addColumnDDL);
 
                 if (!StringUtils.isNullOrWhitespaceOnly(addColumn.getAddColumn().getComment())) {
@@ -234,8 +240,7 @@ public class HologresMetadataApplier implements MetadataApplier {
             for (Map.Entry<String, DataType> typeMapping : event.getTypeMapping().entrySet()) {
                 Column currentColumn = tableSchema.getColumn(typeMapping.getKey()).get();
                 Column columnAlter =
-                        HologresTypeHelper.inferColumn(
-                                typeMapping.getValue(), false, param.isEnableTypeNormalization());
+                        hologresTypeNormalizer.transformToHoloColumn(typeMapping.getValue(), false);
                 if (columnAlter.getArrayType() != currentColumn.getArrayType()
                         || columnAlter.getType() != currentColumn.getType()
                         || columnAlter.getTypeName() != currentColumn.getTypeName()) {
@@ -265,7 +270,7 @@ public class HologresMetadataApplier implements MetadataApplier {
                         tableSchema.partitionKeys(),
                         tableSchema.comment(),
                         true,
-                        param.isEnableTypeNormalization());
+                        hologresTypeNormalizer);
 
         // get persisted options ddl
         String persistedOptionDDL = preparePersistedOptionsStatement(tableId, tableOptions);
