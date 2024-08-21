@@ -34,6 +34,7 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.RefreshPendingListsResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.ReleaseUpstreamRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.ReleaseUpstreamResponse;
@@ -304,6 +305,11 @@ public class SchemaRegistryRequestHandler implements Closeable {
         pendingSchemaChanges.clear();
         flushedSinkWriters.clear();
         return CompletableFuture.completedFuture(wrap(new RefreshPendingListsResponse()));
+    }
+
+    public CompletableFuture<CoordinationResponse> getTokenResult(TableId tableId) {
+        return CompletableFuture.completedFuture(
+                wrap(new GetTokenResponse(metadataApplier.getToken(tableId))));
     }
 
     public CompletableFuture<CoordinationResponse> getSchemaChangeResult() {

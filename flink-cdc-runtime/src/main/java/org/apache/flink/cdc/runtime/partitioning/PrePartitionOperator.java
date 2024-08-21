@@ -26,6 +26,7 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.function.HashFunction;
 import org.apache.flink.cdc.common.function.HashFunctionProvider;
 import org.apache.flink.cdc.common.schema.Schema;
+import org.apache.flink.cdc.common.utils.StringUtils;
 import org.apache.flink.cdc.runtime.operators.schema.SchemaOperator;
 import org.apache.flink.cdc.runtime.operators.sink.SchemaEvolutionClient;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -128,8 +129,23 @@ public class PrePartitionOperator extends AbstractStreamOperator<PartitioningEve
         return schema.get();
     }
 
+    private String loadLatestTokenFromRegistry(TableId tableId) {
+        try {
+            return schemaEvolutionClient.getLatestToken(tableId);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get token for " + tableId, e);
+        }
+    }
+
     private HashFunction<DataChangeEvent> recreateHashFunction(TableId tableId) {
-        return hashFunctionProvider.getHashFunction(tableId, loadLatestSchemaFromRegistry(tableId));
+        String token = loadLatestTokenFromRegistry(tableId);
+        if (StringUtils.isNullOrWhitespaceOnly(token)) {
+            return hashFunctionProvider.getHashFunction(
+                    tableId, loadLatestSchemaFromRegistry(tableId));
+        } else {
+            return hashFunctionProvider.getHashFunction(
+                    tableId, loadLatestSchemaFromRegistry(tableId), token);
+        }
     }
 
     private LoadingCache<TableId, HashFunction<DataChangeEvent>> createCache() {

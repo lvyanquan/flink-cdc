@@ -31,6 +31,7 @@ import org.apache.flink.cdc.runtime.operators.schema.event.GetEvolvedSchemaReque
 import org.apache.flink.cdc.runtime.operators.schema.event.GetEvolvedSchemaResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.GetOriginalSchemaRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.GetOriginalSchemaResponse;
+import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.RefreshPendingListsRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.ReleaseUpstreamRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeRequest;
@@ -208,6 +209,8 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             return requestHandler.getSchemaChangeResult();
         } else if (request instanceof RefreshPendingListsRequest) {
             return requestHandler.refreshPendingLists();
+        } else if (request instanceof GetTokenRequest) {
+            return requestHandler.getTokenResult(((GetTokenRequest) request).getTableId());
         } else {
             throw new IllegalArgumentException("Unrecognized CoordinationRequest type: " + request);
         }

@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEventType;
 import org.apache.flink.cdc.common.event.SchemaChangeEventTypeFamily;
+import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
 
 import java.io.Serializable;
@@ -49,5 +50,10 @@ public interface MetadataApplier extends Serializable {
     /** Checks what kind of schema change events downstream can handle. */
     default Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
         return Arrays.stream(SchemaChangeEventTypeFamily.ALL).collect(Collectors.toSet());
+    }
+
+    /** Get token info for specific table, use for connecting dlf2.0 only. */
+    default String getToken(TableId tableId) {
+        return null;
     }
 }
