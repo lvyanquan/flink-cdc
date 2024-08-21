@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.common.configuration.ConfigOption;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.utils.Preconditions;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
 
 import java.util.Arrays;
@@ -151,6 +152,7 @@ public class FactoryHelper {
         private final Configuration factoryConfiguration;
         private final ClassLoader classLoader;
         private final Configuration pipelineConfiguration;
+        private ReadableConfig flinkConf = new org.apache.flink.configuration.Configuration();
 
         public DefaultContext(
                 Configuration factoryConfiguration,
@@ -159,6 +161,17 @@ public class FactoryHelper {
             this.factoryConfiguration = factoryConfiguration;
             this.pipelineConfiguration = pipelineConfiguration;
             this.classLoader = classLoader;
+        }
+
+        public DefaultContext(
+                Configuration factoryConfiguration,
+                Configuration pipelineConfiguration,
+                ClassLoader classLoader,
+                ReadableConfig flinkConf) {
+            this.factoryConfiguration = factoryConfiguration;
+            this.pipelineConfiguration = pipelineConfiguration;
+            this.classLoader = classLoader;
+            this.flinkConf = flinkConf;
         }
 
         @Override
@@ -174,6 +187,11 @@ public class FactoryHelper {
         @Override
         public ClassLoader getClassLoader() {
             return classLoader;
+        }
+
+        @Override
+        public ReadableConfig getFlinkConf() {
+            return flinkConf;
         }
     }
 }
