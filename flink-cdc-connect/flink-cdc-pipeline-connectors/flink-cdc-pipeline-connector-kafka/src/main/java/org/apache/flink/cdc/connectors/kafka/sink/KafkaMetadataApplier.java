@@ -23,10 +23,10 @@ import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.connectors.kafka.aliyun.AliyunKafkaClient;
 import org.apache.flink.cdc.connectors.kafka.aliyun.AliyunKafkaClientParams;
-import org.apache.flink.table.catalog.exceptions.CatalogException;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaFuture;
@@ -39,11 +39,14 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaSinkUtil.generateKafkaTopic;
 
 /**
  * A {@code MetadataApplier} that applies metadata changes to Upsert Kafka. Support primary key
@@ -80,15 +83,27 @@ public class KafkaMetadataApplier implements MetadataApplier {
 
                 int tries = 0;
                 int createRetryTimes = 5;
-                String topicName = schemaChangeEvent.tableId().getTableName();
+                String topicName = generateKafkaTopic(schemaChangeEvent.tableId());
 
                 if (aliyunKafkaParams != null) {
                     if (aliyunKafkaClient == null) {
+                        LOG.info("Creating Aliyun Kafka client....");
                         this.aliyunKafkaClient = new AliyunKafkaClient(aliyunKafkaParams);
                         aliyunKafkaClient.open();
+                        LOG.info("Create Aliyun Kafka client succeed.");
+                    }
+
+                    List<String> topics = aliyunKafkaClient.listTopic(100, TimeUnit.SECONDS);
+                    if (topics.contains(topicName)) {
+                        LOG.warn("Topic {} already exists.", topicName);
+                        return;
                     }
 
                     while (tries++ < createRetryTimes) {
+                        LOG.info(
+                                "Start to create compacted topic {} at the {} try",
+                                topicName,
+                                tries);
                         try {
                             aliyunKafkaClient.createTopic(
                                     topicName,
@@ -103,7 +118,7 @@ public class KafkaMetadataApplier implements MetadataApplier {
                             if (tries < createRetryTimes) {
                                 LOG.warn(
                                         String.format(
-                                                "Fail to create topic %s at the %d time.",
+                                                "Fail to create compacted topic %s at the %d time.",
                                                 topicName, tries),
                                         t);
                                 try {
@@ -113,9 +128,9 @@ public class KafkaMetadataApplier implements MetadataApplier {
                                 }
                                 continue;
                             }
-                            throw new CatalogException(
+                            throw new IllegalStateException(
                                     String.format(
-                                            "Fail to create topic [%s] in aliyun kafka.",
+                                            "Fail to create compacted topic [%s] in aliyun kafka.",
                                             topicName),
                                     t);
                         }
@@ -126,6 +141,12 @@ public class KafkaMetadataApplier implements MetadataApplier {
                     }
 
                     if (isUpsertKafka) {
+                        ListTopicsResult topicsResult = adminClient.listTopics();
+                        if (topicsResult.names().get(100, TimeUnit.SECONDS).contains(topicName)) {
+                            LOG.info("Topic {} already exists.", topicName);
+                            return;
+                        }
+
                         while (tries++ < createRetryTimes) {
                             try {
                                 Map<String, String> newTopicConfig = new HashMap<>();
@@ -156,7 +177,7 @@ public class KafkaMetadataApplier implements MetadataApplier {
                                     }
                                     continue;
                                 }
-                                throw new CatalogException(
+                                throw new IllegalStateException(
                                         String.format("Fail to create topic [%s].", topicName), t);
                             }
                         }

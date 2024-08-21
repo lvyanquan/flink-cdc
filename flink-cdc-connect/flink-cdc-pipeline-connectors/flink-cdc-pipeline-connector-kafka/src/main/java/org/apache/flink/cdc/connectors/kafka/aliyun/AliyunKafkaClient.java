@@ -17,21 +17,17 @@
 
 package org.apache.flink.cdc.connectors.kafka.aliyun;
 
-import org.apache.flink.annotation.VisibleForTesting;
-
 import com.aliyun.auth.credentials.Credential;
 import com.aliyun.auth.credentials.provider.StaticCredentialProvider;
 import com.aliyun.sdk.service.alikafka20190916.AsyncClient;
 import com.aliyun.sdk.service.alikafka20190916.models.CreateTopicRequest;
 import com.aliyun.sdk.service.alikafka20190916.models.CreateTopicResponse;
-import com.aliyun.sdk.service.alikafka20190916.models.DeleteConsumerGroupRequest;
-import com.aliyun.sdk.service.alikafka20190916.models.DeleteConsumerGroupResponse;
-import com.aliyun.sdk.service.alikafka20190916.models.DeleteTopicRequest;
-import com.aliyun.sdk.service.alikafka20190916.models.DeleteTopicResponse;
 import com.aliyun.sdk.service.alikafka20190916.models.GetTopicListRequest;
 import com.aliyun.sdk.service.alikafka20190916.models.GetTopicListResponse;
 import com.aliyun.sdk.service.alikafka20190916.models.GetTopicListResponseBody;
 import darabonba.core.client.ClientOverrideConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -46,6 +42,9 @@ import java.util.stream.Collectors;
  * consumer/producer APIs could be used in the aliyun kafka.
  */
 public class AliyunKafkaClient implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AliyunKafkaClient.class);
+
     private final AliyunKafkaClientParams params;
     private AsyncClient kafkaClient;
 
@@ -58,7 +57,7 @@ public class AliyunKafkaClient implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         if (kafkaClient != null) {
             kafkaClient.close();
         }
@@ -77,18 +76,8 @@ public class AliyunKafkaClient implements AutoCloseable {
                         .build();
         CompletableFuture<CreateTopicResponse> future = kafkaClient.createTopic(createTopicRequest);
         CreateTopicResponse response = future.get(timeout, unit);
+        LOG.info("Creating topic by aliyun client succeed.");
         response.getBody();
-    }
-
-    public void deleteTopic(String topic, long timeout, TimeUnit unit) throws Exception {
-        DeleteTopicRequest deleteTopicRequest =
-                DeleteTopicRequest.builder()
-                        .instanceId(params.getInstanceId())
-                        .topic(topic)
-                        .regionId(params.getRegionId())
-                        .build();
-        CompletableFuture<DeleteTopicResponse> future = kafkaClient.deleteTopic(deleteTopicRequest);
-        future.get(timeout, unit);
     }
 
     public List<String> listTopic(long timeout, TimeUnit unit) throws Exception {
@@ -98,23 +87,10 @@ public class AliyunKafkaClient implements AutoCloseable {
                 kafkaClient.getTopicList(getTopicListRequest);
         // Synchronously get the return value of the API request
         GetTopicListResponse response = future.get(timeout, unit);
+        LOG.info("Getting topic list from aliyun client succeed.");
         return response.getBody().getTopicList().getTopicVO().stream()
                 .map(GetTopicListResponseBody.TopicVO::getTopic)
                 .collect(Collectors.toList());
-    }
-
-    public boolean deleteConsumerGroup(String groupId, long timeout, TimeUnit unit)
-            throws Exception {
-        DeleteConsumerGroupRequest deleteConsumerGroupRequest =
-                DeleteConsumerGroupRequest.builder()
-                        .instanceId(params.getInstanceId())
-                        .regionId(params.getRegionId())
-                        .consumerId(groupId)
-                        .build();
-        CompletableFuture<DeleteConsumerGroupResponse> future =
-                kafkaClient.deleteConsumerGroup(deleteConsumerGroupRequest);
-        DeleteConsumerGroupResponse response = future.get(timeout, unit);
-        return response.getBody() != null && response.getBody().getSuccess();
     }
 
     private AsyncClient initKafkaClient() {
@@ -132,10 +108,5 @@ public class AliyunKafkaClient implements AutoCloseable {
                         ClientOverrideConfiguration.create()
                                 .setEndpointOverride(params.getEndpoint()))
                 .build();
-    }
-
-    @VisibleForTesting
-    public AliyunKafkaClientParams getParams() {
-        return params;
     }
 }

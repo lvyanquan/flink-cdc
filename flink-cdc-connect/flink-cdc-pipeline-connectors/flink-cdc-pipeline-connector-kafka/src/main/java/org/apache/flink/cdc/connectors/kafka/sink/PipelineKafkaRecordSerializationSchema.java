@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.flink.cdc.connectors.kafka.sink.KafkaSinkUtil.generateKafkaTopic;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -102,7 +103,8 @@ public class PipelineKafkaRecordSerializationSchema
             // skip sending SchemaChangeEvent.
             return null;
         }
-        String topic = unifiedTopic == null ? changeEvent.tableId().toString() : unifiedTopic;
+        String topic =
+                unifiedTopic == null ? generateKafkaTopic(changeEvent.tableId()) : unifiedTopic;
         RecordHeaders recordHeaders = new RecordHeaders();
         if (addTableToHeaderEnabled) {
             String namespace =

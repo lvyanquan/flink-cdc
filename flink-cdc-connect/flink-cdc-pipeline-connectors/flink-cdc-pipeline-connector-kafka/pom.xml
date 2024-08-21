@@ -157,6 +157,12 @@ limitations under the License.
                                 <includes>
                                     <include>org.apache.kafka:*</include>
                                     <include>org.apache.flink:flink-connector-kafka</include>
+                                    <!-- For aliyun kafka -->
+                                    <include>com.aliyun:*</include>
+                                    <include>com.google.code.gson:gson</include>
+                                    <include>org.apache.httpcomponents.client5:httpclient5</include>
+                                    <include>org.apache.httpcomponents.core5:httpcore5</include>
+                                    <include>org.apache.httpcomponents.core5:httpcore5-h2</include>
                                 </includes>
                             </artifactSet>
                             <relocations>

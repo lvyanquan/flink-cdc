@@ -29,6 +29,8 @@ import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.DeliveryGuarantee;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
+
 import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Map;
@@ -84,6 +86,8 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
                             final String subKey = key.substring((PROPERTIES_PREFIX).length());
                             kafkaProperties.put(subKey, value);
                         });
+        checkKafkaProperties(kafkaProperties);
+
         String topic = context.getFactoryConfiguration().get(KafkaDataSinkOptions.TOPIC);
         boolean addTableToHeaderEnabled =
                 context.getFactoryConfiguration()
@@ -125,5 +129,14 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
         options.add(SINK_CUSTOM_HEADER);
         options.add(KafkaDataSinkOptions.DELIVERY_GUARANTEE);
         return options;
+    }
+
+    private void checkKafkaProperties(Properties kafkaProperties) {
+        if (kafkaProperties.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG) == null) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "%s.%s must be set for upsert kafka.",
+                            PROPERTIES_PREFIX, ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        }
     }
 }

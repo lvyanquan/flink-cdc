@@ -538,7 +538,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             return optionalSchema.get();
         } catch (Exception e) {
             throw new IllegalStateException(
-                    String.format("Unable to get latest schema for table \"%s\"", tableId));
+                    String.format("Unable to get latest schema for table \"%s\"", tableId), e);
         }
     }
 
@@ -553,7 +553,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             return optionalSchema.get();
         } catch (Exception e) {
             throw new IllegalStateException(
-                    String.format("Unable to get latest schema for table \"%s\"", tableId));
+                    String.format("Unable to get latest schema for table \"%s\"", tableId), e);
         }
     }
 
