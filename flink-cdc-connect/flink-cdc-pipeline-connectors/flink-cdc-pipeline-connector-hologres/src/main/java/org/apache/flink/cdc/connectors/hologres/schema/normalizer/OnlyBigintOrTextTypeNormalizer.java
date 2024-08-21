@@ -22,8 +22,8 @@ import org.apache.flink.cdc.common.data.ArrayData;
 import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.types.ArrayType;
 import org.apache.flink.cdc.common.types.DataType;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.StringOrBigintHoloColumnTransformer;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.StringOrBigintPgTypeTransformer;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.OnlyBigintOrTextHoloColumnConverter;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.OnlyBigintOrTextPgTypeConverter;
 
 import com.alibaba.hologres.client.model.Column;
 
@@ -36,7 +36,7 @@ import static org.apache.flink.cdc.common.types.DataTypeChecks.getPrecision;
 import static org.apache.flink.cdc.common.types.DataTypeChecks.getScale;
 
 /**
- * Transforms CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} or
+ * Convert CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} or
  * hologres type in String or Bigint mode.
  *
  * <p>TINYINT、SMALLINT、INT、BIGINT -> PG_BIGINT
@@ -44,21 +44,21 @@ import static org.apache.flink.cdc.common.types.DataTypeChecks.getScale;
  * <p>others -> PG_TEXT
  */
 @Internal
-public class StringOrBigintTypeNormalizer extends NormalTypeNormalizer {
+public class OnlyBigintOrTextTypeNormalizer extends StandardTypeNormalizer {
     private static final long serialVersionUID = 1L;
 
     @Override
     public String transformToHoloType(DataType dataType, boolean isPrimaryKey) {
-        StringOrBigintPgTypeTransformer stringOrBigintPgTypeTransformer =
-                new StringOrBigintPgTypeTransformer(isPrimaryKey);
-        return dataType.accept(stringOrBigintPgTypeTransformer);
+        OnlyBigintOrTextPgTypeConverter onlyBigintOrTextPgTypeConverter =
+                new OnlyBigintOrTextPgTypeConverter(isPrimaryKey);
+        return dataType.accept(onlyBigintOrTextPgTypeConverter);
     }
 
     @Override
     public Column transformToHoloColumn(DataType dataType, boolean isPrimaryKey) {
-        StringOrBigintHoloColumnTransformer stringOrBigintHoloColumnTransformer =
-                new StringOrBigintHoloColumnTransformer(isPrimaryKey);
-        return dataType.accept(stringOrBigintHoloColumnTransformer);
+        OnlyBigintOrTextHoloColumnConverter onlyBigintOrTextHoloColumnConverter =
+                new OnlyBigintOrTextHoloColumnConverter(isPrimaryKey);
+        return dataType.accept(onlyBigintOrTextHoloColumnConverter);
     }
 
     protected RecordData.FieldGetter createDataTypeToRecordFieldGetter(

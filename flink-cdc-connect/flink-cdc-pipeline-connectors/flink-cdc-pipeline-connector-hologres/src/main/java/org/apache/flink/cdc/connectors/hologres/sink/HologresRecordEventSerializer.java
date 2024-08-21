@@ -96,7 +96,7 @@ public class HologresRecordEventSerializer implements HologresRecordSerializer<E
                 inferTableSchema(tableInfo.schema, tableId, shardKeys, hologresTypeNormalizer);
         tableInfo.holoTableSchema = newHoloTableSchema;
         tableInfo.fieldGetters =
-                hologresTypeNormalizer.createFieldGetters(newSchema, param.getZoneId());
+                hologresTypeNormalizer.getNormalizedFieldGetters(newSchema, param.getZoneId());
         tableInfoMap.put(tableId, tableInfo);
         return new HologresSchemaFlushRecord(newHoloTableSchema);
     }

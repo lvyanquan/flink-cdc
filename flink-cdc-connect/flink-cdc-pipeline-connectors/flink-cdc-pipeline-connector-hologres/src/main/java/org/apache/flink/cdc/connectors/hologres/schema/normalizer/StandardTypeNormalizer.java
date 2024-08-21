@@ -23,8 +23,8 @@ import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.ArrayType;
 import org.apache.flink.cdc.common.types.DataType;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.NormalHoloColumnTransformer;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.NormalPgTypeTransformer;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.StandardHoloColumnConverter;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.StandardPgTypeConverter;
 
 import com.alibaba.hologres.client.model.Column;
 
@@ -38,28 +38,28 @@ import java.time.ZoneId;
 import static org.apache.flink.cdc.common.types.DataTypeChecks.getPrecision;
 import static org.apache.flink.cdc.common.types.DataTypeChecks.getScale;
 
-/** Transforms CDC {@link DataType} to Hologres Type in normal type normalize mode. */
+/** Convert CDC {@link DataType} to Hologres Type in normal type normalize mode. */
 @Internal
-public class NormalTypeNormalizer implements HologresTypeNormalizer {
+public class StandardTypeNormalizer implements HologresTypeNormalizer {
     private static final long serialVersionUID = 1L;
 
-    public NormalTypeNormalizer() {}
+    public StandardTypeNormalizer() {}
 
     @Override
     public String transformToHoloType(DataType dataType, boolean isPrimaryKey) {
-        NormalPgTypeTransformer normalPgTypeTransformer = new NormalPgTypeTransformer(isPrimaryKey);
-        return dataType.accept(normalPgTypeTransformer);
+        StandardPgTypeConverter standardPgTypeConverter = new StandardPgTypeConverter(isPrimaryKey);
+        return dataType.accept(standardPgTypeConverter);
     }
 
     @Override
     public Column transformToHoloColumn(DataType dataType, boolean isPrimaryKey) {
-        NormalHoloColumnTransformer holoColumnTransformer =
-                new NormalHoloColumnTransformer(isPrimaryKey);
+        StandardHoloColumnConverter holoColumnTransformer =
+                new StandardHoloColumnConverter(isPrimaryKey);
         return dataType.accept(holoColumnTransformer);
     }
 
     @Override
-    public RecordData.FieldGetter[] createFieldGetters(Schema schema, ZoneId zoneId) {
+    public RecordData.FieldGetter[] getNormalizedFieldGetters(Schema schema, ZoneId zoneId) {
         RecordData.FieldGetter[] fieldGetters = new RecordData.FieldGetter[schema.getColumnCount()];
         for (int i = 0; i < schema.getColumnCount(); i++) {
             org.apache.flink.cdc.common.schema.Column column = schema.getColumns().get(i);

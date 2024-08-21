@@ -250,7 +250,7 @@ public class HologresSinkITCase extends HologresTestBase {
                     expected,
                     true,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    TypeNormalizationStrategy.NORMAL,
+                    TypeNormalizationStrategy.STANDARD,
                     partitionKeys,
                     ZoneId.systemDefault());
         } finally {
@@ -433,7 +433,7 @@ public class HologresSinkITCase extends HologresTestBase {
                 events,
                 false,
                 DeleteStrategy.IGNORE_DELETE,
-                TypeNormalizationStrategy.NORMAL,
+                TypeNormalizationStrategy.STANDARD,
                 ZoneId.systemDefault());
         String[] expected = new String[] {"1,Alice", "2,Bob"};
         String[] fieldNames = {"h", "c"};
@@ -497,7 +497,7 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
-    public void testInsertWithTolerateTypeNormalizationStrategy() throws Exception {
+    public void testInsertWithTolerateInBroadenStrategy() throws Exception {
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME( "
                         + "tiny_int_type bigint, "
@@ -568,7 +568,7 @@ public class HologresSinkITCase extends HologresTestBase {
                     expected,
                     false,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    TypeNormalizationStrategy.TOLERANCE,
+                    TypeNormalizationStrategy.BROADEN,
                     new String[0],
                     ZoneId.systemDefault());
         } finally {
@@ -577,7 +577,7 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
-    public void testUpdateWithTolerateTypeNormalizationStrategy() throws Exception {
+    public void testUpdateWithTolerateWithBroadenStrategy() throws Exception {
         String typeNormalizationTable = "tolerate_2_" + sinkTable;
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME( "
@@ -676,7 +676,7 @@ public class HologresSinkITCase extends HologresTestBase {
                     events,
                     false,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    TypeNormalizationStrategy.TOLERANCE,
+                    TypeNormalizationStrategy.BROADEN,
                     ZoneId.systemDefault());
 
             String[] expected =
@@ -701,7 +701,7 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
-    public void testInsertWithStringOrBigIntTypeNormalizationStrategy() throws Exception {
+    public void testInsertWithOnlyBigIntOrTextStrategy() throws Exception {
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME(\n"
                         + "    a text,\n"
@@ -805,7 +805,7 @@ public class HologresSinkITCase extends HologresTestBase {
                     expected,
                     false,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    TypeNormalizationStrategy.STRING_OR_BIGINT,
+                    TypeNormalizationStrategy.ONLY_BIGINT_OR_TEXT,
                     new String[0],
                     ZoneId.of("+06:00"));
         } finally {
@@ -814,7 +814,7 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
-    public void testUpdateWithStringOrBigIntTypeNormalizationStrategy() throws Exception {
+    public void testUpdateWithOnlyBigIntOrTextStrategy() throws Exception {
         String typeNormalizationTable = "string_or_bigint_2_" + sinkTable;
         String prepareCreateTableSql =
                 "CREATE TABLE TABLE_NAME( "
@@ -913,7 +913,7 @@ public class HologresSinkITCase extends HologresTestBase {
                     events,
                     false,
                     DeleteStrategy.DELETE_ROW_ON_PK,
-                    TypeNormalizationStrategy.TOLERANCE,
+                    TypeNormalizationStrategy.BROADEN,
                     ZoneId.systemDefault());
 
             String[] expected =

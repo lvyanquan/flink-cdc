@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.hologres.schema.transformer;
+package org.apache.flink.cdc.connectors.hologres.schema.converter;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.cdc.common.types.ArrayType;
@@ -49,7 +49,7 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_C
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_TEXT;
 
 /**
- * Transforms CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} in
+ * Convert CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} in
  * String or Bigint mode.
  *
  * <p>TINYINT、SMALLINT、INT、BIGINT -> PG_BIGINT
@@ -57,12 +57,12 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_T
  * <p>others -> PG_TEXT
  */
 @Internal
-public class StringOrBigintHoloColumnTransformer extends DataTypeDefaultVisitor<Column> {
+public class OnlyBigintOrTextHoloColumnConverter extends DataTypeDefaultVisitor<Column> {
     protected final boolean isPrimaryKey;
 
     protected final com.alibaba.hologres.client.model.Column holoColumn;
 
-    public StringOrBigintHoloColumnTransformer(boolean isPrimaryKey) {
+    public OnlyBigintOrTextHoloColumnConverter(boolean isPrimaryKey) {
         this.isPrimaryKey = isPrimaryKey;
         holoColumn = new com.alibaba.hologres.client.model.Column();
         holoColumn.setPrimaryKey(isPrimaryKey);

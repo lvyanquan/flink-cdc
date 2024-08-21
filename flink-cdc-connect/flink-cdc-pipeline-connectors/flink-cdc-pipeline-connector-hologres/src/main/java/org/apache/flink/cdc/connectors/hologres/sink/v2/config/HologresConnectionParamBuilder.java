@@ -81,7 +81,8 @@ public class HologresConnectionParamBuilder {
 
     private Boolean enableDeduplication = true;
 
-    private TypeNormalizationStrategy typeNormalizationStrategy = TypeNormalizationStrategy.NORMAL;
+    private TypeNormalizationStrategy typeNormalizationStrategy =
+            TypeNormalizationStrategy.STANDARD;
 
     private String jdbcSharedConnectionPoolName = "cdc-default";
 

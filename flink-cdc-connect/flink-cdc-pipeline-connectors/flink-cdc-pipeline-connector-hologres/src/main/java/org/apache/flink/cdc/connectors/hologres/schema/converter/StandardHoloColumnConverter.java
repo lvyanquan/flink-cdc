@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.hologres.schema.transformer;
+package org.apache.flink.cdc.connectors.hologres.schema.converter;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.cdc.common.types.ArrayType;
@@ -66,14 +66,14 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_T
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_TIMESTAMP_TIME_PRECISION;
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_VARCHAR_MAX_SIZE;
 
-/** Transforms CDC {@link DataType} to Postgres(or hologres ) data type string. */
+/** Convert CDC {@link DataType} to Postgres(or hologres ) data type string. */
 @Internal
-public class NormalHoloColumnTransformer extends DataTypeDefaultVisitor<Column> {
+public class StandardHoloColumnConverter extends DataTypeDefaultVisitor<Column> {
     protected final boolean isPrimaryKey;
 
     protected final com.alibaba.hologres.client.model.Column holoColumn;
 
-    public NormalHoloColumnTransformer(boolean isPrimaryKey) {
+    public StandardHoloColumnConverter(boolean isPrimaryKey) {
         this.isPrimaryKey = isPrimaryKey;
         holoColumn = new com.alibaba.hologres.client.model.Column();
         holoColumn.setPrimaryKey(isPrimaryKey);

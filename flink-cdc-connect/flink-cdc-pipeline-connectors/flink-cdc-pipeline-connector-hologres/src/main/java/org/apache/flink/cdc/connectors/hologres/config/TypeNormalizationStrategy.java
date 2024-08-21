@@ -17,32 +17,35 @@
 
 package org.apache.flink.cdc.connectors.hologres.config;
 
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.BroadenTypeNormalizer;
 import org.apache.flink.cdc.connectors.hologres.schema.normalizer.HologresTypeNormalizer;
-import org.apache.flink.cdc.connectors.hologres.schema.normalizer.NormalTypeNormalizer;
-import org.apache.flink.cdc.connectors.hologres.schema.normalizer.StringOrBigintTypeNormalizer;
-import org.apache.flink.cdc.connectors.hologres.schema.normalizer.TolerantTypeNormalizer;
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.OnlyBigintOrTextTypeNormalizer;
+import org.apache.flink.cdc.connectors.hologres.schema.normalizer.StandardTypeNormalizer;
 import org.apache.flink.util.FlinkRuntimeException;
 
 /**
- * The strategy when hologres sink transform upstream data to holo type. If using NORMAL, each type
- * is mapping to corresponding type in hologres. If using TOLERANCE, each type is mapping to
- * corresponding widest type in hologres. If using TOLERANCE, tiny int, smallint, int, long and
- * bigint are mapping to bigint in hologres, while others are mapping to string in hologres.
+ * The strategy when hologres sink transform upstream data to holo type.
+ *
+ * <p>NORMAL: Flink CDC type to PG type conversion according to standard.
+ *
+ * <p>BROADEN: Flink CDC type converted to a broader Holo type.
+ *
+ * <p>ONLY_BIGINT_OR_TEXT: ALL Flink CDC types converted to BIGINT or STRING types in Holo.
  */
 public enum TypeNormalizationStrategy {
-    NORMAL,
-    TOLERANCE,
-    STRING_OR_BIGINT;
+    STANDARD,
+    BROADEN,
+    ONLY_BIGINT_OR_TEXT;
 
     public static HologresTypeNormalizer getHologresTypeNormalizer(
             TypeNormalizationStrategy typeNormalizationStrategy) {
         switch (typeNormalizationStrategy) {
-            case NORMAL:
-                return new NormalTypeNormalizer();
-            case TOLERANCE:
-                return new TolerantTypeNormalizer();
-            case STRING_OR_BIGINT:
-                return new StringOrBigintTypeNormalizer();
+            case STANDARD:
+                return new StandardTypeNormalizer();
+            case BROADEN:
+                return new BroadenTypeNormalizer();
+            case ONLY_BIGINT_OR_TEXT:
+                return new OnlyBigintOrTextTypeNormalizer();
             default:
                 throw new FlinkRuntimeException(
                         "Not support typeNormalizationStrategy:" + typeNormalizationStrategy);

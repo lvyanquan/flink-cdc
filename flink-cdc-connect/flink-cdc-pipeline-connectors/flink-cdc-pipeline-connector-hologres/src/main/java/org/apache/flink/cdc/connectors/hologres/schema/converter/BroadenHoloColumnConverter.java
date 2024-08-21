@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.hologres.schema.transformer;
+package org.apache.flink.cdc.connectors.hologres.schema.converter;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.cdc.common.types.ArrayType;
@@ -40,7 +40,7 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_T
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_TEXT_ARRAY;
 
 /**
- * Transforms CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} in
+ * Convert CDC {@link DataType} to Hologres {@link com.alibaba.hologres.client.model.Column} in
  * Normalization mode.
  *
  * <p>TINYINT、SMALLINT、INT、BIGINT -> PG_BIGINT
@@ -50,8 +50,8 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_T
  * <p>FLOAT、DOUBLE -> PG_DOUBLE_PRECISION
  */
 @Internal
-public class TolerantNormalHoloColumnTransformer extends NormalHoloColumnTransformer {
-    public TolerantNormalHoloColumnTransformer(boolean isPrimaryKey) {
+public class BroadenHoloColumnConverter extends StandardHoloColumnConverter {
+    public BroadenHoloColumnConverter(boolean isPrimaryKey) {
         super(isPrimaryKey);
     }
 

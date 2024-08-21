@@ -28,13 +28,20 @@ import java.io.Serializable;
 import java.time.ZoneId;
 
 /**
- * Transform From CDC data types to Hologers/Postgres types or HoloColumn which depends on {@link
+ * Convert CDC data types to Hologers/Postgres types or HoloColumn which depends on {@link
  * org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy}.
  */
 @Internal
 public interface HologresTypeNormalizer extends Serializable {
 
-    /** Transforms CDC {@link DataType} to Postgres(or hologres ) data type string. */
+    /**
+     * Normalizes CDC {@link Column} to Hologres {@link com.alibaba.hologres.client.model.Column}.
+     * com.alibaba.hologres.client.model.Column normalize(Column column, boolean isPrimaryKey)
+     *
+     * @param dataType
+     * @param isPrimaryKey
+     * @return
+     */
     String transformToHoloType(DataType dataType, boolean isPrimaryKey);
 
     /**
@@ -51,5 +58,5 @@ public interface HologresTypeNormalizer extends Serializable {
      * @param schema the schema type of the RecordData
      * @return
      */
-    RecordData.FieldGetter[] createFieldGetters(Schema schema, ZoneId zoneId);
+    RecordData.FieldGetter[] getNormalizedFieldGetters(Schema schema, ZoneId zoneId);
 }

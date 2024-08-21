@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.hologres.schema.transformer;
+package org.apache.flink.cdc.connectors.hologres.schema.converter;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.cdc.common.types.ArrayType;
@@ -43,18 +43,18 @@ import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_B
 import static org.apache.flink.cdc.connectors.hologres.schema.HologresTypes.PG_TEXT;
 
 /**
- * Transforms CDC {@link DataType} to to Postgres(or hologres ) data type string.
+ * Convert CDC {@link DataType} to to Postgres(or hologres ) data type string.
  *
  * <p>TINYINT、SMALLINT、INT、BIGINT -> PG_BIGINT
  *
  * <p>others -> PG_TEXT.
  */
 @Internal
-public class StringOrBigintPgTypeTransformer extends DataTypeDefaultVisitor<String> {
+public class OnlyBigintOrTextPgTypeConverter extends DataTypeDefaultVisitor<String> {
 
     private final boolean isPrimaryKey;
 
-    public StringOrBigintPgTypeTransformer(boolean isPrimaryKey) {
+    public OnlyBigintOrTextPgTypeConverter(boolean isPrimaryKey) {
         this.isPrimaryKey = isPrimaryKey;
     }
 

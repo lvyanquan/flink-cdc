@@ -424,7 +424,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             tableOptions.put("orientation", "row");
             tableOptions.put("CLUSTERING_KEY", "a");
             HologresMetadataApplier applier =
-                    getHologresMetadataApplier(tableOptions, TypeNormalizationStrategy.NORMAL);
+                    getHologresMetadataApplier(tableOptions, TypeNormalizationStrategy.STANDARD);
 
             // 1. create table
             Schema schema =
@@ -621,7 +621,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testCreateTableAllTypeInTolerance() {
+    public void testCreateTableAllTypeWithOnlyBroadenStrategy() {
         Object[][] allTypeMapping =
                 new Object[][] {
                     new Object[] {
@@ -716,8 +716,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
 
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier =
-                    getHologresMetadataApplier(
-                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
+                    getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.BROADEN);
 
             // 1. create table
             Schema.Builder builder = Schema.newBuilder();
@@ -750,11 +749,10 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testAddColumnInTolerance() throws HoloClientException {
+    public void testAddColumnWithOnlyBroadenStrategy() throws HoloClientException {
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier =
-                    getHologresMetadataApplier(
-                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
+                    getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.BROADEN);
             Schema schema =
                     Schema.newBuilder()
                             .physicalColumn("a", DataTypes.INT().notNull())
@@ -795,12 +793,11 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testAlterColumnInTolerance() {
+    public void testAlterColumnWithOnlyBroadenStrategy() {
 
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier =
-                    getHologresMetadataApplier(
-                            new HashMap<>(), TypeNormalizationStrategy.TOLERANCE);
+                    getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.BROADEN);
 
             // 1. create table
             Schema schema =
@@ -868,7 +865,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testCreateTableAllTypeInStringOrBigint() {
+    public void testCreateTableAllTypeWithOnlyBigintOrTextStrategy() {
         Object[][] allTypeMapping =
                 new Object[][] {
                     new Object[] {
@@ -953,7 +950,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier =
                     getHologresMetadataApplier(
-                            new HashMap<>(), TypeNormalizationStrategy.STRING_OR_BIGINT);
+                            new HashMap<>(), TypeNormalizationStrategy.ONLY_BIGINT_OR_TEXT);
 
             // 1. create table
             Schema.Builder builder = Schema.newBuilder();
@@ -1135,7 +1132,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     private HologresMetadataApplier getHologresMetadataApplier() {
-        return getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.NORMAL);
+        return getHologresMetadataApplier(new HashMap<>(), TypeNormalizationStrategy.STANDARD);
     }
 
     private HologresMetadataApplier getHologresMetadataApplier(

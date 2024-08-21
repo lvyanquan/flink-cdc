@@ -19,13 +19,13 @@ package org.apache.flink.cdc.connectors.hologres.schema.normalizer;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.cdc.common.types.DataType;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.TolerantNormalHoloColumnTransformer;
-import org.apache.flink.cdc.connectors.hologres.schema.transformer.TolerantNormalPgTypeTransformer;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.BroadenHoloColumnConverter;
+import org.apache.flink.cdc.connectors.hologres.schema.converter.BroadenPgTypeConverter;
 
 import com.alibaba.hologres.client.model.Column;
 
 /**
- * Transforms CDC {@link DataType} to Hologres Type in tolerant type normalize mode.
+ * Convert CDC {@link DataType} to Hologres Type in tolerant type normalize mode.
  *
  * <p>TINYINT、SMALLINT、INT、BIGINT -> PG_BIGINT
  *
@@ -34,24 +34,24 @@ import com.alibaba.hologres.client.model.Column;
  * <p>DOUBLE -> PG_DOUBLE_PRECISION
  */
 @Internal
-public class TolerantTypeNormalizer extends NormalTypeNormalizer {
+public class BroadenTypeNormalizer extends StandardTypeNormalizer {
     private static final long serialVersionUID = 1L;
 
-    public TolerantTypeNormalizer() {
+    public BroadenTypeNormalizer() {
         super();
     }
 
     @Override
     public String transformToHoloType(DataType dataType, boolean isPrimaryKey) {
-        TolerantNormalPgTypeTransformer tolerantNormalPgTypeTransformer =
-                new TolerantNormalPgTypeTransformer(isPrimaryKey);
+        BroadenPgTypeConverter tolerantNormalPgTypeTransformer =
+                new BroadenPgTypeConverter(isPrimaryKey);
         return dataType.accept(tolerantNormalPgTypeTransformer);
     }
 
     @Override
     public Column transformToHoloColumn(DataType dataType, boolean isPrimaryKey) {
-        TolerantNormalHoloColumnTransformer tolerantHoloColumnTransformer =
-                new TolerantNormalHoloColumnTransformer(isPrimaryKey);
+        BroadenHoloColumnConverter tolerantHoloColumnTransformer =
+                new BroadenHoloColumnConverter(isPrimaryKey);
         return dataType.accept(tolerantHoloColumnTransformer);
     }
 }
