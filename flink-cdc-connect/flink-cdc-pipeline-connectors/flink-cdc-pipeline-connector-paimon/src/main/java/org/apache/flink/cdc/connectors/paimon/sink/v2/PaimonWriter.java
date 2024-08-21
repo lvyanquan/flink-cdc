@@ -21,6 +21,8 @@ import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
 import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.FlushEvent;
+import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
@@ -35,13 +37,16 @@ import org.apache.paimon.memory.MemoryPoolFactory;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.utils.ExecutorThreadFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -49,6 +54,8 @@ import java.util.stream.Collectors;
 /** A {@link Sink} to write {@link DataChangeEvent} to Paimon storage. */
 public class PaimonWriter<InputT>
         implements TwoPhaseCommittingSink.PrecommittingSinkWriter<InputT, MultiTableCommittable> {
+
+    protected static final Logger LOGGER = LoggerFactory.getLogger(PaimonWriter.class);
 
     // use `static` because Catalog is unSerializable.
     private static Catalog catalog;
@@ -66,19 +73,25 @@ public class PaimonWriter<InputT>
     private final Map<Identifier, StoreSinkWrite> writes;
     private final ExecutorService compactExecutor;
     private final MetricGroup metricGroup;
-    private final List<MultiTableCommittable> committables;
+    private final Set<MultiTableCommittable> committables;
+
+    private final Options catalogOptions;
+
+    private final ReadableConfig flinkConf;
 
     public PaimonWriter(
             Options catalogOptions,
             MetricGroup metricGroup,
             String commitUser,
-            PaimonRecordSerializer<InputT> serializer) {
-        catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
+            PaimonRecordSerializer<InputT> serializer,
+            ReadableConfig flinkConf) {
+        this.flinkConf = flinkConf;
+        this.catalogOptions = catalogOptions;
         this.metricGroup = metricGroup;
         this.commitUser = commitUser;
         this.tables = new HashMap<>();
         this.writes = new HashMap<>();
-        this.committables = new ArrayList<>();
+        this.committables = new HashSet<>();
         this.ioManager = new IOManagerAsync();
         this.compactExecutor =
                 Executors.newSingleThreadScheduledExecutor(
@@ -96,6 +109,10 @@ public class PaimonWriter<InputT>
 
     @Override
     public void write(InputT event, Context context) throws IOException {
+        if (catalog == null) {
+            DlfCatalogUtil.convertOptionToDlf(catalogOptions, flinkConf);
+            catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
+        }
         PaimonEvent paimonEvent = serializer.serialize(event);
         Identifier tableId = paimonEvent.getTableId();
         if (paimonEvent.isShouldRefreshSchema()) {
@@ -130,6 +147,7 @@ public class PaimonWriter<InputT>
                                                 memoryPoolFactory,
                                                 metricGroup);
                                 storeSinkWrite.withCompactExecutor(compactExecutor);
+                                LOGGER.debug("Succeed to get table write " + tableId);
                                 return storeSinkWrite;
                             });
             try {
@@ -171,8 +189,15 @@ public class PaimonWriter<InputT>
             committables.addAll(
                     write.prepareCommit(waitCompaction, checkpointId).stream()
                             .map(
-                                    committable ->
-                                            MultiTableCommittable.fromCommittable(key, committable))
+                                    committable -> {
+                                        LOGGER.debug(
+                                                "Writer hash: "
+                                                        + write.hashCode()
+                                                        + ", Prepare commit: "
+                                                        + committable);
+                                        return MultiTableCommittable.fromCommittable(
+                                                key, committable);
+                                    })
                             .collect(Collectors.toList()));
         }
     }

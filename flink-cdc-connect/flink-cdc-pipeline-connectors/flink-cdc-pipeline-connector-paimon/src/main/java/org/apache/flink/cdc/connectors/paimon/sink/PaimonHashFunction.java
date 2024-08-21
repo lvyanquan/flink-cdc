@@ -22,8 +22,14 @@ import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.function.HashFunction;
 import org.apache.flink.cdc.common.schema.Schema;
+import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonWriterHelper;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.runtime.dlf.DlfResourceInfosCollector;
 
+import com.aliyun.datalake.common.DlfDataToken;
+import com.aliyun.datalake.external.com.fasterxml.jackson.databind.JsonNode;
+import com.aliyun.datalake.external.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.data.GenericRow;
@@ -31,6 +37,8 @@ import org.apache.paimon.flink.FlinkCatalogFactory;
 import org.apache.paimon.flink.sink.RowAssignerChannelComputer;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.table.FileStoreTable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.ZoneId;
@@ -44,17 +52,37 @@ public class PaimonHashFunction implements HashFunction<DataChangeEvent>, Serial
 
     private static final long serialVersionUID = 1L;
 
+    protected static final Logger LOGGER = LoggerFactory.getLogger(PaimonHashFunction.class);
+
     private final List<RecordData.FieldGetter> fieldGetters;
 
     private final RowAssignerChannelComputer channelComputer;
 
+    private Catalog catalog;
+
     public PaimonHashFunction(
-            Options options, TableId tableId, Schema schema, ZoneId zoneId, int parallelism) {
-        Catalog catalog = FlinkCatalogFactory.createPaimonCatalog(options);
+            Options options,
+            TableId tableId,
+            Schema schema,
+            ZoneId zoneId,
+            int parallelism,
+            ReadableConfig flinkConf,
+            String token) {
+        DlfCatalogUtil.convertOptionToDlf(options, flinkConf);
         FileStoreTable table;
         try {
+            if (options.containsKey("metastore") && options.get("metastore").equals("dlf-paimon")) {
+                LOGGER.debug("Try to write token: " + token);
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode root = mapper.readTree(token);
+                String identifier = root.get("Identifier").asText();
+                DlfDataToken dlfDataToken = DlfDataToken.fromJson(token, identifier);
+                DlfResourceInfosCollector.setDataTokenLocally(flinkConf, dlfDataToken);
+            }
+            catalog = FlinkCatalogFactory.createPaimonCatalog(options);
             table = (FileStoreTable) catalog.getTable(Identifier.fromString(tableId.toString()));
-        } catch (Catalog.TableNotExistException e) {
+            LOGGER.debug("Succeed to write table token " + table.name());
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
         this.fieldGetters = PaimonWriterHelper.createFieldGetters(schema, zoneId);

@@ -32,6 +32,7 @@ import org.apache.flink.cdc.connectors.paimon.sink.v2.OperatorIDGenerator;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonWriterHelper;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.TableSchemaInfo;
 import org.apache.flink.cdc.runtime.operators.sink.SchemaEvolutionClient;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
@@ -44,7 +45,7 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.data.GenericRow;
-import org.apache.paimon.flink.FlinkCatalogFactory;
+import org.apache.paimon.flink.VvrCatalogFactory;
 import org.apache.paimon.index.BucketAssigner;
 import org.apache.paimon.index.HashBucketAssigner;
 import org.apache.paimon.options.Options;
@@ -53,6 +54,8 @@ import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.sink.RowKeyExtractor;
 import org.apache.paimon.table.sink.RowPartitionKeyExtractor;
 import org.apache.paimon.utils.MathUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -62,6 +65,8 @@ import java.util.Optional;
 /** Assign bucket for every given {@link DataChangeEvent}. */
 public class BucketAssignOperator extends AbstractStreamOperator<Event>
         implements OneInputStreamOperator<Event, Event> {
+
+    protected static final Logger LOGGER = LoggerFactory.getLogger(BucketAssignOperator.class);
 
     public final String commitUser;
 
@@ -85,19 +90,25 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
 
     private final ZoneId zoneId;
 
+    protected final ReadableConfig flinkConf;
+
     public BucketAssignOperator(
-            Options catalogOptions, String schemaOperatorUid, ZoneId zoneId, String commitUser) {
+            Options catalogOptions,
+            String schemaOperatorUid,
+            ZoneId zoneId,
+            String commitUser,
+            ReadableConfig flinkConf) {
         this.catalogOptions = catalogOptions;
         this.chainingStrategy = ChainingStrategy.ALWAYS;
         this.schemaOperatorUid = schemaOperatorUid;
         this.commitUser = commitUser;
         this.zoneId = zoneId;
+        this.flinkConf = flinkConf;
     }
 
     @Override
     public void open() throws Exception {
         super.open();
-        this.catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
         this.bucketAssignerMap = new HashMap<>();
         this.totalTasksNumber = getRuntimeContext().getNumberOfParallelSubtasks();
         this.currentTaskNumber = getRuntimeContext().getIndexOfThisSubtask();
@@ -119,6 +130,9 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
 
     @Override
     public void processElement(StreamRecord<Event> streamRecord) throws Exception {
+        if (catalog == null) {
+            this.catalog = VvrCatalogFactory.createPaimonCatalog(catalogOptions, flinkConf);
+        }
         Event event = streamRecord.getValue();
         if (event instanceof FlushEvent) {
             output.collect(
@@ -130,7 +144,7 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
 
         if (event instanceof DataChangeEvent) {
             DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
-            if (schemaMaps.containsKey(dataChangeEvent.tableId())) {
+            if (!schemaMaps.containsKey(dataChangeEvent.tableId())) {
                 Optional<Schema> schema =
                         schemaEvolutionClient.getLatestEvolvedSchema(dataChangeEvent.tableId());
                 if (schema.isPresent()) {
@@ -151,7 +165,7 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                             dataChangeEvent,
                             schemaMaps.get(dataChangeEvent.tableId()).getFieldGetters());
             switch (tuple4.f0) {
-                case DYNAMIC:
+                case HASH_DYNAMIC:
                     {
                         bucket =
                                 tuple4.f2.assign(
@@ -159,18 +173,18 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                                         tuple4.f3.trimmedPrimaryKey(genericRow).hashCode());
                         break;
                     }
-                case FIXED:
+                case HASH_FIXED:
                     {
                         tuple4.f1.setRecord(genericRow);
                         bucket = tuple4.f1.bucket();
                         break;
                     }
-                case UNAWARE:
+                case BUCKET_UNAWARE:
                     {
                         bucket = 0;
                         break;
                     }
-                case GLOBAL_DYNAMIC:
+                case CROSS_PARTITION:
                 default:
                     {
                         throw new RuntimeException("Unsupported bucket mode: " + tuple4.f0);
@@ -210,6 +224,7 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
         }
         long targetRowNum = table.coreOptions().dynamicBucketTargetRowNum();
         Integer numAssigners = table.coreOptions().dynamicBucketInitialBuckets();
+        LOGGER.debug("Succeed to get table info " + table);
         return new Tuple4<>(
                 table.bucketMode(),
                 table.createRowKeyExtractor(),

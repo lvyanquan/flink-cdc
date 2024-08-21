@@ -24,13 +24,12 @@ import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
-import org.apache.flink.cdc.common.utils.Preconditions;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonRecordEventSerializer;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonRecordSerializer;
 
-import org.apache.paimon.catalog.Catalog;
-import org.apache.paimon.flink.FlinkCatalogFactory;
 import org.apache.paimon.options.Options;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -46,6 +45,8 @@ import static org.apache.flink.cdc.connectors.paimon.sink.PaimonDataSinkOptions.
 
 /** A {@link DataSinkFactory} to create {@link PaimonDataSink}. */
 public class PaimonDataSinkFactory implements DataSinkFactory {
+
+    protected static final Logger LOGGER = LoggerFactory.getLogger(PaimonDataSinkFactory.class);
 
     public static final String IDENTIFIER = "paimon";
 
@@ -69,12 +70,6 @@ public class PaimonDataSinkFactory implements DataSinkFactory {
                     }
                 });
         Options options = Options.fromMap(catalogOptions);
-        try (Catalog catalog = FlinkCatalogFactory.createPaimonCatalog(options)) {
-            Preconditions.checkNotNull(
-                    catalog.listDatabases(), "catalog option of Paimon is invalid.");
-        } catch (Exception e) {
-            throw new RuntimeException("failed to create or use paimon catalog", e);
-        }
         ZoneId zoneId = ZoneId.systemDefault();
         if (!Objects.equals(
                 context.getPipelineConfiguration().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),
@@ -114,7 +109,8 @@ public class PaimonDataSinkFactory implements DataSinkFactory {
                 partitionMaps,
                 serializer,
                 zoneId,
-                schemaOperatorUid);
+                schemaOperatorUid,
+                context.getFlinkConf());
     }
 
     @Override

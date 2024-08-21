@@ -27,6 +27,7 @@ import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonEventSink;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonRecordSerializer;
+import org.apache.flink.configuration.ReadableConfig;
 
 import org.apache.paimon.options.Options;
 
@@ -54,6 +55,8 @@ public class PaimonDataSink implements DataSink, Serializable {
 
     public final String schemaOperatorUid;
 
+    private final ReadableConfig flinkConf;
+
     public PaimonDataSink(
             Options options,
             Map<String, String> tableOptions,
@@ -61,7 +64,8 @@ public class PaimonDataSink implements DataSink, Serializable {
             Map<TableId, List<String>> partitionMaps,
             PaimonRecordSerializer<Event> serializer,
             ZoneId zoneId,
-            String schemaOperatorUid) {
+            String schemaOperatorUid,
+            ReadableConfig flinkConf) {
         this.options = options;
         this.tableOptions = tableOptions;
         this.commitUser = commitUser;
@@ -69,22 +73,24 @@ public class PaimonDataSink implements DataSink, Serializable {
         this.serializer = serializer;
         this.zoneId = zoneId;
         this.schemaOperatorUid = schemaOperatorUid;
+        this.flinkConf = flinkConf;
     }
 
     @Override
     public EventSinkProvider getEventSinkProvider() {
         return FlinkSinkProvider.of(
-                new PaimonEventSink(options, commitUser, serializer, schemaOperatorUid, zoneId));
+                new PaimonEventSink(
+                        options, commitUser, serializer, schemaOperatorUid, zoneId, flinkConf));
     }
 
     @Override
     public MetadataApplier getMetadataApplier() {
-        return new PaimonMetadataApplier(options, tableOptions, partitionMaps);
+        return new PaimonMetadataApplier(options, tableOptions, partitionMaps, flinkConf);
     }
 
     @Override
     public HashFunctionProvider<DataChangeEvent> getDataChangeEventHashFunctionProvider(
             int parallelism) {
-        return new PaimonHashFunctionProvider(options, zoneId, parallelism);
+        return new PaimonHashFunctionProvider(options, zoneId, parallelism, flinkConf);
     }
 }

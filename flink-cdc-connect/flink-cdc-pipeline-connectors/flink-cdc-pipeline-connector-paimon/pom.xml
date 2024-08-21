@@ -29,7 +29,8 @@ limitations under the License.
     <artifactId>flink-cdc-pipeline-connector-paimon</artifactId>
 
     <properties>
-        <paimon.version>0.8.2</paimon.version>
+        <paimon-ali.version>0.9-ali-dlf-SNAPSHOT</paimon-ali.version>
+        <paimon.version>0.7.0-incubating</paimon.version>
         <hadoop.version>2.8.5</hadoop.version>
         <hive.version>2.3.9</hive.version>
         <mockito.version>3.4.6</mockito.version>
@@ -39,8 +40,8 @@ limitations under the License.
         <!-- paimon dependency -->
         <dependency>
             <groupId>org.apache.paimon</groupId>
-            <artifactId>paimon-flink-${flink.major.version}</artifactId>
-            <version>${paimon.version}</version>
+            <artifactId>paimon-ali-vvr-8.0-vvp</artifactId>
+            <version>${paimon-ali.version}</version>
         </dependency>
 
         <!-- test -->
@@ -253,7 +254,7 @@ limitations under the License.
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.1.1</version>
+                <version>3.6.0</version>
                 <executions>
                     <execution>
                         <id>shade-flink</id>
@@ -266,6 +267,7 @@ limitations under the License.
                             <artifactSet>
                                 <includes>
                                     <include>org.apache.paimon:*</include>
+                                    <include>com.aliyun.datalake:*</include>
                                 </includes>
                             </artifactSet>
                             <relocations>

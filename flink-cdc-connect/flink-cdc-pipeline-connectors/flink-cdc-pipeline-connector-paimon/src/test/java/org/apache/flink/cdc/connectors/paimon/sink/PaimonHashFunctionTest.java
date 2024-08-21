@@ -26,6 +26,7 @@ import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
+import org.apache.flink.configuration.Configuration;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.flink.FlinkCatalogFactory;
@@ -77,7 +78,8 @@ public class PaimonHashFunctionTest {
         Map<String, String> tableOptions = new HashMap<>();
         tableOptions.put("bucket", "10");
         MetadataApplier metadataApplier =
-                new PaimonMetadataApplier(catalogOptions, tableOptions, new HashMap<>());
+                new PaimonMetadataApplier(
+                        catalogOptions, tableOptions, new HashMap<>(), new Configuration());
         Schema schema =
                 Schema.newBuilder()
                         .physicalColumn("col1", DataTypes.STRING().notNull())
@@ -91,7 +93,8 @@ public class PaimonHashFunctionTest {
         BinaryRecordDataGenerator generator =
                 new BinaryRecordDataGenerator(schema.getColumnDataTypes().toArray(new DataType[0]));
         PaimonHashFunction hashFunction =
-                new PaimonHashFunction(catalogOptions, tableId, schema, ZoneId.systemDefault(), 4);
+                new PaimonHashFunction(
+                        catalogOptions, tableId, schema, ZoneId.systemDefault(), 4, null, null);
         DataChangeEvent dataChangeEvent1 =
                 DataChangeEvent.insertEvent(
                         tableId,
