@@ -295,4 +295,11 @@ public class MySqlSourceOptions {
                     .defaultValue(false)
                     .withDescription(
                             "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+
+    @Experimental
+    public static final ConfigOption<Integer> SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE =
+            ConfigOptions.key("scan.parallel-deserialize-changelog.handler.size")
+                    .intType()
+                    .defaultValue(2)
+                    .withDescription("The size of the event handler during parallel conversion.");
 }

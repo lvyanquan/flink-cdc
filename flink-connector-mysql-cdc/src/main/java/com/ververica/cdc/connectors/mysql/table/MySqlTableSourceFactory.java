@@ -77,6 +77,7 @@ import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOption
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED;
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static com.ververica.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_MODE;
@@ -162,6 +163,8 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         boolean readChangelogAsAppend = config.get(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
         boolean scanParallelDeserializeChangelog =
                 config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        int scanParallelDeserializeHandlerSize =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
 
         checkEvolvingScanNewlyAddedTableOption(
                 evolvingScanNewlyAddedTableEnabled, closeIdleReaders);
@@ -228,7 +231,9 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 rdsConfig,
                 scanOnlyDeserializeCapturedTablesChangelog,
                 readChangelogAsAppend,
-                scanParallelDeserializeChangelog);
+                scanParallelDeserializeChangelog,
+                scanChunkAssignStrategy,
+                scanParallelDeserializeHandlerSize);
     }
 
     @Override
@@ -285,6 +290,9 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
         options.add(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        options.add(RDS_BINLOG_ENDPOINT);
+        options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
+        options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
         return options;
     }
 

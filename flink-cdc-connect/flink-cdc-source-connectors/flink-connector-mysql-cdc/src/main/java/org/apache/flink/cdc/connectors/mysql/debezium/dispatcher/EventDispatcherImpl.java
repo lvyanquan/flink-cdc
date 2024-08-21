@@ -23,6 +23,7 @@ import com.lmax.disruptor.YieldingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import io.debezium.config.CommonConnectorConfig;
+import io.debezium.config.Configuration;
 import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.connector.mysql.MySqlChangeRecordEmitter;
 import io.debezium.connector.mysql.MySqlPartition;
@@ -297,10 +298,19 @@ public class EventDispatcherImpl<T extends DataCollectionId>
 
     private void initializeDisruptor() {
         if (disruptor == null) {
+            Configuration configuration = connectorConfig.getConfig();
+            int handlerSize =
+                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
             int bufferSize =
-                    connectorConfig
-                            .getConfig()
-                            .getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+                    handlerSize
+                            * configuration.getInteger(
+                                    SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+            LOG.info(
+                    "Create ringBuffer with "
+                            + handlerSize
+                            + " handlers, "
+                            + bufferSize
+                            + " bufferSize.");
             disruptor =
                     new Disruptor<>(
                             ChangeRecordEvent::new,
@@ -308,10 +318,6 @@ public class EventDispatcherImpl<T extends DataCollectionId>
                             new NamedThreadFactory("ChangeRecordEvent", true),
                             ProducerType.SINGLE,
                             new YieldingWaitStrategy());
-            int handlerSize =
-                    connectorConfig
-                            .getConfig()
-                            .getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
             ChangeRecordEventHandler<T>[] handlers = new ChangeRecordEventHandler[handlerSize];
             for (int i = 0; i < handlerSize; i++) {
                 handlers[i] = new ChangeRecordEventHandler<>(disruptorException);

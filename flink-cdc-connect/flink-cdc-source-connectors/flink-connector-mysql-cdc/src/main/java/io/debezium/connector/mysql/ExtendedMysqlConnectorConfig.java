@@ -69,6 +69,6 @@ public class ExtendedMysqlConnectorConfig {
                     .withType(ConfigDef.Type.INT)
                     .withWidth(ConfigDef.Width.SHORT)
                     .withImportance(ConfigDef.Importance.MEDIUM)
-                    .withDefault(3)
+                    .withDefault(2)
                     .withDescription("The size of the event handler during parallel conversion.");
 }

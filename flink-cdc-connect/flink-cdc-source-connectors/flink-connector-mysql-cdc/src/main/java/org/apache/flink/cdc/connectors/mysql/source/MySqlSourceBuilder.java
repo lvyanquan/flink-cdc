@@ -299,6 +299,12 @@ public class MySqlSourceBuilder<T> {
         return this;
     }
 
+    public MySqlSourceBuilder<T> scanParallelDeserializeHandlerSize(
+            int scanParallelDeserializeHandlerSize) {
+        this.configFactory.scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
+        return this;
+    }
+
     /**
      * Build the {@link MySqlSource}.
      *

@@ -483,8 +483,18 @@ public class MySqlStreamingChangeEventSource
                                 .setMayContainExtraInformation(true));
         client.setEventDeserializer(eventDeserializer);
         if (configuration.getBoolean(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED)) {
+            int handlerSize =
+                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
             int bufferSize =
-                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+                    handlerSize
+                            * configuration.getInteger(
+                                    SCAN_PARALLEL_DESERIALIZE_CHANGELOG_RINGBUFFER_SIZE);
+            LOGGER.info(
+                    "Create ringBuffer with "
+                            + handlerSize
+                            + " handlers, "
+                            + bufferSize
+                            + " bufferSize.");
             disruptor =
                     new Disruptor<>(
                             Event::new,
@@ -492,8 +502,6 @@ public class MySqlStreamingChangeEventSource
                             new NamedThreadFactory(Event.class.getSimpleName(), true),
                             ProducerType.SINGLE,
                             new YieldingWaitStrategy());
-            int handlerSize =
-                    configuration.getInteger(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
             BinlogEventHandler[] handlers = new BinlogEventHandler[handlerSize];
             for (int i = 0; i < handlerSize; i++) {
                 handlers[i] = new BinlogEventHandler(eventDeserializer);

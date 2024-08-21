@@ -76,9 +76,11 @@ public class MySqlSourceConfigFactory implements Serializable {
     @Nullable private AliyunRdsConfig rdsConfig;
     private boolean scanOnlyDeserializeCapturedTablesChangelog = false;
 
-    private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
-
     private boolean scanParallelDeserializeChangelog = false;
+
+    private int scanParallelDeserializeHandlerSize = 2;
+
+    private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
@@ -307,6 +309,12 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
+    public MySqlSourceConfigFactory scanParallelDeserializeHandlerSize(
+            int scanParallelDeserializeHandlerSize) {
+        this.scanParallelDeserializeHandlerSize = scanParallelDeserializeHandlerSize;
+        return this;
+    }
+
     public MySqlSourceConfigFactory scanChunkAssignStrategy(
             AssignStrategy scanChunkAssignStrategy) {
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
@@ -383,7 +391,11 @@ public class MySqlSourceConfigFactory implements Serializable {
                     "scan.only.deserialize.captured.tables.changelog", String.valueOf(true));
         }
         if (scanParallelDeserializeChangelog) {
-            props.setProperty("scan.parallel-deserialize-changelog.enabled", String.valueOf(true));
+            props.setProperty(
+                    SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.key(), String.valueOf(true));
+            props.setProperty(
+                    SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE.key(),
+                    String.valueOf(scanParallelDeserializeHandlerSize));
         }
 
         // override the user-defined debezium properties
