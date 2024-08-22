@@ -166,6 +166,7 @@ public class YamlApplicationRunnerITCase {
                         + "\n"
                         + "pipeline:\n"
                         + "  name: Sync Value Database to value\n"
+                        + "  schema.change.behavior: EVOLVE\n"
                         + "  parallelism: 1";
         JobID jobID = JobID.generate();
         String encryptedYamlContent =

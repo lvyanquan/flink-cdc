@@ -135,7 +135,7 @@ public class KafkaDataSinkFactory implements DataSinkFactory {
         if (kafkaProperties.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG) == null) {
             throw new IllegalArgumentException(
                     String.format(
-                            "%s.%s must be set for upsert kafka.",
+                            "%s%s must be set for upsert kafka.",
                             PROPERTIES_PREFIX, ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         }
     }

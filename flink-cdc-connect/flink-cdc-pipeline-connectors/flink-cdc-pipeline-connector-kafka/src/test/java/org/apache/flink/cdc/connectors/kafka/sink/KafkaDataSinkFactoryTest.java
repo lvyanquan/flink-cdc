@@ -38,7 +38,11 @@ public class KafkaDataSinkFactoryTest {
                 FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSinkFactory.class);
         Assertions.assertThat(sinkFactory).isInstanceOf(KafkaDataSinkFactory.class);
 
-        Configuration conf = Configuration.fromMap(ImmutableMap.<String, String>builder().build());
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put("properties.bootstrap.servers", "test")
+                                .build());
         DataSink dataSink =
                 sinkFactory.createDataSink(
                         new FactoryHelper.DefaultContext(
@@ -56,6 +60,7 @@ public class KafkaDataSinkFactoryTest {
         Configuration conf =
                 Configuration.fromMap(
                         ImmutableMap.<String, String>builder()
+                                .put("properties.bootstrap.servers", "test")
                                 .put("unsupported_key", "unsupported_value")
                                 .build());
 
@@ -82,6 +87,7 @@ public class KafkaDataSinkFactoryTest {
         Configuration conf =
                 Configuration.fromMap(
                         ImmutableMap.<String, String>builder()
+                                .put("properties.bootstrap.servers", "test")
                                 .put("properties.compression.type", "none")
                                 .build());
         DataSink dataSink =

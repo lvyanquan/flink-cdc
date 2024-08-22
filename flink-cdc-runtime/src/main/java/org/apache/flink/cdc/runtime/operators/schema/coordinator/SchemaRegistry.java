@@ -112,14 +112,6 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             String operatorName,
             OperatorCoordinator.Context context,
             MetadataApplier metadataApplier,
-            List<RouteRule> routes) {
-        this(operatorName, context, metadataApplier, routes, SchemaChangeBehavior.EVOLVE);
-    }
-
-    public SchemaRegistry(
-            String operatorName,
-            OperatorCoordinator.Context context,
-            MetadataApplier metadataApplier,
             List<RouteRule> routes,
             SchemaChangeBehavior schemaChangeBehavior) {
         this.context = context;
