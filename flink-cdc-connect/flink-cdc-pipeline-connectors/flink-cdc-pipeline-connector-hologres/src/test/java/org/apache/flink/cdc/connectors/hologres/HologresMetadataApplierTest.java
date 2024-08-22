@@ -21,8 +21,10 @@ import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DropColumnEvent;
+import org.apache.flink.cdc.common.event.DropTableEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.event.TruncateTableEvent;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataType;
@@ -34,7 +36,11 @@ import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectio
 import org.apache.flink.cdc.connectors.hologres.sink.v2.config.HologresConnectionParamBuilder;
 
 import com.alibaba.hologres.client.HoloClient;
+import com.alibaba.hologres.client.Put;
+import com.alibaba.hologres.client.Scan;
 import com.alibaba.hologres.client.exception.HoloClientException;
+import com.alibaba.hologres.client.model.Record;
+import com.alibaba.hologres.client.model.RecordScanner;
 import com.alibaba.hologres.client.model.TableSchema;
 import org.assertj.core.api.Assertions;
 import org.junit.Assert;
@@ -42,12 +48,14 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Test for HologresMetadataApplier. */
 public class HologresMetadataApplierTest extends HologresTestBase {
@@ -1129,6 +1137,160 @@ public class HologresMetadataApplierTest extends HologresTestBase {
         } finally {
             dropTable(sinkTable);
         }
+    }
+
+    @Test
+    public void testTruncateTable() throws HoloClientException {
+        try (HoloClient holoClient = getHoloClient()) {
+            HologresMetadataApplier applier = getHologresMetadataApplier();
+
+            // 1. Initialize table
+            Schema schema =
+                    Schema.newBuilder()
+                            .physicalColumn("a", DataTypes.INT().notNull())
+                            .physicalColumn("b", DataTypes.STRING())
+                            .primaryKey("a")
+                            .build();
+            TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+            CreateTableEvent createTableEvent = new CreateTableEvent(tableId, schema);
+            applier.applySchemaChange(createTableEvent);
+
+            // 2. Push in data
+            TableSchema holoSchema = holoClient.getTableSchema(sinkTable, true);
+
+            holoClient.put(
+                    Arrays.asList(
+                            new Put(holoSchema).setObject("a", 17).setObject("b", "Alice"),
+                            new Put(holoSchema).setObject("a", 18).setObject("b", "Bury"),
+                            new Put(holoSchema).setObject("a", 19).setObject("b", "Carolle")));
+            holoClient.flush();
+
+            // 3. Ensure we've got records written into
+            Assert.assertArrayEquals(
+                    scanRecords(holoClient, holoSchema).stream()
+                            .map(Record::getValues)
+                            .map(
+                                    e ->
+                                            Arrays.stream(e)
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining(" | ")))
+                            .sorted()
+                            .toArray(),
+                    new String[] {"17 | Alice", "18 | Bury", "19 | Carolle"});
+
+            // 4. Check truncate event results
+            TruncateTableEvent truncateTableEvent = new TruncateTableEvent(tableId);
+            applier.applySchemaChange(truncateTableEvent);
+            Assert.assertArrayEquals(
+                    scanRecords(holoClient, holoSchema).stream()
+                            .map(Record::getValues)
+                            .map(
+                                    e ->
+                                            Arrays.stream(e)
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining(" | ")))
+                            .sorted()
+                            .toArray(),
+                    new String[] {});
+
+            // 5. Test it again to ensure new data correctness after TRUNCATE
+            holoClient.put(
+                    Arrays.asList(
+                            new Put(holoSchema).setObject("a", 20).setObject("b", "Derrida"),
+                            new Put(holoSchema).setObject("a", 21).setObject("b", "Eve"),
+                            new Put(holoSchema).setObject("a", 22).setObject("b", "Ferry")));
+            holoClient.flush();
+
+            // 6. Ensure we've got new records written into
+            Assert.assertArrayEquals(
+                    scanRecords(holoClient, holoSchema).stream()
+                            .map(Record::getValues)
+                            .map(
+                                    e ->
+                                            Arrays.stream(e)
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining(" | ")))
+                            .sorted()
+                            .toArray(),
+                    new String[] {"20 | Derrida", "21 | Eve", "22 | Ferry"});
+
+            // 7. Check truncate event results
+            applier.applySchemaChange(truncateTableEvent);
+            Assert.assertArrayEquals(
+                    scanRecords(holoClient, holoSchema).stream()
+                            .map(Record::toString)
+                            .sorted()
+                            .toArray(),
+                    new String[] {});
+
+        } finally {
+            dropTable(sinkTable);
+        }
+    }
+
+    @Test
+    public void testDropTable() throws HoloClientException {
+        try (HoloClient holoClient = getHoloClient()) {
+            HologresMetadataApplier applier = getHologresMetadataApplier();
+
+            // 1. Initialize table
+            Schema schema =
+                    Schema.newBuilder()
+                            .physicalColumn("a", DataTypes.INT().notNull())
+                            .physicalColumn("b", DataTypes.STRING())
+                            .primaryKey("a")
+                            .build();
+            TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+            CreateTableEvent createTableEvent = new CreateTableEvent(tableId, schema);
+            applier.applySchemaChange(createTableEvent);
+
+            // 2. Push in data
+            TableSchema holoSchema = holoClient.getTableSchema(sinkTable, true);
+
+            holoClient.put(
+                    Arrays.asList(
+                            new Put(holoSchema).setObject("a", 17).setObject("b", "Alice"),
+                            new Put(holoSchema).setObject("a", 18).setObject("b", "Bury"),
+                            new Put(holoSchema).setObject("a", 19).setObject("b", "Carolle")));
+            holoClient.flush();
+
+            // 3. Ensure we've got records written into
+            Assert.assertArrayEquals(
+                    scanRecords(holoClient, holoSchema).stream()
+                            .map(Record::getValues)
+                            .map(
+                                    e ->
+                                            Arrays.stream(e)
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining(" | ")))
+                            .sorted()
+                            .toArray(),
+                    new String[] {"17 | Alice", "18 | Bury", "19 | Carolle"});
+
+            // 4. Check drop event results
+            DropTableEvent dropTableEvent = new DropTableEvent(tableId);
+            applier.applySchemaChange(dropTableEvent);
+
+            Assertions.assertThatThrownBy(
+                            () -> System.out.println(holoClient.getTableSchema(sinkTable, true)))
+                    .hasRootCauseInstanceOf(SQLException.class)
+                    .hasMessageContaining(
+                            String.format("can not found table \"public\".\"%s\"", sinkTable));
+
+        } finally {
+            dropTable(sinkTable);
+        }
+    }
+
+    private List<Record> scanRecords(HoloClient client, TableSchema schema)
+            throws HoloClientException {
+        List<Record> records = new ArrayList<>();
+        try (RecordScanner rs = client.scan(Scan.newBuilder(schema).build())) {
+            while (rs.next()) {
+                records.add(rs.getRecord());
+            }
+        }
+        return records;
     }
 
     private HologresMetadataApplier getHologresMetadataApplier() {

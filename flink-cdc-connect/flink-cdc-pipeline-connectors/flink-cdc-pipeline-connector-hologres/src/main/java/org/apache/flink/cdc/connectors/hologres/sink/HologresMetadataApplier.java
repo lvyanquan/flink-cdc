@@ -22,9 +22,11 @@ import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DropColumnEvent;
+import org.apache.flink.cdc.common.event.DropTableEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.event.TruncateTableEvent;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
@@ -87,6 +89,10 @@ public class HologresMetadataApplier implements MetadataApplier {
             applyRenameColumn((RenameColumnEvent) schemaChangeEvent);
         } else if (schemaChangeEvent instanceof AlterColumnTypeEvent) {
             applyAlterColumn((AlterColumnTypeEvent) schemaChangeEvent);
+        } else if (schemaChangeEvent instanceof TruncateTableEvent) {
+            applyTruncateTable((TruncateTableEvent) schemaChangeEvent);
+        } else if (schemaChangeEvent instanceof DropTableEvent) {
+            applyDropTable((DropTableEvent) schemaChangeEvent);
         } else {
             throw new UnsupportedOperationException(
                     "HologresDataSink doesn't support schema change event " + schemaChangeEvent);
@@ -254,6 +260,41 @@ public class HologresMetadataApplier implements MetadataApplier {
             } else {
                 LOG.info("No need to apply idempotent AlterColumnTypeEvent: " + event);
             }
+        } finally {
+            hologresJDBCClientProvider.closeClient();
+        }
+    }
+
+    private void applyTruncateTable(TruncateTableEvent event) {
+        TableId tableId = event.tableId();
+        String pgTableName = getQualifiedPath(tableId);
+        try {
+            HoloClient client = getHologresJDBCClientProvider().getClient();
+            if (!HoloStatementUtils.checkTableExists(client, tableId)) {
+                LOG.warn("Could not truncate table <{}> because it does not exist.", tableId);
+                return;
+            }
+            executeDDL(client, String.format("TRUNCATE TABLE %s;", pgTableName));
+        } catch (HoloClientException | InterruptedException | ExecutionException e) {
+            throw new FlinkRuntimeException(
+                    String.format("Failed to truncate table <%s>", tableId), e);
+        } finally {
+            hologresJDBCClientProvider.closeClient();
+        }
+    }
+
+    private void applyDropTable(DropTableEvent event) {
+        TableId tableId = event.tableId();
+        String pgTableName = getQualifiedPath(tableId);
+        try {
+            HoloClient client = getHologresJDBCClientProvider().getClient();
+            if (!HoloStatementUtils.checkTableExists(client, tableId)) {
+                LOG.warn("Could not drop table <{}> because it does not exist.", tableId);
+                return;
+            }
+            executeDDL(client, String.format("DROP TABLE %s;", pgTableName));
+        } catch (HoloClientException | InterruptedException | ExecutionException e) {
+            throw new FlinkRuntimeException(String.format("Failed to drop table <%s>", tableId), e);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }
