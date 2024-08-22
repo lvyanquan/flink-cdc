@@ -789,7 +789,7 @@ public class HologresSinkITCase extends HologresTestBase {
         // default timezone is asian/shanghai and pipeline time-zone is GMT+06:00
         String[] expected =
                 new String[] {
-                    "a,test character,test text,false,8119.21,1,32767,32768,652482,20.2007,8.58965,2023-11-12,08:30:15,2023-11-11T11:11:11.000000011,2023-11-11T11:11:11.000000011+05:00,2023-11-11T12:11:11.000000011+06:00"
+                    "a,test character,test text,false,8119.21,1,32767,32768,652482,20.2007,8.58965,2023-11-12,08:30:15,2023-11-11 11:11:11.000000011,2023-11-11 11:11:11.000000011+05:00,2023-11-11 06:11:11.000000011"
                 };
         TableId tableId = TableId.tableId("default_namespace", "test", typeNormalizationTable);
 

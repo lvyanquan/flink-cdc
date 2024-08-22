@@ -22,12 +22,14 @@ import org.apache.flink.cdc.common.data.ArrayData;
 import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.types.ArrayType;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.connectors.hologres.data.converter.LocalZonedTimestampDataConverters;
+import org.apache.flink.cdc.connectors.hologres.data.converter.TimestampDataConverters;
+import org.apache.flink.cdc.connectors.hologres.data.converter.ZonedTimestampDataConverters;
 import org.apache.flink.cdc.connectors.hologres.schema.converter.OnlyBigintOrTextHoloColumnConverter;
 import org.apache.flink.cdc.connectors.hologres.schema.converter.OnlyBigintOrTextPgTypeConverter;
 
 import com.alibaba.hologres.client.model.Column;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -111,29 +113,37 @@ public class OnlyBigintOrTextTypeNormalizer extends StandardTypeNormalizer {
                                         .toString();
                 break;
             case TIMESTAMP_WITHOUT_TIME_ZONE:
-                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TIMESTAMP.
+                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TEXT.
                 fieldGetter =
                         record ->
-                                record.getTimestamp(fieldPos, getPrecision(fieldType))
-                                        .toTimestamp()
-                                        .toString();
+                                TimestampDataConverters.getDataFormatConverter(
+                                                String.class.getName())
+                                        .toExternal(
+                                                record.getTimestamp(
+                                                        fieldPos, getPrecision(fieldType)));
                 break;
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                // TIME_WITHOUT_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
+                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TEXT,(use PIPELINE_LOCAL_TIME_ZONE
+                // rather system.default)
                 fieldGetter =
                         record ->
-                                Timestamp.from(
+                                LocalZonedTimestampDataConverters.getDataFormatConverter(
+                                                String.class.getName())
+                                        .toExternal(
                                                 record.getLocalZonedTimestampData(
-                                                                fieldPos, getPrecision(fieldType))
-                                                        .toInstant())
-                                        .toString();
+                                                        fieldPos, getPrecision(fieldType)));
+
                 break;
             case TIMESTAMP_WITH_TIME_ZONE:
-                // TIMESTAMP_WITH_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
+                // TIMESTAMP_WITH_TIME_ZONE will be mapped to PG_TEXT.
                 fieldGetter =
                         record ->
-                                record.getZonedTimestamp(fieldPos, getPrecision(fieldType))
-                                        .toString();
+                                ZonedTimestampDataConverters.getDataFormatConverter(
+                                                String.class.getName())
+                                        .toExternal(
+                                                record.getZonedTimestamp(
+                                                        fieldPos, getPrecision(fieldType)));
+
                 break;
             case CHAR:
                 // CHAR will be mapped to PG_TEXT.

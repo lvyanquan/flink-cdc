@@ -23,6 +23,9 @@ import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.ArrayType;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.connectors.hologres.data.converter.LocalZonedTimestampDataConverters;
+import org.apache.flink.cdc.connectors.hologres.data.converter.TimestampDataConverters;
+import org.apache.flink.cdc.connectors.hologres.data.converter.ZonedTimestampDataConverters;
 import org.apache.flink.cdc.connectors.hologres.schema.converter.StandardHoloColumnConverter;
 import org.apache.flink.cdc.connectors.hologres.schema.converter.StandardPgTypeConverter;
 
@@ -131,29 +134,40 @@ public class StandardTypeNormalizer implements HologresTypeNormalizer {
                                         LocalTime.ofNanoOfDay(
                                                 record.getInt(fieldPos) * 1_000_000L));
                 break;
+
             case TIMESTAMP_WITHOUT_TIME_ZONE:
                 // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TIMESTAMP.
                 fieldGetter =
                         record ->
-                                record.getTimestamp(fieldPos, getPrecision(fieldType))
-                                        .toTimestamp();
+                                TimestampDataConverters.getDataFormatConverter(
+                                                Timestamp.class.getName())
+                                        .toExternal(
+                                                record.getTimestamp(
+                                                        fieldPos, getPrecision(fieldType)));
                 break;
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                 // TIME_WITHOUT_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
                 fieldGetter =
                         record ->
-                                Timestamp.from(
-                                        record.getLocalZonedTimestampData(
-                                                        fieldPos, getPrecision(fieldType))
-                                                .toInstant());
+                                LocalZonedTimestampDataConverters.getDataFormatConverter(
+                                                Timestamp.class.getName())
+                                        .toExternal(
+                                                record.getLocalZonedTimestampData(
+                                                        fieldPos, getPrecision(fieldType)));
+
                 break;
             case TIMESTAMP_WITH_TIME_ZONE:
                 // TIMESTAMP_WITH_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
                 fieldGetter =
                         record ->
-                                record.getZonedTimestamp(fieldPos, getPrecision(fieldType))
-                                        .toTimestamp();
+                                ZonedTimestampDataConverters.getDataFormatConverter(
+                                                Timestamp.class.getName())
+                                        .toExternal(
+                                                record.getZonedTimestamp(
+                                                        fieldPos, getPrecision(fieldType)));
+
                 break;
+
             case CHAR:
                 // CHAR will be mapped to PG_CHAR.
             case VARCHAR:
