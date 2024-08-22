@@ -42,7 +42,6 @@ import org.apache.flink.util.StringUtils;
 
 import com.alibaba.hologres.client.HoloClient;
 import com.alibaba.hologres.client.HoloConfig;
-import com.alibaba.hologres.client.exception.HoloClientException;
 import com.alibaba.hologres.client.model.Column;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +50,6 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.executeDDL;
@@ -116,9 +114,10 @@ public class HologresMetadataApplier implements MetadataApplier {
             String tableDDL = prepareCreateTableStatement(tableId, schema, param.getTableOptions());
             executeDDL(client, tableDDL);
 
-        } catch (HoloClientException | InterruptedException | ExecutionException e) {
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to create the table <%s>", tableId), t);
             throw new FlinkRuntimeException(
-                    String.format("Failed to create the table <%s>", tableId), e);
+                    String.format("Failed to create the table <%s>", tableId), t);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }
@@ -183,8 +182,9 @@ public class HologresMetadataApplier implements MetadataApplier {
                         String.format("BEGIN;\n%s\nCOMMIT;", String.join("\n", addColumnDdlList));
                 executeDDL(client, ddl);
             }
-        } catch (HoloClientException | InterruptedException | ExecutionException e) {
-            throw new FlinkRuntimeException(String.format("Failed to add column <%s>", tableId), e);
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to add column <%s>", tableId), t);
+            throw new FlinkRuntimeException(String.format("Failed to add column <%s>", tableId), t);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }
@@ -229,9 +229,10 @@ public class HologresMetadataApplier implements MetadataApplier {
                         String.format("BEGIN;\n%s\nCOMMIT;", String.join("\n", renameColumnDDls));
                 executeDDL(client, ddl);
             }
-        } catch (HoloClientException | InterruptedException | ExecutionException e) {
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to rename column <%s>", tableId), t);
             throw new FlinkRuntimeException(
-                    String.format("Failed to rename column <%s>", tableId), e);
+                    String.format("Failed to rename column <%s>", tableId), t);
         }
     }
 
@@ -260,6 +261,10 @@ public class HologresMetadataApplier implements MetadataApplier {
             } else {
                 LOG.info("No need to apply idempotent AlterColumnTypeEvent: " + event);
             }
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to alter column <%s>", tableId), t);
+            throw new FlinkRuntimeException(
+                    String.format("Failed to alter column <%s>", tableId), t);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }
@@ -275,9 +280,10 @@ public class HologresMetadataApplier implements MetadataApplier {
                 return;
             }
             executeDDL(client, String.format("TRUNCATE TABLE %s;", pgTableName));
-        } catch (HoloClientException | InterruptedException | ExecutionException e) {
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to truncate table <%s>", tableId), t);
             throw new FlinkRuntimeException(
-                    String.format("Failed to truncate table <%s>", tableId), e);
+                    String.format("Failed to truncate table <%s>", tableId), t);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }
@@ -293,8 +299,9 @@ public class HologresMetadataApplier implements MetadataApplier {
                 return;
             }
             executeDDL(client, String.format("DROP TABLE %s;", pgTableName));
-        } catch (HoloClientException | InterruptedException | ExecutionException e) {
-            throw new FlinkRuntimeException(String.format("Failed to drop table <%s>", tableId), e);
+        } catch (Throwable t) {
+            LOG.error(String.format("Failed to drop table <%s>", tableId), t);
+            throw new FlinkRuntimeException(String.format("Failed to drop table <%s>", tableId), t);
         } finally {
             hologresJDBCClientProvider.closeClient();
         }

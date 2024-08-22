@@ -73,9 +73,7 @@ public class HologresSinkWriter<INPUT> implements SinkWriter<INPUT> {
 
     @Override
     public void flush(boolean endOfInput) throws IOException, InterruptedException {
-        if (hologresWriter != null) {
-            hologresWriter.flush();
-        }
+        getHologresWriter().flush();
     }
 
     @Override

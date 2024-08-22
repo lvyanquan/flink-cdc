@@ -51,8 +51,10 @@ public class HoloStatementUtils {
     public static void executeDDL(HoloClient client, String ddl)
             throws HoloClientException, InterruptedException, ExecutionException {
         try {
+
             client.sql(
                             conn -> {
+                                LOG.info("HoloClient begin to execute ddl statement: {}", ddl);
                                 ConnectionUtil.refreshMeta(conn, 10000);
                                 try (Statement stat = conn.createStatement()) {
                                     // Hologres V2.0 has optimized the syntax for using double
@@ -79,6 +81,7 @@ public class HoloStatementUtils {
                                 return null;
                             })
                     .get();
+            LOG.info("HoloClient success to execute ddl statement: {}", ddl);
         } catch (HoloClientException | InterruptedException | ExecutionException e) {
             LOG.error(String.format("Failed to execute SQL statement '%s' in Hologres", ddl), e);
             throw e;
@@ -93,22 +96,29 @@ public class HoloStatementUtils {
             throws HoloClientException, InterruptedException, ExecutionException {
         List<String[]> res = new ArrayList<>();
         try {
-            return client.sql(
-                            conn -> {
-                                ConnectionUtil.refreshMeta(conn, 10000);
-                                try (Statement stat = conn.createStatement()) {
-                                    ResultSet resultSet = stat.executeQuery(sql);
-                                    while (resultSet.next()) {
-                                        String[] row = new String[fieldCount];
-                                        for (int i = 0; i < fieldCount; i++) {
-                                            row[i] = resultSet.getString(i + 1);
+
+            List<String[]> result =
+                    client.sql(
+                                    conn -> {
+                                        LOG.info(
+                                                "HoloClient begin to execute query statement: {}",
+                                                sql);
+                                        ConnectionUtil.refreshMeta(conn, 10000);
+                                        try (Statement stat = conn.createStatement()) {
+                                            ResultSet resultSet = stat.executeQuery(sql);
+                                            while (resultSet.next()) {
+                                                String[] row = new String[fieldCount];
+                                                for (int i = 0; i < fieldCount; i++) {
+                                                    row[i] = resultSet.getString(i + 1);
+                                                }
+                                                res.add(row);
+                                            }
+                                            return res;
                                         }
-                                        res.add(row);
-                                    }
-                                    return res;
-                                }
-                            })
-                    .get();
+                                    })
+                            .get();
+            LOG.info("HoloClient success to execute query statement: {}", sql);
+            return result;
         } catch (HoloClientException | InterruptedException | ExecutionException e) {
             LOG.error(String.format("Failed to execute SQL statement '%s' in Hologres", sql), e);
             throw e;

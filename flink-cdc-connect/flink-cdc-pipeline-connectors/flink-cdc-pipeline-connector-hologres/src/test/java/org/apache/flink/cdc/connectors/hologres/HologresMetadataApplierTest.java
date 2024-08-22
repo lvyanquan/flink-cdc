@@ -484,13 +484,12 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             CreateTableEvent createTableEvent = new CreateTableEvent(tableId, schema);
             applier.applySchemaChange(createTableEvent);
         } catch (Exception ex) {
-            Assert.assertTrue(
-                    "partition key is not included in PRIMARY KEY",
-                    ex.getMessage()
-                            .contains(
-                                    String.format(
-                                            "PRIMARY KEY constraint on table \"%s\" lacks column \"%s\" which is part of the partition key",
-                                            tableId, "b")));
+            Assertions.assertThat(ex)
+                    .rootCause()
+                    .hasMessageContaining(
+                            String.format(
+                                    "PRIMARY KEY constraint on table \"%s\" lacks column \"%s\" which is part of the partition key",
+                                    tableId, "b"));
         } finally {
             dropTable(sinkTable);
         }
@@ -621,6 +620,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             throw new Exception("If throw this exception, mean that job execute successfully.");
         } catch (Exception ex) {
             Assertions.assertThat(ex)
+                    .rootCause()
                     .hasMessageContaining("Hologres not support alter columnType now");
 
         } finally {
@@ -865,6 +865,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             throw new Exception("If throw this exception, mean that job execute successfully.");
         } catch (Exception ex) {
             Assertions.assertThat(ex)
+                    .rootCause()
                     .hasMessageContaining("Hologres not support alter columnType now");
 
         } finally {

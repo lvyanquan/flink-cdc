@@ -27,10 +27,10 @@ import org.apache.flink.cdc.connectors.hologres.schema.converter.OnlyBigintOrTex
 
 import com.alibaba.hologres.client.model.Column;
 
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 
 import static org.apache.flink.cdc.common.types.DataTypeChecks.getPrecision;
 import static org.apache.flink.cdc.common.types.DataTypeChecks.getScale;
@@ -111,24 +111,25 @@ public class OnlyBigintOrTextTypeNormalizer extends StandardTypeNormalizer {
                                         .toString();
                 break;
             case TIMESTAMP_WITHOUT_TIME_ZONE:
-                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TEXT.
-                fieldGetter =
-                        record -> record.getTimestamp(fieldPos, getPrecision(fieldType)).toString();
-                break;
-            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TEXT,(use PIPELINE_LOCAL_TIME_ZONE
-                // rather system.default)
+                // TIME_WITHOUT_TIME_ZONE will be mapped to PG_TIMESTAMP.
                 fieldGetter =
                         record ->
-                                ZonedDateTime.ofInstant(
+                                record.getTimestamp(fieldPos, getPrecision(fieldType))
+                                        .toTimestamp()
+                                        .toString();
+                break;
+            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                // TIME_WITHOUT_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
+                fieldGetter =
+                        record ->
+                                Timestamp.from(
                                                 record.getLocalZonedTimestampData(
                                                                 fieldPos, getPrecision(fieldType))
-                                                        .toInstant(),
-                                                zoneId)
+                                                        .toInstant())
                                         .toString();
                 break;
             case TIMESTAMP_WITH_TIME_ZONE:
-                // TIMESTAMP_WITH_TIME_ZONE will be mapped to PG_TEXT.
+                // TIMESTAMP_WITH_TIME_ZONE will be mapped to TIMESTAMP_WITH_LOCAL_TIME_ZONE.
                 fieldGetter =
                         record ->
                                 record.getZonedTimestamp(fieldPos, getPrecision(fieldType))
