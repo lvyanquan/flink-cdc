@@ -114,7 +114,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLEBETA\n"
                                 + "    projection: ID, VERSION\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
@@ -122,7 +122,8 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -196,13 +197,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "    filter: ID <= 1008\n"
                                 + "\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, mysqlCdcJar, valuesCdcJar);
@@ -282,7 +284,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLEBETA\n"
                                 + "    projection: ID, CONCAT('v', VERSION) AS VERSION, LOWER(NAMEBETA) AS NAME\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
@@ -290,7 +292,8 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -360,13 +363,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLEBETA\n"
                                 + "    projection: \\*, CONCAT('v', VERSION) AS VERSION, LOWER(NAMEBETA) AS NAME\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -441,13 +445,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLEBETA\n"
                                 + "    projection: \\*, __namespace_name__ || '.' || __schema_name__ || '.' || __table_name__ AS identifier_name, __data_event_type__ AS type\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -525,12 +530,13 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLE\\.*\n"
                                 + "    projection: \\*, ID + 1000 as UID, VERSION AS NEWVERSION\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, mysqlCdcJar, valuesCdcJar);
@@ -607,13 +613,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "  - source-table: %s.TABLEBETA\n"
                                 + "    projection: ID, CAST(VERSION AS DOUBLE) + 100 AS VERSION, CAST(AGEBETA AS VARCHAR) || ' - ' || NAMEBETA AS IDENTIFIER\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -702,13 +709,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "    projection: ID, LOCALTIME as lcl_t, CURRENT_TIME as cur_t, CAST(CURRENT_TIMESTAMP AS TIMESTAMP) as cur_ts, CAST(NOW() AS TIMESTAMP) as now_ts, LOCALTIMESTAMP as lcl_ts, CURRENT_DATE as cur_dt\n"
                                 + "\n"
                                 + "pipeline:\n"
-                                + "  parallelism: 1\n"
+                                + "  parallelism: %d\n"
                                 + "  local-time-zone: America/Los_Angeles",
                         INTER_CONTAINER_MYSQL_ALIAS,
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         transformTestDatabase.getDatabaseName(),
-                        transformTestDatabase.getDatabaseName());
+                        transformTestDatabase.getDatabaseName(),
+                        parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path valuesCdcJar = TestUtils.getResource("values-cdc-pipeline-connector.jar");
         Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
@@ -775,7 +783,9 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
     }
 
     boolean extractDataLines(String line) {
-        if (!line.startsWith("DataChangeEvent{")) {
+        // In multiple parallelism mode, a prefix with subTaskId (like '1> ') will be appended.
+        // Should trim it before extracting data fields.
+        if (!line.startsWith("DataChangeEvent{", 3)) {
             return false;
         }
         Stream.of("before", "after")

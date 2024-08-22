@@ -194,21 +194,17 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             if (request instanceof SchemaChangeRequest) {
                 SchemaChangeRequest schemaChangeRequest = (SchemaChangeRequest) request;
                 return requestHandler.handleSchemaChangeRequest(schemaChangeRequest);
-            } else if (request instanceof ReleaseUpstreamRequest) {
-                return requestHandler.handleReleaseUpstreamRequest();
+            } else if (request instanceof SchemaChangeResultRequest) {
+                return requestHandler.getSchemaChangeResult();
             } else if (request instanceof GetEvolvedSchemaRequest) {
                 return CompletableFuture.completedFuture(
                         wrap(handleGetEvolvedSchemaRequest(((GetEvolvedSchemaRequest) request))));
             } else if (request instanceof GetOriginalSchemaRequest) {
                 return CompletableFuture.completedFuture(
                         wrap(handleGetOriginalSchemaRequest((GetOriginalSchemaRequest) request)));
-            } else if (request instanceof SchemaChangeResultRequest) {
-                return requestHandler.getSchemaChangeResult();
-            } else if (request instanceof RefreshPendingListsRequest) {
-                return requestHandler.refreshPendingLists();
-            } else if (request instanceof GetTokenRequest) {
-            return requestHandler.getTokenResult(((GetTokenRequest) request).getTableId());
-        } else {
+            }  else if (request instanceof GetTokenRequest) {
+                return requestHandler.getTokenResult(((GetTokenRequest) request).getTableId());
+            }  else {
                 throw new IllegalArgumentException(
                         "Unrecognized CoordinationRequest type: " + request);
             }

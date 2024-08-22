@@ -62,6 +62,8 @@ public abstract class PipelineTestEnvironment extends TestLogger {
 
     private static final Logger LOG = LoggerFactory.getLogger(PipelineTestEnvironment.class);
 
+    public Integer parallelism = 4;
+
     // ------------------------------------------------------------------------------------------
     // Flink Variables
     // ------------------------------------------------------------------------------------------
