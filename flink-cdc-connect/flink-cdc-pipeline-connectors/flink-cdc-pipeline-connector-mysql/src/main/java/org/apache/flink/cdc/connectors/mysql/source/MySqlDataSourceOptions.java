@@ -263,6 +263,17 @@ public class MySqlDataSourceOptions {
                                     + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
 
     @Experimental
+    public static final ConfigOption<Boolean> SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED =
+            ConfigOptions.key("scan.binlog.newly-added-table.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "In binlog reading stage, whether to scan the ddl and dml statements of newly added tables or not, by default is false. \n"
+                                    + "The difference between scan.newly-added-table.enabled and scan.binlog.newly-added-table.enabled options is: \n"
+                                    + "scan.newly-added-table.enabled: do re-snapshot & binlog-reading for newly added table when restored; \n"
+                                    + "scan.binlog.newly-added-table.enabled: only do binlog-reading for newly added table during binlog reading phase.");
+
+    @Experimental
     public static final ConfigOption<Boolean>
             SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED =
                     ConfigOptions.key("scan.only.deserialize.captured.tables.changelog.enabled")
