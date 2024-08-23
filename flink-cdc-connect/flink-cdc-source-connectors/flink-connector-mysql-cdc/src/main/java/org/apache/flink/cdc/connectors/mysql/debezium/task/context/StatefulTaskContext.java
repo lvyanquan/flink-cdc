@@ -22,6 +22,7 @@ import org.apache.flink.cdc.connectors.mysql.debezium.EmbeddedFlinkDatabaseHisto
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.EventDispatcherImpl;
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 
@@ -83,6 +84,7 @@ public class StatefulTaskContext {
     private final SchemaNameAdjuster schemaNameAdjuster;
     private final MySqlConnection connection;
     private final BinaryLogClient binaryLogClient;
+    private final MySqlSourceReaderMetrics sourceReaderMetrics;
 
     private MySqlDatabaseSchema databaseSchema;
     private MySqlTaskContextImpl taskContext;
@@ -100,13 +102,15 @@ public class StatefulTaskContext {
     public StatefulTaskContext(
             MySqlSourceConfig sourceConfig,
             BinaryLogClient binaryLogClient,
-            MySqlConnection connection) {
+            MySqlConnection connection,
+            MySqlSourceReaderMetrics sourceReaderMetrics) {
         this.sourceConfig = sourceConfig;
         this.connectorConfig = sourceConfig.getMySqlConnectorConfig();
         this.schemaNameAdjuster = SchemaNameAdjuster.create();
         this.metadataProvider = new MySqlEventMetadataProvider();
         this.binaryLogClient = binaryLogClient;
         this.connection = connection;
+        this.sourceReaderMetrics = sourceReaderMetrics;
     }
 
     public void configure(MySqlSplit mySqlSplit) {
@@ -299,6 +303,10 @@ public class StatefulTaskContext {
             LOG.info("MySQL has the binlog file '{}' required by the connector", binlogFilename);
         }
         return found;
+    }
+
+    public MySqlSourceReaderMetrics getSourceReaderMetrics() {
+        return sourceReaderMetrics;
     }
 
     /** Copied from debezium for accessing here. */

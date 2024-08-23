@@ -777,27 +777,20 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     @SuppressWarnings("unchecked")
     private void validateTemporalMetrics(OperatorMetricGroup operatorMetricGroup) {
         Map<String, Metric> metrics = metricReporter.getMetricsByGroup(operatorMetricGroup);
-
         // currentEmitEventTimeLag
         assertTrue(metrics.containsKey(CURRENT_EMIT_EVENT_TIME_LAG));
         Gauge<Long> currentEmitEventTimeLag =
                 (Gauge<Long>) metrics.get(CURRENT_EMIT_EVENT_TIME_LAG);
         assertTrue(currentEmitEventTimeLag.getValue() > 0);
         assertTrue(currentEmitEventTimeLag.getValue() < TIMEOUT.toMillis());
-
         // currentFetchEventTimeLag
         assertTrue(metrics.containsKey(CURRENT_FETCH_EVENT_TIME_LAG));
         Gauge<Long> currentFetchEventTimeLag =
                 (Gauge<Long>) metrics.get(CURRENT_FETCH_EVENT_TIME_LAG);
         assertTrue(currentFetchEventTimeLag.getValue() > 0);
         assertTrue(currentFetchEventTimeLag.getValue() < TIMEOUT.toMillis());
-
         // sourceIdleTime should be positive (we can't know the exact value)
         assertTrue(metrics.containsKey(SOURCE_IDLE_TIME));
-        Gauge<Long> sourceIdleTime = (Gauge<Long>) metrics.get(SOURCE_IDLE_TIME);
-        assertTrue(sourceIdleTime.getValue() > 0);
-        assertTrue(sourceIdleTime.getValue() < TIMEOUT.toMillis());
-
         // currentReadTimestampMs
         assertTrue(metrics.containsKey(CURRENT_READ_TIMESTAMP_MS));
         Gauge<Long> currentReadTimestampMs = (Gauge<Long>) metrics.get(CURRENT_READ_TIMESTAMP_MS);

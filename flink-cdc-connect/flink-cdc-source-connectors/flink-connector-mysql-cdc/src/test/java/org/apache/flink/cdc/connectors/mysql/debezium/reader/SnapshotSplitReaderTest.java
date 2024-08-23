@@ -23,11 +23,13 @@ import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlSnapshotSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.SourceRecords;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
 import org.apache.flink.cdc.connectors.mysql.testutils.RecordsFormatter;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.ExceptionUtils;
@@ -93,7 +95,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
         MySqlSourceConfig sourceConfig =
                 getConfig(customerDatabase, new String[] {"customers_even_dist"}, 4);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
         final DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("id", DataTypes.BIGINT()),
@@ -122,7 +129,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
         MySqlConnection mySqlConnection = DebeziumUtils.createMySqlConnection(sourceConfig);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
         final DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("id", DataTypes.BIGINT()),
@@ -157,7 +169,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
         MySqlSourceConfig sourceConfig =
                 getConfig(customerDatabase, new String[] {"customers_even_dist"}, 4);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         final DataType dataType =
                 DataTypes.ROW(
@@ -191,7 +208,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
         MySqlSourceConfig sourceConfig =
                 getConfig(customerDatabase, new String[] {"customer_card_single_line"}, 10);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         final DataType dataType =
                 DataTypes.ROW(
@@ -215,7 +237,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         new String[] {"customer_card", "customer_card_single_line"},
                         10);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         DataType dataType =
                 DataTypes.ROW(
@@ -259,7 +286,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
         MySqlSourceConfig sourceConfig =
                 getConfig(customerDatabase, new String[] {"customer_card", "customers_1"}, 10);
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         DataType dataType =
                 DataTypes.ROW(
@@ -299,7 +331,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(
@@ -359,7 +396,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPostLowWatermarkAction(
                 (mySqlConnection, split) -> {
@@ -421,7 +463,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(
                 (mySqlConnection, split) -> {
@@ -474,7 +521,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPostLowWatermarkAction(
@@ -529,7 +581,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         StatefulTaskContext statefulTaskContext =
-                new StatefulTaskContext(sourceConfig, binaryLogClient, mySqlConnection);
+                new StatefulTaskContext(
+                        sourceConfig,
+                        binaryLogClient,
+                        mySqlConnection,
+                        new MySqlSourceReaderMetrics(
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(

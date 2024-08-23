@@ -174,7 +174,8 @@ public class MySqlSource<T>
                                 sourceConfig,
                                 readerContext.getIndexOfSubtask(),
                                 mySqlSourceReaderContext,
-                                snapshotHooks);
+                                snapshotHooks,
+                                sourceReaderMetrics);
         return new MySqlSourceReader<>(
                 elementsQueue,
                 splitReaderSupplier,

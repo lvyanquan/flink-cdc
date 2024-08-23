@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.EventDispatcherImpl;
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.StoppableChangeEventSourceContext;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
 import org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils;
@@ -56,6 +57,8 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
     private final SignalEventDispatcher signalEventDispatcher;
     private final ErrorHandler errorHandler;
     private final Predicate<Event> eventFilter;
+    private final MySqlSourceReaderMetrics sourceReaderMetrics;
+    private final boolean isBackfilling;
     private ChangeEventSourceContext context;
 
     public MySqlBinlogSplitReadTask(
@@ -68,13 +71,17 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
             MySqlTaskContext taskContext,
             MySqlStreamingChangeEventSourceMetrics metrics,
             MySqlBinlogSplit binlogSplit,
-            Predicate<Event> eventFilter) {
+            Predicate<Event> eventFilter,
+            MySqlSourceReaderMetrics sourceReaderMetrics,
+            boolean isBackfilling) {
         super(connectorConfig, connection, dispatcher, errorHandler, clock, taskContext, metrics);
         this.binlogSplit = binlogSplit;
         this.eventDispatcher = dispatcher;
         this.errorHandler = errorHandler;
         this.signalEventDispatcher = signalEventDispatcher;
         this.eventFilter = eventFilter;
+        this.sourceReaderMetrics = sourceReaderMetrics;
+        this.isBackfilling = isBackfilling;
     }
 
     @Override
@@ -90,6 +97,12 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
     @Override
     protected void handleEvent(
             MySqlPartition partition, MySqlOffsetContext offsetContext, Event event) {
+        sourceReaderMetrics.markInput(1L);
+
+        if (!isBackfilling) {
+            sourceReaderMetrics.updateTemporalMetrics(event);
+        }
+
         if (!eventFilter.test(event)) {
             return;
         }

@@ -22,6 +22,7 @@ import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.EventDispatcher
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.SnapshotSplitReader;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSnapshotSplit;
 import org.apache.flink.cdc.connectors.mysql.source.utils.StatementUtils;
@@ -83,6 +84,7 @@ public class MySqlSnapshotSplitReadTask
 
     private final SnapshotPhaseHooks hooks;
     private final boolean isBackfillSkipped;
+    private final MySqlSourceReaderMetrics sourceReaderMetrics;
 
     public MySqlSnapshotSplitReadTask(
             MySqlSourceConfig sourceConfig,
@@ -96,7 +98,8 @@ public class MySqlSnapshotSplitReadTask
             Clock clock,
             MySqlSnapshotSplit snapshotSplit,
             SnapshotPhaseHooks hooks,
-            boolean isBackfillSkipped) {
+            boolean isBackfillSkipped,
+            MySqlSourceReaderMetrics sourceReaderMetrics) {
         super(connectorConfig, snapshotChangeEventSourceMetrics);
         this.sourceConfig = sourceConfig;
         this.databaseSchema = databaseSchema;
@@ -109,6 +112,7 @@ public class MySqlSnapshotSplitReadTask
         this.snapshotChangeEventSourceMetrics = snapshotChangeEventSourceMetrics;
         this.hooks = hooks;
         this.isBackfillSkipped = isBackfillSkipped;
+        this.sourceReaderMetrics = sourceReaderMetrics;
     }
 
     @Override
@@ -294,6 +298,7 @@ public class MySqlSnapshotSplitReadTask
                         table.id(),
                         getChangeRecordEmitter(snapshotContext, table.id(), row),
                         snapshotReceiver);
+                sourceReaderMetrics.markInput(1L);
             }
             LOG.info(
                     "Finished exporting {} records for split '{}', total duration '{}'",

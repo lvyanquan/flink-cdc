@@ -24,6 +24,7 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.SourceReaderMetricGroup;
 import org.apache.flink.runtime.metrics.MetricNames;
 
+import com.github.shyiko.mysql.binlog.event.Event;
 import io.debezium.data.Envelope;
 import io.debezium.relational.TableId;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -33,8 +34,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getFetchTimestamp;
-import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getMessageTimestamp;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.getTableId;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils.isDataChangeRecord;
 
@@ -91,74 +90,77 @@ public class MySqlSourceReaderMetrics {
         schemaChangeCounter = metricGroup.counter(NUM_DDL_RECORDS);
     }
 
-    /**
-     * Mark a source record and process its related metrics.
-     *
-     * @param record current processing {@link SourceRecord}
-     */
-    public void markRecord(SourceRecord record) {
+    public void markInput(long count) {
+        // Update reader-level numRecordsIn
+        catchAndWarnLogAllExceptions(
+                () -> metricGroup.getIOMetricGroup().getNumRecordsInCounter().inc(count));
+    }
+
+    public void updateTemporalMetrics(Event event) {
+        catchAndWarnLogAllExceptions(
+                () -> {
+                    long eventTimestampMs = event.getHeader().getTimestamp();
+                    if (eventTimestampMs > 0L) {
+                        // currentReadTimestampMs
+                        currentReadTimestampMs = eventTimestampMs;
+                        // currentFetchEventTimeLag
+                        long fetchTimestamp = System.currentTimeMillis();
+                        if (fetchTimestamp >= eventTimestampMs) {
+                            fetchDelay = fetchTimestamp - eventTimestampMs;
+                        }
+                    }
+                });
+    }
+
+    public void updateRecordCounters(SourceRecord record) {
+        catchAndWarnLogAllExceptions(
+                () -> {
+                    // Increase reader and table level input counters
+                    if (isDataChangeRecord(record)) {
+                        TableMetrics tableMetrics = getTableMetrics(getTableId(record));
+                        Envelope.Operation op = Envelope.operationFor(record);
+                        switch (op) {
+                            case READ:
+                                snapshotCounter.inc();
+                                tableMetrics.markSnapshotRecord();
+                                break;
+                            case CREATE:
+                                insertCounter.inc();
+                                tableMetrics.markInsertRecord();
+                                break;
+                            case DELETE:
+                                deleteCounter.inc();
+                                tableMetrics.markDeleteRecord();
+                                break;
+                            case UPDATE:
+                                updateCounter.inc();
+                                tableMetrics.markUpdateRecord();
+                                break;
+                        }
+                    } else if (RecordUtils.isSchemaChangeEvent(record)) {
+                        schemaChangeCounter.inc();
+                        TableId tableId = getTableId(record);
+                        if (tableId != null) {
+                            getTableMetrics(tableId).markSchemaChangeRecord();
+                        }
+                    }
+                });
+    }
+
+    // ------------------------------- Helper functions -----------------------------
+
+    private void catchAndWarnLogAllExceptions(Runnable runnable) {
         try {
-            // Update reader-level numRecordsIn
-            metricGroup.getIOMetricGroup().getNumRecordsInCounter().inc();
-            // Increase reader and table level input counters
-            updateRecordCounters(record);
-            // Update currentFetchEventTimeLag
-            updateTemporalMetrics(record);
+            runnable.run();
         } catch (Exception e) {
             // Catch all exceptions as errors in metric handling should not fail the job
             LOG.warn("Failed to update metrics", e);
         }
     }
 
-    // ------------------------------- Helper functions -----------------------------
-
     private TableMetrics getTableMetrics(TableId tableId) {
         return tableMetricsMap.computeIfAbsent(
                 tableId, id -> new TableMetrics(id.catalog(), id.table(), metricGroup));
-    }
-
-    private void updateRecordCounters(SourceRecord record) {
-        if (isDataChangeRecord(record)) {
-            TableMetrics tableMetrics = getTableMetrics(getTableId(record));
-            Envelope.Operation op = Envelope.operationFor(record);
-            switch (op) {
-                case READ:
-                    snapshotCounter.inc();
-                    tableMetrics.markSnapshotRecord();
-                    break;
-                case CREATE:
-                    insertCounter.inc();
-                    tableMetrics.markInsertRecord();
-                    break;
-                case DELETE:
-                    deleteCounter.inc();
-                    tableMetrics.markDeleteRecord();
-                    break;
-                case UPDATE:
-                    updateCounter.inc();
-                    tableMetrics.markUpdateRecord();
-                    break;
-            }
-        } else if (RecordUtils.isSchemaChangeEvent(record)) {
-            schemaChangeCounter.inc();
-            TableId tableId = getTableId(record);
-            if (tableId != null) {
-                getTableMetrics(tableId).markSchemaChangeRecord();
-            }
-        }
-    }
-
-    private void updateTemporalMetrics(SourceRecord record) {
-        Long messageTimestamp = getMessageTimestamp(record);
-        if (messageTimestamp != null && messageTimestamp > 0L) {
-            // currentReadTimestampMs
-            currentReadTimestampMs = messageTimestamp;
-            // currentEmitEventTimeLag
-            Long fetchTimestamp = getFetchTimestamp(record);
-            if (fetchTimestamp != null && fetchTimestamp >= messageTimestamp) {
-                fetchDelay = fetchTimestamp - messageTimestamp;
-            }
-        }
     }
 
     // ----------------------------------- Helper classes --------------------------------

@@ -22,11 +22,13 @@ import org.apache.flink.cdc.connectors.mysql.debezium.reader.BinlogSplitReader;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.binlog.LocalBinlogFile;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.SourceRecords;
 import org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils;
 import org.apache.flink.cdc.connectors.mysql.testutils.junit5.rds.AliyunRdsExtension;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
 import com.github.shyiko.mysql.binlog.BinaryLogFileReader;
 import com.github.shyiko.mysql.binlog.event.Event;
@@ -122,7 +124,9 @@ class AliyunRdsBasedBinlogSplitReaderTest {
         return new StatefulTaskContext(
                 sourceConfig,
                 DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration()),
-                RDS.getMySqlConnection());
+                RDS.getMySqlConnection(),
+                new MySqlSourceReaderMetrics(
+                        UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
     }
 
     private AliyunRdsBinlogFileFetcher createFetcher(long startTimestampMs, long stopTimestampMs) {

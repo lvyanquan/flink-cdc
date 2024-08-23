@@ -49,6 +49,7 @@ import org.apache.flink.connector.base.source.reader.synchronization.FutureCompl
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderOutput;
 import org.apache.flink.core.io.InputStatus;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -594,7 +595,13 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             MySqlSourceConfig configuration,
             MySqlSourceReaderContext readerContext,
             SnapshotPhaseHooks snapshotHooks) {
-        return new MySqlSplitReader(configuration, 0, readerContext, snapshotHooks);
+        return new MySqlSplitReader(
+                configuration,
+                0,
+                readerContext,
+                snapshotHooks,
+                new MySqlSourceReaderMetrics(
+                        UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
     }
 
     private void makeBinlogEventsInOneTransaction(MySqlSourceConfig sourceConfig, String tableId)
@@ -778,7 +785,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 }
             } else if (isDataChangeRecord(element)) {
                 updateStartingOffsetForSplit(splitState, element);
-                sourceReaderMetrics.markRecord(element);
+                sourceReaderMetrics.updateRecordCounters(element);
                 emitElement(element, output);
             } else if (isHeartbeatEvent(element)) {
                 updateStartingOffsetForSplit(splitState, element);
