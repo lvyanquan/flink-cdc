@@ -96,7 +96,7 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
     @Override
     public void start() {
         splitAssigner.open();
-        requestBinlogSplitUpdateIfNeed();
+        requestBinlogSplitUpdateIfNeed("start");
         this.context.callAsync(
                 this::getRegisteredReader,
                 this::syncWithReaders,
@@ -132,6 +132,9 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
         // send BinlogSplitUpdateRequestEvent to source reader after newly added table
         // snapshot splits finished.
         if (isNewlyAddedAssigningSnapshotFinished(splitAssigner.getAssignerStatus())) {
+            LOG.info(
+                    "The enumerator send BinlogSplitUpdateRequestEvent to {} subtask when adding reader.",
+                    subtaskId);
             context.sendEventToSourceReader(subtaskId, new BinlogSplitUpdateRequestEvent());
         }
     }
@@ -149,14 +152,14 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
             Map<String, BinlogOffset> finishedOffsets = reportEvent.getFinishedOffsets();
 
             splitAssigner.onFinishedSplits(finishedOffsets);
-            requestBinlogSplitUpdateIfNeed();
+            requestBinlogSplitUpdateIfNeed("FinishedSnapshotSplitsReportEvent");
 
             // send acknowledge event
             FinishedSnapshotSplitsAckEvent ackEvent =
                     new FinishedSnapshotSplitsAckEvent(new ArrayList<>(finishedOffsets.keySet()));
             context.sendEventToSourceReader(subtaskId, ackEvent);
         } else if (sourceEvent instanceof BinlogSplitMetaRequestEvent) {
-            LOG.debug(
+            LOG.info(
                     "The enumerator receives request for binlog split meta from subtask {}.",
                     subtaskId);
             sendBinlogMeta(subtaskId, (BinlogSplitMetaRequestEvent) sourceEvent);
@@ -229,7 +232,7 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
                 LOG.info("The enumerator assigns split {} to subtask {}", mySqlSplit, nextAwaiting);
             } else {
                 // there is no available splits by now, skip assigning
-                requestBinlogSplitUpdateIfNeed();
+                requestBinlogSplitUpdateIfNeed("assignSplits");
                 break;
             }
         }
@@ -269,15 +272,16 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
             }
         }
 
-        requestBinlogSplitUpdateIfNeed();
+        requestBinlogSplitUpdateIfNeed("syncWithReaders");
     }
 
-    private void requestBinlogSplitUpdateIfNeed() {
+    private void requestBinlogSplitUpdateIfNeed(String trigger) {
         if (isNewlyAddedAssigningSnapshotFinished(splitAssigner.getAssignerStatus())) {
             for (int subtaskId : getRegisteredReader()) {
                 LOG.info(
-                        "The enumerator requests subtask {} to update the binlog split after newly added table.",
-                        subtaskId);
+                        "The enumerator requests subtask {} to update the binlog split after newly added table from {}.",
+                        subtaskId,
+                        trigger);
                 context.sendEventToSourceReader(subtaskId, new BinlogSplitUpdateRequestEvent());
             }
         }

@@ -111,6 +111,7 @@ public class MySqlSourceReader<T>
     @Override
     public void start() {
         if (getNumberOfCurrentlyAssignedSplits() <= 1) {
+            LOG.info("Subtask {} requests splits.", subtaskId);
             context.sendSplitRequest();
         }
     }
@@ -143,6 +144,17 @@ public class MySqlSourceReader<T>
         // add suspended BinlogSplit
         if (suspendedBinlogSplit != null) {
             unfinishedSplits.add(suspendedBinlogSplit);
+        }
+
+        if (!unfinishedSplits.isEmpty()) {
+            LOG.info(
+                    "Subtask {} on checkpoint {} contains {} unfinishedSplits including {} finishedUnackedSplits, {} uncompletedBinlogSplits, {} suspendedBinlogSplit.",
+                    subtaskId,
+                    checkpointId,
+                    unfinishedSplits.size(),
+                    finishedUnackedSplits.size(),
+                    uncompletedBinlogSplits.size(),
+                    suspendedBinlogSplit != null ? 1 : 0);
         }
 
         logCurrentBinlogOffsets(unfinishedSplits, checkpointId);
@@ -380,7 +392,7 @@ public class MySqlSourceReader<T>
             FinishedSnapshotSplitsReportEvent reportEvent =
                     new FinishedSnapshotSplitsReportEvent(finishedOffsets);
             context.sendSourceEventToCoordinator(reportEvent);
-            LOG.debug(
+            LOG.info(
                     "Source reader {} reports offsets of finished snapshot splits {}.",
                     subtaskId,
                     finishedOffsets);
@@ -533,7 +545,11 @@ public class MySqlSourceReader<T>
                 return;
             }
             BinlogOffset offset = split.asBinlogSplit().getStartingOffset();
-            LOG.info("Binlog offset on checkpoint {}: {}", checkpointId, offset);
+            LOG.info(
+                    "Binlog offset in subtask {} on checkpoint {}: {}",
+                    subtaskId,
+                    checkpointId,
+                    offset);
         }
     }
 

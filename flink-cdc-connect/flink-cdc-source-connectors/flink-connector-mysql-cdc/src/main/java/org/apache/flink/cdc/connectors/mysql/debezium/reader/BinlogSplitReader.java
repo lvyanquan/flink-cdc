@@ -173,10 +173,15 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
                     sourceRecords.add(event.getRecord());
                 }
             }
+
+            LOG.debug(
+                    "BinlogSplit {} returns {} records.", currentBinlogSplit, sourceRecords.size());
+
             List<SourceRecords> sourceRecordsSet = new ArrayList<>();
             sourceRecordsSet.add(new SourceRecords(sourceRecords));
             return sourceRecordsSet.iterator();
         } else {
+            LOG.info("BinlogSplit {} returns null when polling records.", currentBinlogSplit);
             return null;
         }
     }

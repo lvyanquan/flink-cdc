@@ -177,6 +177,7 @@ public class MySqlSplitReader implements SplitReader<SourceRecords, MySqlSplit> 
     }
 
     private MySqlRecords finishedSplit() {
+        LOG.info("Split {} finished reading from finishedSplit.", currentSplitId);
         final MySqlRecords finishedRecords = MySqlRecords.forFinishedSplit(currentSplitId);
         currentSplitId = null;
         return finishedRecords;
@@ -187,6 +188,7 @@ public class MySqlSplitReader implements SplitReader<SourceRecords, MySqlSplit> 
             final MySqlRecords finishedRecords =
                     MySqlRecords.forSnapshotRecords(currentSplitId, dataIt);
             closeSnapshotReader();
+            LOG.info("Split {} finished reading.", currentSplitId);
             return finishedRecords;
         } else {
             return MySqlRecords.forBinlogRecords(currentSplitId, dataIt);
@@ -199,6 +201,7 @@ public class MySqlSplitReader implements SplitReader<SourceRecords, MySqlSplit> 
      */
     private MySqlRecords forNewAddedTableFinishedSplit(
             final String splitId, final Iterator<SourceRecords> recordsForSplit) {
+        LOG.info("Split {} finished reading from forNewAddedTableFinishedSplit.", splitId);
         final Set<String> finishedSplits = new HashSet<>();
         finishedSplits.add(splitId);
         finishedSplits.add(BINLOG_SPLIT_ID);

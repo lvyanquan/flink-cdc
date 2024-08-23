@@ -180,11 +180,19 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
         if (!isBackfillRequired(backfillBinlogSplit)) {
             dispatchBinlogEndEvent(backfillBinlogSplit);
             stopCurrentTask();
+            LOG.info(
+                    "SnapshotSplit {} skips executing backfill task with BinlogSplit {}.",
+                    currentSnapshotSplit,
+                    backfillBinlogSplit);
             return;
         }
 
         // execute binlog read task
         if (snapshotResult.isCompletedOrSkipped()) {
+            LOG.info(
+                    "SnapshotSplit {} starts to execute backfill task with BinlogSplit {}.",
+                    currentSnapshotSplit,
+                    backfillBinlogSplit);
             final MySqlBinlogSplitReadTask backfillBinlogReadTask =
                     createBackfillBinlogReadTask(backfillBinlogSplit);
             final MySqlOffsetContext.Loader loader =
@@ -196,6 +204,10 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                     changeEventSourceContext,
                     statefulTaskContext.getMySqlPartition(),
                     mySqlOffsetContext);
+            LOG.info(
+                    "SnapshotSplit {} finished executing backfill task with BinlogSplit {}.",
+                    currentSnapshotSplit,
+                    backfillBinlogSplit);
         } else {
             throw new IllegalStateException(
                     String.format("Read snapshot for mysql split %s fail", currentSnapshotSplit));
@@ -297,6 +309,7 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
             SourceRecord highWatermark = null;
 
             Map<Struct, List<SourceRecord>> snapshotRecords = new HashMap<>();
+            LOG.info("Start to poll records from SnapshotSplit {}.", currentSnapshotSplit);
             while (!reachBinlogEnd) {
                 checkReadException();
                 List<DataChangeEvent> batch = queue.poll();
@@ -305,6 +318,9 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                     if (lowWatermark == null) {
                         lowWatermark = record;
                         assertLowWatermark(lowWatermark);
+                        LOG.info(
+                                "Received lowWatermark from SnapshotSplit {}.",
+                                currentSnapshotSplit);
                         continue;
                     }
 
@@ -312,12 +328,18 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                         highWatermark = record;
                         // snapshot events capture end and begin to capture binlog events
                         reachBinlogStart = true;
+                        LOG.info(
+                                "Received highWatermark from SnapshotSplit {}, start to read binlog records.",
+                                currentSnapshotSplit);
                         continue;
                     }
 
                     if (reachBinlogStart && RecordUtils.isEndWatermarkEvent(record)) {
                         // capture to end watermark events, stop the loop
                         reachBinlogEnd = true;
+                        LOG.info(
+                                "Received reachBinlogEnd from SnapshotSplit {}, start to merge.",
+                                currentSnapshotSplit);
                         break;
                     }
 
@@ -354,12 +376,18 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                                     .collect(Collectors.toList())));
             normalizedRecords.add(highWatermark);
 
+            LOG.info(
+                    "SnapshotSplit {} returns {} records.",
+                    currentSnapshotSplit,
+                    normalizedRecords.size());
+
             final List<SourceRecords> sourceRecordsSet = new ArrayList<>();
             sourceRecordsSet.add(new SourceRecords(normalizedRecords));
             return sourceRecordsSet.iterator();
         }
         // the data has been polled, no more data
         reachEnd.compareAndSet(false, true);
+        LOG.info("SnapshotSplit {} reaches end and return null.", currentSnapshotSplit);
         return null;
     }
 

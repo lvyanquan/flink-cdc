@@ -228,8 +228,9 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             } catch (Exception e) {
                 throw new FlinkRuntimeException("Failed to discovery tables to capture", e);
             }
-            LOG.debug(
-                    "Discovery tables success, time cost: {} ms.",
+            LOG.info(
+                    "Discovery {} tables success, time cost: {} ms.",
+                    remainingTables.size(),
                     System.currentTimeMillis() - start);
         }
         // when restore the job from legacy savepoint, the legacy state may haven't snapshot
@@ -242,6 +243,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 discoverTables.removeAll(alreadyProcessedTables);
                 this.remainingTables.addAll(discoverTables);
                 this.isTableIdCaseSensitive = DebeziumUtils.isTableIdCaseSensitive(jdbc);
+                LOG.info("Discovery {} tables success.", remainingTables.size());
             } catch (Exception e) {
                 throw new FlinkRuntimeException(
                         "Failed to discover remaining tables to capture", e);
