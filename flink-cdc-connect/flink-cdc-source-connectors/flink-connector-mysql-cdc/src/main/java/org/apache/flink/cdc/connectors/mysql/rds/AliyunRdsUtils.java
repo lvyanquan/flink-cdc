@@ -40,14 +40,17 @@ public class AliyunRdsUtils {
             if (latestBinlogFilenameFromOss == null) {
                 return false;
             }
-            if (earliestBinlogFilenameInLocal.compareTo(latestBinlogFilenameFromOss) > 0) {
-                return true;
-            } else {
-                return false;
-            }
+            // 1. if earliestBinlogFilenameInLocal =< latestBinlogFilenameFromOss, we can read
+            // binlog
+            // in local directly.
+            // 2. if earliestBinlogFilenameInLocal > latestBinlogFilenameFromOss, we can try to read
+            // binlog in oss firstly, if no suitable binlog was found, then switch to read binlog in
+            // local.
+            return earliestBinlogFilenameInLocal.compareTo(latestBinlogFilenameFromOss) > 0;
         }
     }
 
+    /** get file name of binlog that were uploaded to oss before the startingOffset. */
     public static String getLatestBinlogFilenameFromOss(
             StatefulTaskContext statefulTaskContext, BinlogOffset startingOffset) {
         checkNotNull(

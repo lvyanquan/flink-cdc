@@ -55,6 +55,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -155,7 +156,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                             if (startingOffset.getFilename() != null) {
                                 if (rdsBinlogFile
                                                 .getFilename()
-                                                .compareTo(rdsBinlogFile.getFilename())
+                                                .compareTo(startingOffset.getFilename())
                                         >= 0) {
                                     LOG.info(
                                             "Starting binlog file downloading executor for: "
@@ -165,11 +166,15 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                                             downloadTimeout,
                                             Throwable.class,
                                             "downloadBinlogFile");
+                                } else {
+                                    LOG.info(
+                                            "Skip to download binlog file from oss for: "
+                                                    + rdsBinlogFile.getFilename());
                                 }
                             } else if (startingOffset.getTimestampSec() > 0) {
                                 // In the situation of starting with specific timestamp.
                                 if (rdsBinlogFile.getTimestampSec()
-                                        >= rdsBinlogFile.getTimestampSec()) {
+                                        >= startingOffset.getTimestampSec()) {
                                     LOG.info(
                                             "Starting binlog file downloading executor for: "
                                                     + rdsBinlogFile.getFilename());
@@ -178,6 +183,10 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                                             downloadTimeout,
                                             Throwable.class,
                                             "downloadBinlogFile");
+                                } else {
+                                    LOG.info(
+                                            "Skip to download binlog file from oss for: "
+                                                    + rdsBinlogFile.getFilename());
                                 }
                             }
                         }
@@ -191,16 +200,44 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     }
 
     public String getLatestBinlogFilename() {
-        retryOnException(
-                () -> listBinlogFilesIntoQueue(startingTimestampMs, stoppingTimestampMs),
-                downloadTimeout,
-                Throwable.class,
-                "listBinlogFiles");
-        RdsBinlogFile rdsBinlogFile = rdsBinlogFileQueue.peek();
-        while (!rdsBinlogFileQueue.isEmpty()) {
-            rdsBinlogFile = rdsBinlogFileQueue.poll();
+        DescribeBinlogFilesRequest request =
+                new DescribeBinlogFilesRequest()
+                        .setDBInstanceId(rdsConfig.getDbInstanceId())
+                        .setStartTime(toDateTime(startingTimestampMs))
+                        .setEndTime(toDateTime(stoppingTimestampMs));
+        String latestBinlogFilename = null;
+        try {
+            DescribeBinlogFilesResponse response = rdsClient.describeBinlogFiles(request);
+            checkState(
+                    response.statusCode == STATUS_CODE_SUCCESS,
+                    "Unexpected status code %d in the response",
+                    response.statusCode);
+            List<DescribeBinlogFilesResponseBody.DescribeBinlogFilesResponseBodyItemsBinLogFile>
+                    files = response.getBody().getItems().getBinLogFile();
+            for (DescribeBinlogFilesResponseBody.DescribeBinlogFilesResponseBodyItemsBinLogFile
+                    file : files) {
+                if (rdsConfig.getMainDbId() != null
+                        && !file.getHostInstanceID().equals(rdsConfig.getMainDbId())) {
+                    continue;
+                }
+                if (latestBinlogFilename == null) {
+                    latestBinlogFilename = file.getLogFileName();
+                }
+                if (file.getLogFileName().compareTo(latestBinlogFilename) > 0) {
+                    latestBinlogFilename = file.getLogFileName();
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to list binlog files on RDS", e);
         }
-        return rdsBinlogFile.getFilename();
+        LOG.info(
+                "Latest binlog file from oss between "
+                        + startingTimestampMs
+                        + " and "
+                        + stoppingTimestampMs
+                        + " is: "
+                        + latestBinlogFilename);
+        return latestBinlogFilename;
     }
 
     @Override
@@ -356,6 +393,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                 FileUtils.byteCountToDisplaySize(bytes.length));
         Files.write(localBinlogFile.getPath(), bytes);
         localBinlogFileQueue.put(localBinlogFile);
+        LOG.info("Finish downloading binlog file {}", rdsBinlogFile);
         return localBinlogFile;
     }
 

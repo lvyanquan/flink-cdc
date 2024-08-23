@@ -71,6 +71,7 @@ class AliyunRdsBasedBinlogSplitReaderTest {
         BinlogOffset latestOnlineOffset =
                 DebeziumUtils.currentBinlogOffset(RDS.getMySqlConnection());
         RDS.clearCustomerTable();
+
         BinlogOffset lastOffset = null;
         while (lastOffset == null || compareBinlogFileOffset(lastOffset, latestOnlineOffset) < 0) {
             Iterator<SourceRecords> iterator = reader.pollSplitRecords();
