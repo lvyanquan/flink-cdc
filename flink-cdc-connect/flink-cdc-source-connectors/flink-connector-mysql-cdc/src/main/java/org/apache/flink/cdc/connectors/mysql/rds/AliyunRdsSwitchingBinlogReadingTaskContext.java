@@ -46,7 +46,8 @@ public class AliyunRdsSwitchingBinlogReadingTaskContext extends MySqlTaskContext
         super(config, schema);
         this.aliyunRdsBinlogFileFetcher =
                 new AliyunRdsBinlogFileFetcher(rdsConfig, startingTimestampMs, stoppingTimestampMs);
-        String earliestBinlogFilenameOnArchive = aliyunRdsBinlogFileFetcher.initialize();
+        String earliestBinlogFilenameOnArchive =
+                aliyunRdsBinlogFileFetcher.initialize(startingOffset.getFilename());
         if (earliestBinlogFilenameOnArchive == null) {
             throw new IllegalStateException("No binlog files are available on RDS archives");
         }

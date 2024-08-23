@@ -106,7 +106,7 @@ class AliyunRdsBinlogFileFetcherTest {
         AliyunRdsBinlogFileFetcher fetcher =
                 new AliyunRdsBinlogFileFetcher(
                         RDS.getRdsConfigBuilder().build(), startTimestampMs, stopTimestampMs);
-        fetcher.initialize();
+        fetcher.initialize("mysql-bin.000001");
         return fetcher;
     }
 

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,11 +34,14 @@ class AliyunRdsConfigTest {
     @Test
     void testCreateFromConfig() {
         Configuration configuration = new Configuration();
+
         // Set required options only
         configuration.set(RDS_REGION_ID, "fake-region");
         configuration.set(RDS_ACCESS_KEY_ID, "fake-key");
         configuration.set(RDS_ACCESS_KEY_SECRET, "fake-secret");
         configuration.set(RDS_DB_INSTANCE_ID, "fake-instance-id");
+        configuration.set(RDS_MAIN_DB_ID, "123456");
+
         AliyunRdsConfig aliyunRdsConfig = AliyunRdsConfig.fromConfig(configuration);
         assertThat(aliyunRdsConfig.getRegionId()).isEqualTo("fake-region");
         assertThat(aliyunRdsConfig.getAccessKeyId()).isEqualTo("fake-key");
@@ -46,5 +50,6 @@ class AliyunRdsConfigTest {
         assertThat(aliyunRdsConfig.getRandomBinlogDirectoryPath()).exists();
         assertThat(aliyunRdsConfig.getDownloadTimeout())
                 .isEqualTo(AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT.defaultValue());
+        assertThat(aliyunRdsConfig.getMainDbId()).isEqualTo("123456");
     }
 }

@@ -80,7 +80,7 @@ class AliyunRdsBasedITCase {
     @Test
     void testReadFromEarliestArchivedBinlog() throws Exception {
         long stopTimestampMs = System.currentTimeMillis();
-        long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
+        long startTimestampMs = 0;
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         List<String> archivedBinlogFiles =

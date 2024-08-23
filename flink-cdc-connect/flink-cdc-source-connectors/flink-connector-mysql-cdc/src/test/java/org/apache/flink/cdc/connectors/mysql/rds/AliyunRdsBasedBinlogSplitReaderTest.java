@@ -134,7 +134,7 @@ class AliyunRdsBasedBinlogSplitReaderTest {
                 new AliyunRdsBinlogFileFetcher(
                         RDS.getRdsConfigBuilder().build(), startTimestampMs, stopTimestampMs);
         fetcher.persistDownloadedFiles();
-        fetcher.initialize();
+        fetcher.initialize("mysql-bin.000001");
         return fetcher;
     }
 

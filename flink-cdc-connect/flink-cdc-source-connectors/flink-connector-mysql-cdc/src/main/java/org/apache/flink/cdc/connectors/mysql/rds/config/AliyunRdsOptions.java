@@ -85,4 +85,11 @@ public class AliyunRdsOptions {
                     .defaultValue(true)
                     .withDescription(
                             "Whether to use intranet download link for downloading binlog files");
+
+    @Experimental
+    public static final ConfigOption<String> RDS_MAIN_DB_ID =
+            ConfigOptions.key("rds.main-db-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The identifier of main database instance");
 }

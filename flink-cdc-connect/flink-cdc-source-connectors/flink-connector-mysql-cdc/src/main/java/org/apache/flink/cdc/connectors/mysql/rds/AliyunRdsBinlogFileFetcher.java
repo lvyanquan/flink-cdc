@@ -76,7 +76,6 @@ import static org.apache.flink.util.Preconditions.checkState;
 public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     private static final Logger LOG = LoggerFactory.getLogger(AliyunRdsBinlogFileFetcher.class);
     // Constants
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private static final DateTimeFormatter TIMESTAMP_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneId.of("UTC"));
     private static final int STATUS_CODE_SUCCESS = 200;
@@ -113,10 +112,14 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     private volatile Throwable uncaughtDownloadException;
     private volatile boolean isDownloadFinished = false;
 
+    // Timeout of requesting binlog files through http
+    private final Duration requestTimeout;
+
     public AliyunRdsBinlogFileFetcher(
             AliyunRdsConfig rdsConfig, long startTimestampMs, long stopTimestampMs) {
         this.rdsConfig = rdsConfig;
         this.downloadTimeout = rdsConfig.getDownloadTimeout();
+        this.requestTimeout = rdsConfig.getDownloadTimeout();
         this.binlogFileDirectory = rdsConfig.getRandomBinlogDirectoryPath();
         checkArgument(
                 Files.isDirectory(binlogFileDirectory),
@@ -130,7 +133,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     }
 
     @Nullable
-    public String initialize() {
+    public String initialize(String startingFilename) {
         initialized = true;
         retryOnException(
                 () -> listBinlogFilesIntoQueue(startingTimestampMs, stoppingTimestampMs),
@@ -144,15 +147,19 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         String earliestBinlogFilename = rdsBinlogFileQueue.peek().getFilename();
         downloadExecutor.execute(
                 () -> {
-                    LOG.info("Starting binlog file downloading executor");
                     try {
                         while (!rdsBinlogFileQueue.isEmpty()) {
                             RdsBinlogFile rdsBinlogFile = rdsBinlogFileQueue.poll();
-                            retryOnException(
-                                    () -> downloadBinlogFile(rdsBinlogFile),
-                                    downloadTimeout,
-                                    Throwable.class,
-                                    "downloadBinlogFile");
+                            if (rdsBinlogFile.getFilename().compareTo(startingFilename) >= 0) {
+                                LOG.info(
+                                        "Starting binlog file downloading executor for: "
+                                                + rdsBinlogFile.getFilename());
+                                retryOnException(
+                                        () -> downloadBinlogFile(rdsBinlogFile),
+                                        downloadTimeout,
+                                        Throwable.class,
+                                        "downloadBinlogFile");
+                            }
                         }
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to download binlog file", e);
@@ -210,8 +217,8 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         config.setAccessKeyId(rdsConfig.getAccessKeyId());
         config.setAccessKeySecret(rdsConfig.getAccessKeySecret());
         config.setRegionId(rdsConfig.getRegionId());
-        config.setReadTimeout(((int) REQUEST_TIMEOUT.toMillis()));
-        config.setConnectTimeout(((int) REQUEST_TIMEOUT.toMillis()));
+        config.setReadTimeout(((int) requestTimeout.toMillis()));
+        config.setConnectTimeout(((int) requestTimeout.toMillis()));
         try {
             return new Client(config);
         } catch (Exception e) {
@@ -221,10 +228,10 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
 
     private OkHttpClient initializeHTTPClient() {
         return new OkHttpClient.Builder()
-                .connectTimeout(REQUEST_TIMEOUT)
-                .callTimeout(REQUEST_TIMEOUT)
-                .readTimeout(REQUEST_TIMEOUT)
-                .writeTimeout(REQUEST_TIMEOUT)
+                .connectTimeout(requestTimeout)
+                .callTimeout(requestTimeout)
+                .readTimeout(requestTimeout)
+                .writeTimeout(requestTimeout)
                 .build();
     }
 
@@ -250,7 +257,17 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     "Unexpected status code %d in the response",
                     response.statusCode);
             response.getBody().getItems().getBinLogFile().stream()
+                    .filter(
+                            payload -> {
+                                if (rdsConfig.getMainDbId() != null) {
+                                    return payload.getHostInstanceID()
+                                            .equals(rdsConfig.getMainDbId());
+                                } else {
+                                    return true;
+                                }
+                            })
                     .map(payload -> RdsBinlogFile.fromRdsResponsePayload(payload, useIntranetLink))
+                    .sorted()
                     .forEach(
                             file -> {
                                 if (!rdsBinlogFileQueue.contains(file)) {

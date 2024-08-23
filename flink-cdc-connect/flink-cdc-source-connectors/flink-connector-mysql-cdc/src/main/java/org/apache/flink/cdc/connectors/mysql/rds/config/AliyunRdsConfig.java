@@ -38,6 +38,7 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -69,6 +70,7 @@ public class AliyunRdsConfig implements Serializable {
         }
         configuration.set(RDS_BINLOG_DIRECTORY_PREFIX, other.get(RDS_BINLOG_DIRECTORY_PREFIX));
         configuration.set(RDS_USE_INTRANET_LINK, other.get(RDS_USE_INTRANET_LINK));
+        configuration.set(RDS_MAIN_DB_ID, other.get(RDS_MAIN_DB_ID));
         return new AliyunRdsConfig(configuration);
     }
 
@@ -113,6 +115,10 @@ public class AliyunRdsConfig implements Serializable {
 
     public boolean isUseIntranetLink() {
         return configuration.get(RDS_USE_INTRANET_LINK);
+    }
+
+    public String getMainDbId() {
+        return configuration.get(RDS_MAIN_DB_ID);
     }
 
     /** Builder of {@link AliyunRdsConfig}. */
@@ -177,6 +183,12 @@ public class AliyunRdsConfig implements Serializable {
          */
         public RdsConfigBuilder useIntranetLink(boolean useIntranetLink) {
             configuration.set(RDS_USE_INTRANET_LINK, useIntranetLink);
+            return this;
+        }
+
+        /** The identifier of main database instance. */
+        public RdsConfigBuilder mainDbId(String mainDbId) {
+            configuration.set(RDS_MAIN_DB_ID, mainDbId);
             return this;
         }
 

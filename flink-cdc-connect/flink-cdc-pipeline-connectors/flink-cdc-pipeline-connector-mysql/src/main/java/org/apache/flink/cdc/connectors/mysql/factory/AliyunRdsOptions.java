@@ -92,6 +92,13 @@ public class AliyunRdsOptions {
                     .withDescription(
                             "Whether to use intranet download link for downloading binlog files");
 
+    @Experimental
+    public static final ConfigOption<String> RDS_MAIN_DB_ID =
+            ConfigOptions.key("rds.main-db-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The identifier of main database instance");
+
     public static AliyunRdsConfig fromConfig(Configuration other) {
         sanityCheck(other);
 
@@ -114,6 +121,7 @@ public class AliyunRdsOptions {
                 factoryOptions.get(RDS_BINLOG_DIRECTORY_PREFIX.key()));
         configuration.put(
                 RDS_USE_INTRANET_LINK.key(), factoryOptions.get(RDS_USE_INTRANET_LINK.key()));
+        configuration.put(RDS_MAIN_DB_ID.key(), factoryOptions.get(RDS_MAIN_DB_ID));
         return new AliyunRdsConfig(
                 org.apache.flink.configuration.Configuration.fromMap(configuration));
     }

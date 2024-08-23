@@ -54,6 +54,7 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
@@ -216,6 +217,7 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(RDS_BINLOG_DIRECTORIES_PARENT_PATH);
         options.add(RDS_BINLOG_DIRECTORY_PREFIX);
         options.add(RDS_USE_INTRANET_LINK);
+        options.add(RDS_MAIN_DB_ID);
         return options;
     }
 

@@ -579,6 +579,7 @@ public class MySqlTableSourceFactoryTest {
         options.put("rds.binlog-directories-parent-path", "/tmp/fake/path");
         options.put("rds.binlog-directory-prefix", "fake-prefix-");
         options.put("rds.use-intranet-link", "false");
+        options.put("rds.main-db-id", "123456");
         DynamicTableSource actual = createTableSource(options);
         AliyunRdsConfig expectedConfig =
                 AliyunRdsConfig.builder()
@@ -590,6 +591,7 @@ public class MySqlTableSourceFactoryTest {
                         .binlogDirectoriesParentPath("/tmp/fake/path")
                         .binlogDirectoryPrefix("fake-prefix-")
                         .useIntranetLink(false)
+                        .mainDbId("123456")
                         .build();
         DynamicTableSource expected =
                 new MySqlTableSource(
