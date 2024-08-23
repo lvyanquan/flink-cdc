@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.executeDDL;
@@ -245,7 +246,15 @@ public class HologresMetadataApplier implements MetadataApplier {
                             hologresJDBCClientProvider.getClient(), getQualifiedPath(tableId));
             boolean needApplyAlterColumn = false;
             for (Map.Entry<String, DataType> typeMapping : event.getTypeMapping().entrySet()) {
-                Column currentColumn = tableSchema.getColumn(typeMapping.getKey()).get();
+                Optional<Column> columnOptional = tableSchema.getColumn(typeMapping.getKey());
+                if (!columnOptional.isPresent()) {
+                    throw new FlinkRuntimeException(
+                            String.format(
+                                    "No column named %s in hologres table %s exists. Maybe the event from upstream is too early.",
+                                    typeMapping.getKey(), tableId));
+                }
+
+                Column currentColumn = columnOptional.get();
                 Column columnAlter =
                         hologresTypeNormalizer.transformToHoloColumn(typeMapping.getValue(), false);
                 if (columnAlter.getArrayType() != currentColumn.getArrayType()
