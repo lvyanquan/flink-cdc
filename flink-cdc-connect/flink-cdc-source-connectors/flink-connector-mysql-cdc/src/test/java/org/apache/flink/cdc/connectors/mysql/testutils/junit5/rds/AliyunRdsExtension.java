@@ -313,7 +313,7 @@ public class AliyunRdsExtension implements BeforeAllCallback, AfterAllCallback, 
                 .accessKeyId(getEnvironmentVariable(ACCESS_KEY_ID_ENV))
                 .accessKeySecret(getEnvironmentVariable(ACCESS_KEY_SECRET_ENV))
                 .dbInstanceId(getEnvironmentVariable(DB_INSTANCE_ID_ENV))
-                .mainDbId("28569133")
+                .mainDbId(getEnvironmentVariable(MAIN_DB_ID_ENV))
                 .useIntranetLink(false);
     }
 

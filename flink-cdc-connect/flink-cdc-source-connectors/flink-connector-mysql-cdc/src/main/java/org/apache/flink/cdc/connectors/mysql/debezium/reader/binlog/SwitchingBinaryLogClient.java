@@ -99,14 +99,7 @@ public class SwitchingBinaryLogClient extends BinaryLogClient {
                 if (binlogFile.getFilename().compareToIgnoreCase(stoppingBinlogFilename) >= 0) {
                     break;
                 }
-                // Skip binlog files before starting offset
-                if (readingState == ReadingState.LOCAL_SEEK) {
-                    if (binlogFile.getFilename().compareToIgnoreCase(startingOffset.getFilename())
-                            < 0) {
-                        LOG.info("Skipping binlog file {}", binlogFile);
-                        continue;
-                    }
-                }
+
                 LOG.info("Reading binlog file {}", binlogFile);
                 readEventsFromBinlogFile(binlogFile);
             }
@@ -168,9 +161,16 @@ public class SwitchingBinaryLogClient extends BinaryLogClient {
                 updateBinlogFilenamePosition(event, localBinlogFile.getFilename());
                 // Check if the client is still seeking for starting offset
                 if (readingState == ReadingState.LOCAL_SEEK) {
-                    if (getBinlogFilename().compareToIgnoreCase(startingOffset.getFilename()) >= 0
-                            && getBinlogPosition() >= startingOffset.getPosition()) {
-                        readingState = ReadingState.LOCAL_READ;
+                    if (startingOffset.getFilename() != null) {
+                        if (getBinlogFilename().compareToIgnoreCase(startingOffset.getFilename())
+                                        >= 0
+                                && getBinlogPosition() >= startingOffset.getPosition()) {
+                            readingState = ReadingState.LOCAL_READ;
+                        }
+                    } else {
+                        if (event.getHeader().getTimestamp() >= startingOffset.getTimestampSec()) {
+                            readingState = ReadingState.LOCAL_READ;
+                        }
                     }
                 }
                 // If the client is already in reading mode, notify the event to listeners

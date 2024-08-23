@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.rds;
 
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.binlog.LocalBinlogFile;
+import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.testutils.junit5.rds.AliyunRdsExtension;
 
 import com.github.shyiko.mysql.binlog.BinaryLogFileReader;
@@ -106,7 +107,7 @@ class AliyunRdsBinlogFileFetcherTest {
         AliyunRdsBinlogFileFetcher fetcher =
                 new AliyunRdsBinlogFileFetcher(
                         RDS.getRdsConfigBuilder().build(), startTimestampMs, stopTimestampMs);
-        fetcher.initialize("mysql-bin.000001");
+        fetcher.initialize(BinlogOffset.ofBinlogFilePosition("mysql-bin.000001", 4));
         return fetcher;
     }
 

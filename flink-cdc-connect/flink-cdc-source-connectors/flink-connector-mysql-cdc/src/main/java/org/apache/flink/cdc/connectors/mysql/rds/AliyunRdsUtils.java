@@ -29,9 +29,39 @@ public class AliyunRdsUtils {
         if (!statefulTaskContext.getSourceConfig().isReadRdsArchivedBinlogEnabled()) {
             return false;
         }
-        String earliestBinlogFilename =
+        String earliestBinlogFilenameInLocal =
                 statefulTaskContext.getConnection().earliestBinlogFilename();
-        return startingOffset.getFilename().compareToIgnoreCase(earliestBinlogFilename) < 0;
+        if (startingOffset.getFilename() != null) {
+            return startingOffset.getFilename().compareToIgnoreCase(earliestBinlogFilenameInLocal)
+                    < 0;
+        } else {
+            String latestBinlogFilenameFromOss =
+                    getLatestBinlogFilenameFromOss(statefulTaskContext, startingOffset);
+            if (latestBinlogFilenameFromOss == null) {
+                return false;
+            }
+            if (earliestBinlogFilenameInLocal.compareTo(latestBinlogFilenameFromOss) > 0) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    public static String getLatestBinlogFilenameFromOss(
+            StatefulTaskContext statefulTaskContext, BinlogOffset startingOffset) {
+        checkNotNull(
+                statefulTaskContext.getSourceConfig().getRdsConfig(),
+                "AliyunRdsBinlogFileFetcher requires AliyunRdsConfig");
+        try (AliyunRdsBinlogFileFetcher aliyunRdsBinlogFileFetcher =
+                new AliyunRdsBinlogFileFetcher(
+                        statefulTaskContext.getSourceConfig().getRdsConfig(),
+                        0,
+                        startingOffset.getTimestampSec() * 1000)) {
+            return aliyunRdsBinlogFileFetcher.getLatestBinlogFilename();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get latest binlog filename from oss", e);
+        }
     }
 
     public static AliyunRdsSwitchingBinlogReadingTaskContext createRdsSwitchingContext(

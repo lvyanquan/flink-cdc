@@ -23,6 +23,7 @@ import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.binlog.LocalBinlogFile;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.binlog.fetcher.BinlogFileFetcher;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
+import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.util.function.SupplierWithException;
 import org.apache.flink.util.function.ThrowingRunnable;
 
@@ -51,6 +52,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
@@ -133,7 +135,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     }
 
     @Nullable
-    public String initialize(String startingFilename) {
+    public String initialize(BinlogOffset startingOffset) {
         initialized = true;
         retryOnException(
                 () -> listBinlogFilesIntoQueue(startingTimestampMs, stoppingTimestampMs),
@@ -150,15 +152,33 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     try {
                         while (!rdsBinlogFileQueue.isEmpty()) {
                             RdsBinlogFile rdsBinlogFile = rdsBinlogFileQueue.poll();
-                            if (rdsBinlogFile.getFilename().compareTo(startingFilename) >= 0) {
-                                LOG.info(
-                                        "Starting binlog file downloading executor for: "
-                                                + rdsBinlogFile.getFilename());
-                                retryOnException(
-                                        () -> downloadBinlogFile(rdsBinlogFile),
-                                        downloadTimeout,
-                                        Throwable.class,
-                                        "downloadBinlogFile");
+                            if (startingOffset.getFilename() != null) {
+                                if (rdsBinlogFile
+                                                .getFilename()
+                                                .compareTo(rdsBinlogFile.getFilename())
+                                        >= 0) {
+                                    LOG.info(
+                                            "Starting binlog file downloading executor for: "
+                                                    + rdsBinlogFile.getFilename());
+                                    retryOnException(
+                                            () -> downloadBinlogFile(rdsBinlogFile),
+                                            downloadTimeout,
+                                            Throwable.class,
+                                            "downloadBinlogFile");
+                                }
+                            } else if (startingOffset.getTimestampSec() > 0) {
+                                // In the situation of starting with specific timestamp.
+                                if (rdsBinlogFile.getTimestampSec()
+                                        >= rdsBinlogFile.getTimestampSec()) {
+                                    LOG.info(
+                                            "Starting binlog file downloading executor for: "
+                                                    + rdsBinlogFile.getFilename());
+                                    retryOnException(
+                                            () -> downloadBinlogFile(rdsBinlogFile),
+                                            downloadTimeout,
+                                            Throwable.class,
+                                            "downloadBinlogFile");
+                                }
                             }
                         }
                     } catch (Exception e) {
@@ -168,6 +188,19 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     }
                 });
         return earliestBinlogFilename;
+    }
+
+    public String getLatestBinlogFilename() {
+        retryOnException(
+                () -> listBinlogFilesIntoQueue(startingTimestampMs, stoppingTimestampMs),
+                downloadTimeout,
+                Throwable.class,
+                "listBinlogFiles");
+        RdsBinlogFile rdsBinlogFile = rdsBinlogFileQueue.peek();
+        while (!rdsBinlogFileQueue.isEmpty()) {
+            rdsBinlogFile = rdsBinlogFileQueue.poll();
+        }
+        return rdsBinlogFile.getFilename();
     }
 
     @Override
@@ -425,6 +458,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     static class RdsBinlogFile implements Comparable<RdsBinlogFile> {
         private final String filename;
         private final URL downloadLink;
+        private final long timestampSec;
 
         public static RdsBinlogFile fromRdsResponsePayload(
                 DescribeBinlogFilesResponseBody.DescribeBinlogFilesResponseBodyItemsBinLogFile
@@ -435,7 +469,11 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                         useIntranetDownloadLink
                                 ? payload.getIntranetDownloadLink()
                                 : payload.getDownloadLink();
-                return new RdsBinlogFile(payload.getLogFileName(), new URL(downloadLink));
+
+                long timestampSec = OffsetDateTime.parse(payload.getLogBeginTime()).toEpochSecond();
+
+                return new RdsBinlogFile(
+                        payload.getLogFileName(), new URL(downloadLink), timestampSec);
             } catch (MalformedURLException e) {
                 throw new IllegalArgumentException(
                         String.format(
@@ -445,9 +483,10 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
             }
         }
 
-        public RdsBinlogFile(String filename, URL downloadLink) {
+        public RdsBinlogFile(String filename, URL downloadLink, long timestampSec) {
             this.filename = filename;
             this.downloadLink = downloadLink;
+            this.timestampSec = timestampSec;
         }
 
         public String getFilename() {
@@ -458,6 +497,10 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
             return downloadLink;
         }
 
+        public long getTimestampSec() {
+            return timestampSec;
+        }
+
         @Override
         public String toString() {
             return "RdsBinlogFile{"
@@ -466,6 +509,8 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                     + '\''
                     + ", downloadLink="
                     + downloadLink
+                    + ", timestampSec="
+                    + timestampSec
                     + '}';
         }
 
