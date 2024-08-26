@@ -29,6 +29,7 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.utils.StringUtils;
 import org.apache.flink.cdc.runtime.operators.schema.SchemaOperator;
 import org.apache.flink.cdc.runtime.operators.sink.SchemaEvolutionClient;
+import org.apache.flink.cdc.runtime.serializer.event.EventSerializer;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
@@ -109,7 +110,10 @@ public class PrePartitionOperator extends AbstractStreamOperator<PartitioningEve
 
     private void broadcastEvent(Event toBroadcast) {
         for (int i = 0; i < downstreamParallelism; i++) {
-            output.collect(new StreamRecord<>(new PartitioningEvent(toBroadcast, i)));
+            // Deep-copying each event is required since downstream subTasks might run in the same
+            // JVM
+            Event copiedEvent = EventSerializer.INSTANCE.copy(toBroadcast);
+            output.collect(new StreamRecord<>(new PartitioningEvent(copiedEvent, i)));
         }
     }
 
