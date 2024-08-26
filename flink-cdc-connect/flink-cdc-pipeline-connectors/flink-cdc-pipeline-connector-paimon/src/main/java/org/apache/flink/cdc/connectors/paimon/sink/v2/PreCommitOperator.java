@@ -17,16 +17,29 @@
 
 package org.apache.flink.cdc.connectors.paimon.sink.v2;
 
+import org.apache.flink.api.common.state.OperatorStateStore;
+import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
-import org.apache.flink.streaming.api.connector.sink2.CommittableSummary;
 import org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
+import org.apache.paimon.catalog.Catalog;
+import org.apache.paimon.flink.FlinkCatalogFactory;
 import org.apache.paimon.flink.sink.MultiTableCommittable;
+import org.apache.paimon.flink.sink.StoreMultiCommitter;
+import org.apache.paimon.manifest.WrappedManifestCommittable;
+import org.apache.paimon.options.Options;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** An Operator to add checkpointId to MultiTableCommittable and generate CommittableSummary. */
@@ -35,12 +48,26 @@ public class PreCommitOperator
         implements OneInputStreamOperator<
                 CommittableMessage<MultiTableCommittable>,
                 CommittableMessage<MultiTableCommittable>> {
+    protected static final Logger LOGGER = LoggerFactory.getLogger(PreCommitOperator.class);
+
+    private String commitUser;
+
+    private final Options catalogOptions;
+
+    private Catalog catalog;
+
+    private StoreMultiCommitter storeMultiCommitter;
 
     /** store a list of MultiTableCommittable in one checkpoint. */
-    private final List<MultiTableCommittable> results;
+    private final List<MultiTableCommittable> multiTableCommittables;
 
-    public PreCommitOperator() {
-        results = new ArrayList<>();
+    protected final ReadableConfig flinkConf;
+
+    public PreCommitOperator(Options catalogOptions, String commitUser, ReadableConfig flinkConf) {
+        multiTableCommittables = new ArrayList<>();
+        this.catalogOptions = catalogOptions;
+        this.commitUser = commitUser;
+        this.flinkConf = flinkConf;
     }
 
     @Override
@@ -50,8 +77,43 @@ public class PreCommitOperator
 
     @Override
     public void processElement(StreamRecord<CommittableMessage<MultiTableCommittable>> element) {
+        if (catalog == null) {
+            DlfCatalogUtil.convertOptionToDlf(catalogOptions, flinkConf);
+            this.catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
+            // flinkMetricGroup could be passed after FLIP-371.
+            this.storeMultiCommitter =
+                    new StoreMultiCommitter(
+                            () -> catalog,
+                            new org.apache.paimon.flink.sink.Committer.Context() {
+                                @Override
+                                public String commitUser() {
+                                    return commitUser;
+                                }
+
+                                @Nullable
+                                @Override
+                                public OperatorMetricGroup metricGroup() {
+                                    return null;
+                                }
+
+                                @Override
+                                public boolean streamingCheckpointEnabled() {
+                                    return true;
+                                }
+
+                                @Override
+                                public boolean isRestored() {
+                                    return false;
+                                }
+
+                                @Override
+                                public OperatorStateStore stateStore() {
+                                    return null;
+                                }
+                            });
+        }
         if (element.getValue() instanceof CommittableWithLineage) {
-            results.add(
+            multiTableCommittables.add(
                     ((CommittableWithLineage<MultiTableCommittable>) element.getValue())
                             .getCommittable());
         }
@@ -64,34 +126,41 @@ public class PreCommitOperator
 
     @Override
     public void prepareSnapshotPreBarrier(long checkpointId) {
-        // CommittableSummary should be sent before all CommittableWithLineage.
-        CommittableMessage<MultiTableCommittable> summary =
-                new CommittableSummary<>(
-                        getRuntimeContext().getIndexOfThisSubtask(),
-                        getRuntimeContext().getNumberOfParallelSubtasks(),
-                        checkpointId,
-                        results.size(),
-                        results.size(),
-                        0);
-        output.collect(new StreamRecord<>(summary));
+        for (int i = 0; i < multiTableCommittables.size(); i++) {
+            MultiTableCommittable multiTableCommittable = multiTableCommittables.get(i);
+            multiTableCommittables.set(
+                    i,
+                    new MultiTableCommittable(
+                            multiTableCommittable.getDatabase(),
+                            multiTableCommittable.getTable(),
+                            checkpointId,
+                            multiTableCommittable.kind(),
+                            multiTableCommittable.wrappedCommittable()));
+        }
+    }
 
-        results.forEach(
-                committable -> {
-                    // update the right checkpointId for MultiTableCommittable
-                    MultiTableCommittable committableWithCheckPointId =
-                            new MultiTableCommittable(
-                                    committable.getDatabase(),
-                                    committable.getTable(),
-                                    checkpointId,
-                                    committable.kind(),
-                                    committable.wrappedCommittable());
-                    CommittableMessage<MultiTableCommittable> message =
-                            new CommittableWithLineage<>(
-                                    committableWithCheckPointId,
-                                    checkpointId,
-                                    getRuntimeContext().getIndexOfThisSubtask());
-                    output.collect(new StreamRecord<>(message));
+    @Override
+    public void notifyCheckpointComplete(long checkpointId) throws Exception {
+        multiTableCommittables.forEach(
+                (multiTableCommittable) -> {
+                    LOGGER.debug(
+                            "Try to commit: "
+                                    + multiTableCommittable
+                                    + " in checkpoint "
+                                    + checkpointId);
                 });
-        results.clear();
+        WrappedManifestCommittable wrappedManifestCommittable =
+                storeMultiCommitter.combine(checkpointId, checkpointId, multiTableCommittables);
+        storeMultiCommitter.commit(Arrays.asList(wrappedManifestCommittable));
+        LOGGER.debug("Succeeded checkpoint " + checkpointId);
+        multiTableCommittables.clear();
+    }
+
+    @Override
+    public void close() throws Exception {
+        super.close();
+        if (storeMultiCommitter != null) {
+            storeMultiCommitter.close();
+        }
     }
 }

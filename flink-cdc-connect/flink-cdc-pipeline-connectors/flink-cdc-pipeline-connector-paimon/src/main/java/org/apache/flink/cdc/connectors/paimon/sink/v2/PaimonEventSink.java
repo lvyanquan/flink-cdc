@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketAssignOperator;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketWrapper;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketWrapperEventTypeInfo;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.connector.sink2.WithPreWriteTopology;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -44,8 +45,9 @@ public class PaimonEventSink extends PaimonSink<Event> implements WithPreWriteTo
             String commitUser,
             PaimonRecordSerializer<Event> serializer,
             String schemaOperatorUid,
-            ZoneId zoneId) {
-        super(catalogOptions, commitUser, serializer);
+            ZoneId zoneId,
+            ReadableConfig flinkConf) {
+        super(catalogOptions, commitUser, serializer, flinkConf);
         this.schemaOperatorUid = schemaOperatorUid;
         this.zoneId = zoneId;
     }
@@ -58,7 +60,7 @@ public class PaimonEventSink extends PaimonSink<Event> implements WithPreWriteTo
                         "BucketAssign",
                         new BucketWrapperEventTypeInfo(),
                         new BucketAssignOperator(
-                                catalogOptions, schemaOperatorUid, zoneId, commitUser))
+                                catalogOptions, schemaOperatorUid, zoneId, commitUser, flinkConf))
                 .name("Assign Bucket")
                 // All Events after BucketAssignOperator are decorated with BucketWrapper.
                 .partitionCustom(

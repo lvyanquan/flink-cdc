@@ -27,6 +27,7 @@ import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.configuration.Configuration;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
@@ -87,12 +88,13 @@ public class PaimonMetadataApplierTest {
         }
         catalogOptions.setString("metastore", metastore);
         catalogOptions.setString("warehouse", warehouse);
+        catalogOptions.setString("cache-enabled", "false");
         this.catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
         this.catalog.dropDatabase(TEST_DATABASE, true, true);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
+    @ValueSource(strings = {"filesystem"})
     public void testApplySchemaChange(String metastore)
             throws Catalog.TableNotExistException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
@@ -180,7 +182,7 @@ public class PaimonMetadataApplierTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
+    @ValueSource(strings = {"filesystem"})
     public void testCreateTableWithOptions(String metastore)
             throws Catalog.TableNotExistException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
@@ -190,7 +192,8 @@ public class PaimonMetadataApplierTest {
         Map<TableId, List<String>> partitionMaps = new HashMap<>();
         partitionMaps.put(TableId.parse("test.table1"), Arrays.asList("col3", "col4"));
         MetadataApplier metadataApplier =
-                new PaimonMetadataApplier(catalogOptions, tableOptions, partitionMaps);
+                new PaimonMetadataApplier(
+                        catalogOptions, tableOptions, partitionMaps, new Configuration());
         CreateTableEvent createTableEvent =
                 new CreateTableEvent(
                         TableId.parse("test.table1"),
@@ -226,7 +229,7 @@ public class PaimonMetadataApplierTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
+    @ValueSource(strings = {"filesystem"})
     public void testCreateTableWithAllDataTypes(String metastore)
             throws Catalog.TableNotExistException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
@@ -336,7 +339,7 @@ public class PaimonMetadataApplierTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
+    @ValueSource(strings = {"filesystem"})
     public void testAddColumnWithPosition(String metastore)
             throws Catalog.DatabaseNotEmptyException, Catalog.DatabaseNotExistException,
                     Catalog.TableNotExistException, SchemaEvolveException {

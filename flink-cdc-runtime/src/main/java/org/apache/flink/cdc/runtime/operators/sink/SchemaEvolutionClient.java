@@ -26,6 +26,8 @@ import org.apache.flink.cdc.runtime.operators.schema.event.GetEvolvedSchemaReque
 import org.apache.flink.cdc.runtime.operators.schema.event.GetEvolvedSchemaResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.GetOriginalSchemaRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.GetOriginalSchemaResponse;
+import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenRequest;
+import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.SinkWriterRegisterEvent;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
@@ -87,5 +89,16 @@ public class SchemaEvolutionClient {
                                                 GetOriginalSchemaRequest.ofLatestSchema(tableId)))
                                 .get());
         return getOriginalSchemaResponse.getSchema();
+    }
+
+    public String getLatestToken(TableId tableId) throws Exception {
+        GetTokenResponse getTokenResponse =
+                unwrap(
+                        toCoordinator
+                                .sendRequestToCoordinator(
+                                        schemaOperatorID,
+                                        new SerializedValue<>(new GetTokenRequest(tableId)))
+                                .get());
+        return getTokenResponse.getToken();
     }
 }

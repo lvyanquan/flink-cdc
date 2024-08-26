@@ -20,6 +20,7 @@ package org.apache.flink.cdc.connectors.paimon.sink.v2;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.sink2.Committer;
 import org.apache.flink.api.connector.sink2.Sink;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessageTypeInfo;
@@ -46,27 +47,38 @@ public class PaimonSink<InputT> implements WithPreCommitTopology<InputT, MultiTa
 
     private final PaimonRecordSerializer<InputT> serializer;
 
-    public PaimonSink(Options catalogOptions, PaimonRecordSerializer<InputT> serializer) {
+    protected final ReadableConfig flinkConf;
+
+    public PaimonSink(
+            Options catalogOptions,
+            PaimonRecordSerializer<InputT> serializer,
+            ReadableConfig flinkConf) {
         this.catalogOptions = catalogOptions;
         this.serializer = serializer;
-        commitUser = DEFAULT_COMMIT_USER;
+        this.commitUser = DEFAULT_COMMIT_USER;
+        this.flinkConf = flinkConf;
     }
 
     public PaimonSink(
-            Options catalogOptions, String commitUser, PaimonRecordSerializer<InputT> serializer) {
+            Options catalogOptions,
+            String commitUser,
+            PaimonRecordSerializer<InputT> serializer,
+            ReadableConfig flinkConf) {
         this.catalogOptions = catalogOptions;
         this.commitUser = commitUser;
         this.serializer = serializer;
+        this.flinkConf = flinkConf;
     }
 
     @Override
     public PaimonWriter<InputT> createWriter(InitContext context) {
-        return new PaimonWriter<>(catalogOptions, context.metricGroup(), commitUser, serializer);
+        return new PaimonWriter<>(
+                catalogOptions, context.metricGroup(), commitUser, serializer, flinkConf);
     }
 
     @Override
     public Committer<MultiTableCommittable> createCommitter() {
-        return new PaimonCommitter(catalogOptions, commitUser);
+        return new PaimonCommitter(catalogOptions, commitUser, flinkConf);
     }
 
     @Override
@@ -89,7 +101,10 @@ public class PaimonSink<InputT> implements WithPreCommitTopology<InputT, MultiTa
 
         // add correct checkpointId to MultiTableCommittable and recreate CommittableSummary.
         return partitioned
-                .transform("preCommit", typeInformation, new PreCommitOperator())
+                .transform(
+                        "preCommit",
+                        typeInformation,
+                        new PreCommitOperator(catalogOptions, commitUser, flinkConf))
                 .setParallelism(committables.getParallelism());
     }
 }

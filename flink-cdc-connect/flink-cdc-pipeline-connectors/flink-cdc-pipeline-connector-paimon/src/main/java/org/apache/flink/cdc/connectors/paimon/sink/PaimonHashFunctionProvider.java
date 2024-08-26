@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.function.HashFunction;
 import org.apache.flink.cdc.common.function.HashFunctionProvider;
 import org.apache.flink.cdc.common.schema.Schema;
+import org.apache.flink.configuration.ReadableConfig;
 
 import org.apache.paimon.options.Options;
 
@@ -38,14 +39,26 @@ public class PaimonHashFunctionProvider implements HashFunctionProvider<DataChan
 
     private final int parallelism;
 
-    public PaimonHashFunctionProvider(Options options, ZoneId zoneId, int parallelism) {
+    private final ReadableConfig flinkConf;
+
+    public PaimonHashFunctionProvider(
+            Options options, ZoneId zoneId, int parallelism, ReadableConfig flinkConf) {
         this.options = options;
         this.zoneId = zoneId;
         this.parallelism = parallelism;
+        this.flinkConf = flinkConf;
     }
 
     @Override
     public HashFunction<DataChangeEvent> getHashFunction(@Nullable TableId tableId, Schema schema) {
-        return new PaimonHashFunction(options, tableId, schema, zoneId, parallelism);
+        return new PaimonHashFunction(
+                options, tableId, schema, zoneId, parallelism, flinkConf, null);
+    }
+
+    @Override
+    public HashFunction<DataChangeEvent> getHashFunction(
+            @Nullable TableId tableId, Schema schema, String token) {
+        return new PaimonHashFunction(
+                options, tableId, schema, zoneId, parallelism, flinkConf, token);
     }
 }

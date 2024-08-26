@@ -46,4 +46,9 @@ public interface HashFunctionProvider<T> extends Serializable {
      * @return hash function based on the given table ID and schema
      */
     HashFunction<T> getHashFunction(@Nullable TableId tableId, Schema schema);
+
+    default HashFunction<T> getHashFunction(
+            @Nullable TableId tableId, Schema schema, String token) {
+        return getHashFunction(tableId, schema);
+    }
 }
