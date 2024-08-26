@@ -69,7 +69,9 @@ import io.debezium.relational.history.TableChanges;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,6 +125,8 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                     DataTypes.FIELD("name", DataTypes.STRING()),
                     DataTypes.FIELD("address", DataTypes.STRING()),
                     DataTypes.FIELD("phone_number", DataTypes.STRING()));
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
 
     @After
     public void clear() {
@@ -724,10 +728,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
         }
         assertFalse(assigner.waitingForFinishedSplits());
 
-        // The assigner will return empty at the first request.
         Optional<MySqlSplit> split = assigner.getNext();
-        // The assigner will return a BinlogSplit at the second request.
-        split = assigner.getNext();
         assertTrue(split.isPresent());
         assertTrue(split.get() instanceof MySqlBinlogSplit);
         MySqlBinlogSplit binlogSplit = split.get().asBinlogSplit();

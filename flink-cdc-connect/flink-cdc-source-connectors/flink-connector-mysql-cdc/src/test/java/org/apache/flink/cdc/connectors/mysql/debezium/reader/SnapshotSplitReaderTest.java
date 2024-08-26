@@ -556,8 +556,8 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         List<String> actual =
-                readTableSnapshotSplits(
-                        mySqlSplits, statefulTaskContext, 1, dataType, snapshotHooks);
+                readOneTableSnapshotSplit(
+                        mySqlSplits.get(2), statefulTaskContext, dataType, snapshotHooks);
         assertEqualsInAnyOrder(Arrays.asList(expected), actual);
     }
 
@@ -616,8 +616,8 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 };
 
         List<String> actual =
-                readTableSnapshotSplits(
-                        mySqlSplits, statefulTaskContext, 1, dataType, snapshotHooks);
+                readOneTableSnapshotSplit(
+                        mySqlSplits.get(2), statefulTaskContext, dataType, snapshotHooks);
         assertEqualsInAnyOrder(Arrays.asList(expected), actual);
     }
 
@@ -657,6 +657,35 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                     SourceRecords sourceRecords = res.next();
                     result.addAll(sourceRecords.getSourceRecordList());
                 }
+            }
+        }
+
+        snapshotSplitReader.close();
+
+        assertNotNull(snapshotSplitReader.getExecutorService());
+        assertTrue(snapshotSplitReader.getExecutorService().isTerminated());
+
+        return formatResult(result, dataType);
+    }
+
+    private List<String> readOneTableSnapshotSplit(
+            MySqlSplit mySqlSplit,
+            StatefulTaskContext statefulTaskContext,
+            DataType dataType,
+            SnapshotPhaseHooks snapshotHooks)
+            throws Exception {
+        SnapshotSplitReader snapshotSplitReader =
+                new SnapshotSplitReader(statefulTaskContext, 0, snapshotHooks);
+
+        List<SourceRecord> result = new ArrayList<>();
+        if (snapshotSplitReader.isFinished()) {
+            snapshotSplitReader.submitSplit(mySqlSplit);
+        }
+        Iterator<SourceRecords> res;
+        while ((res = snapshotSplitReader.pollSplitRecords()) != null) {
+            while (res.hasNext()) {
+                SourceRecords sourceRecords = res.next();
+                result.addAll(sourceRecords.getSourceRecordList());
             }
         }
 

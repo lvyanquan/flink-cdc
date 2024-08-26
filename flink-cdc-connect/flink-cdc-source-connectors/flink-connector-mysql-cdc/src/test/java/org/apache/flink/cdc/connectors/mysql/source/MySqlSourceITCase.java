@@ -23,7 +23,6 @@ import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
-import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHook;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
 import org.apache.flink.cdc.connectors.mysql.table.MySqlDeserializationConverterFactory;
@@ -41,8 +40,6 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.OperatorMetricGroup;
-import org.apache.flink.runtime.metrics.MetricNames;
-import org.apache.flink.runtime.metrics.groups.InternalSourceReaderMetricGroup;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -70,6 +67,7 @@ import org.apache.flink.util.Collector;
 
 import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.jdbc.JdbcConnection;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.Assert;
@@ -981,19 +979,29 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     @Test
     public void testSourceMetrics() throws Exception {
         customDatabase.createAndInitialize();
+        String customerTableName = "customers";
+        String anotherCustomerTableName = "customers_1";
+        TestTable customers =
+                new TestTable(customDatabase, customerTableName, TestTableSchemas.CUSTOMERS);
+        TestTable anotherCustomers =
+                new TestTable(customDatabase, anotherCustomerTableName, TestTableSchemas.CUSTOMERS);
+        String blankDatabase = "blank_db_" + RandomStringUtils.randomAlphabetic(6);
+        MySqlConnection connection = getConnection();
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         MySqlSource<String> source =
                 MySqlSource.<String>builder()
                         .hostname(MYSQL_CONTAINER.getHost())
                         .port(MYSQL_CONTAINER.getDatabasePort())
-                        .databaseList(customDatabase.getDatabaseName())
-                        .tableList(customDatabase.getDatabaseName() + ".customers")
+                        .databaseList(customDatabase.getDatabaseName(), blankDatabase)
+                        .tableList(customers.getTableId(), anotherCustomers.getTableId())
                         .username(customDatabase.getUsername())
                         .password(customDatabase.getPassword())
                         .deserializer(new StringDebeziumDeserializationSchema())
                         .serverId(getServerId())
+                        .includeSchemaChanges(true)
                         .serverTimeZone("UTC")
+                        .debeziumProperties(new Properties())
                         .build();
         DataStreamSource<String> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
@@ -1002,77 +1010,146 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         iterator.setJobClient(jobClient);
 
         // ---------------------------- Snapshot phase ------------------------------
-        // Wait until we receive all 21 snapshot records
-        int numSnapshotRecordsExpected = 21;
+        // Wait until we receive all 42 snapshot records
+        int expectedSnapshotRecordsInCustomerTable = 21;
+        int expectedSnapshotRecordsInAnotherCustomerTable = 21;
         int numSnapshotRecordsReceived = 0;
-        while (numSnapshotRecordsReceived < numSnapshotRecordsExpected && iterator.hasNext()) {
+        while (numSnapshotRecordsReceived
+                        < expectedSnapshotRecordsInCustomerTable
+                                + expectedSnapshotRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
             iterator.next();
             numSnapshotRecordsReceived++;
         }
 
-        // Check metrics
+        // Per-reader metrics
         List<OperatorMetricGroup> metricGroups =
                 metricReporter.findOperatorMetricGroups(jobClient.getJobID(), "MySQL CDC Source");
         // There should be only 1 parallelism of source, so it's safe to get the only group
-        OperatorMetricGroup group = metricGroups.get(0);
-        Map<String, Metric> metrics = metricReporter.getMetricsByGroup(group);
+        OperatorMetricGroup operatorMetricGroup = metricGroups.get(0);
+        validateReaderCounters(operatorMetricGroup, numSnapshotRecordsReceived, 0, 0, 0, 0);
 
-        // numRecordsOut
-        assertEquals(
-                numSnapshotRecordsExpected,
-                group.getIOMetricGroup().getNumRecordsOutCounter().getCount());
-
-        // currentEmitEventTimeLag should be UNDEFINED during snapshot phase
-        assertTrue(metrics.containsKey(MetricNames.CURRENT_EMIT_EVENT_TIME_LAG));
-        Gauge<Long> currentEmitEventTimeLag =
-                (Gauge<Long>) metrics.get(MetricNames.CURRENT_EMIT_EVENT_TIME_LAG);
-        assertEquals(
-                InternalSourceReaderMetricGroup.UNDEFINED,
-                (long) currentEmitEventTimeLag.getValue());
-
-        // currentFetchEventTimeLag should be UNDEFINED during snapshot phase
-        assertTrue(metrics.containsKey(MetricNames.CURRENT_FETCH_EVENT_TIME_LAG));
-        Gauge<Long> currentFetchEventTimeLag =
-                (Gauge<Long>) metrics.get(MetricNames.CURRENT_FETCH_EVENT_TIME_LAG);
-        assertEquals(
-                MySqlSourceReaderMetrics.UNDEFINED, (long) currentFetchEventTimeLag.getValue());
-
-        // sourceIdleTime should be positive (we can't know the exact value)
-        assertTrue(metrics.containsKey(MetricNames.SOURCE_IDLE_TIME));
-        Gauge<Long> sourceIdleTime = (Gauge<Long>) metrics.get(MetricNames.SOURCE_IDLE_TIME);
-        assertTrue(sourceIdleTime.getValue() > 0);
-        assertTrue(sourceIdleTime.getValue() < TIMEOUT.toMillis());
+        // Per-table metrics
+        MetricGroup customerTableMetricGroup = getReaderMetricGroupByTableName(customerTableName);
+        MetricGroup anotherCustomerTableMetricGroup =
+                getReaderMetricGroupByTableName(anotherCustomerTableName);
+        validateTableCounters(
+                customerTableMetricGroup, expectedSnapshotRecordsInCustomerTable, 0, 0, 0, 0);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                0,
+                0,
+                0,
+                0);
 
         // --------------------------------- Binlog phase -----------------------------
-        makeFirstPartBinlogEvents(getConnection(), customDatabase.qualifiedTableName("customers"));
-        // Wait until we receive 4 changes made above
-        int numBinlogRecordsExpected = 4;
+        makeFirstPartBinlogEvents(connection, customers.getTableId());
+        makeFirstPartBinlogEvents(connection, anotherCustomers.getTableId());
+
+        // Wait until we receive 8 changes made above
+        int expectedBinlogRecordsInCustomerTable = 4;
+        int expectedBinlogRecordsInAnotherCustomerTable = 4;
         int numBinlogRecordsReceived = 0;
-        while (numBinlogRecordsReceived < numBinlogRecordsExpected && iterator.hasNext()) {
+        while (numBinlogRecordsReceived
+                        < expectedBinlogRecordsInCustomerTable
+                                + expectedBinlogRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
             iterator.next();
             numBinlogRecordsReceived++;
         }
 
-        // Check metrics
-        // numRecordsOut
-        assertEquals(
-                numSnapshotRecordsExpected + numBinlogRecordsExpected,
-                group.getIOMetricGroup().getNumRecordsOutCounter().getCount());
+        // Per-reader metrics
+        validateReaderCounters(operatorMetricGroup, numSnapshotRecordsReceived, 2, 4, 2, 0);
 
-        // currentEmitEventTimeLag should be reasonably positive (we can't know the exact value)
-        assertTrue(currentEmitEventTimeLag.getValue() > 0);
-        assertTrue(currentEmitEventTimeLag.getValue() < TIMEOUT.toMillis());
+        // Per-table metrics
+        validateTableCounters(
+                customerTableMetricGroup, expectedSnapshotRecordsInCustomerTable, 1, 2, 1, 0);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                1,
+                2,
+                1,
+                0);
 
-        // currentEmitEventTimeLag should be reasonably positive (we can't know the exact value)
-        assertTrue(currentFetchEventTimeLag.getValue() > 0);
-        assertTrue(currentFetchEventTimeLag.getValue() < TIMEOUT.toMillis());
+        // Temporal metrics
+        validateTemporalMetrics(operatorMetricGroup);
 
-        // currentEmitEventTimeLag should be reasonably positive (we can't know the exact value)
-        assertTrue(sourceIdleTime.getValue() > 0);
-        assertTrue(sourceIdleTime.getValue() < TIMEOUT.toMillis());
+        // ------------------------------ Schema change ---------------------------
+        addColumnToTable(connection, customers.getTableId());
+        addColumnToTable(connection, anotherCustomers.getTableId());
+
+        // Wait until we receive the schema change record
+        int expectedSchemaChangeRecordsInCustomerTable = 1;
+        int expectedSchemaChangeRecordsInAnotherCustomerTable = 1;
+        int numSchemaChangeRecordsReceived = 0;
+        while (numSchemaChangeRecordsReceived
+                        < expectedSchemaChangeRecordsInCustomerTable
+                                + expectedSchemaChangeRecordsInAnotherCustomerTable
+                && iterator.hasNext()) {
+            iterator.next();
+            numSchemaChangeRecordsReceived++;
+        }
+
+        // Per-reader metrics
+        validateReaderCounters(
+                operatorMetricGroup,
+                numSnapshotRecordsReceived,
+                2,
+                4,
+                2,
+                expectedSchemaChangeRecordsInCustomerTable
+                        + expectedSchemaChangeRecordsInAnotherCustomerTable);
+
+        // Per-table metrics
+        validateTableCounters(
+                customerTableMetricGroup,
+                expectedSnapshotRecordsInCustomerTable,
+                1,
+                2,
+                1,
+                expectedSchemaChangeRecordsInCustomerTable);
+        validateTableCounters(
+                anotherCustomerTableMetricGroup,
+                expectedSnapshotRecordsInAnotherCustomerTable,
+                1,
+                2,
+                1,
+                expectedSchemaChangeRecordsInAnotherCustomerTable);
+
+        // Temporal metrics
+        validateTemporalMetrics(operatorMetricGroup);
+
+        // DB-level schema change
+        //        connection.execute(String.format("CREATE DATABASE IF NOT EXISTS %s",
+        // blankDatabase));
+        //        connection.commit();
+        //        int expectedSchemaChangeRecordsInDatabase = 1;
+        //
+        //        while (numSchemaChangeRecordsReceived
+        //                < expectedSchemaChangeRecordsInCustomerTable
+        //                + expectedSchemaChangeRecordsInAnotherCustomerTable
+        //                + expectedSchemaChangeRecordsInDatabase
+        //                && iterator.hasNext()) {
+        //            iterator.next();
+        //            numSchemaChangeRecordsReceived++;
+        //        }
+        //
+        //        validateReaderCounters(
+        //                operatorMetricGroup,
+        //                expectedSnapshotRecordsInCustomerTable
+        //                        + expectedSnapshotRecordsInAnotherCustomerTable,
+        //                2,
+        //                4,
+        //                2,
+        //                expectedSchemaChangeRecordsInCustomerTable
+        //                        + expectedSchemaChangeRecordsInAnotherCustomerTable
+        //                        + expectedSchemaChangeRecordsInDatabase);
 
         jobClient.cancel().get();
         iterator.close();
+        connection.close();
     }
 
     private <T> CollectResultIterator<T> addCollector(

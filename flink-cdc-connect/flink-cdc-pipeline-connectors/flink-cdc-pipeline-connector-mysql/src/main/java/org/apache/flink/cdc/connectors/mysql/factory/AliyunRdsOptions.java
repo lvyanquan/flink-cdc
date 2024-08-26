@@ -132,7 +132,8 @@ public class AliyunRdsOptions {
             configuration.put(RDS_MAIN_DB_ID.key(), factoryOptions.get(RDS_MAIN_DB_ID.key()));
         }
         if (factoryOptions.get(RDS_BINLOG_ENDPOINT.key()) != null) {
-            configuration.put(RDS_BINLOG_ENDPOINT.key(), factoryOptions.get(RDS_BINLOG_ENDPOINT.key()));
+            configuration.put(
+                    RDS_BINLOG_ENDPOINT.key(), factoryOptions.get(RDS_BINLOG_ENDPOINT.key()));
         }
         return new AliyunRdsConfig(
                 org.apache.flink.configuration.Configuration.fromMap(configuration));

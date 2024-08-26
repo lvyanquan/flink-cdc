@@ -697,7 +697,9 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                             + "ZRrvv70IOQ9I77+977+977+9Nu+/vT57dAA=, [4, 4, 4, 4, 4, 4, 4, 4], text, [16], [16], [16], [16], 2021, red, [a, b], "
                             + (incrementalSnapshot
                                     ? "{\"key1\":\"value1\",\"key2\":\"value2\",\"num1\":16708304,\"num2\":16708305}, "
-                                    : "{\"key1\": \"value1\", \"key2\": \"value2\", \"num1\": 16708304, \"num2\": 16708305}, ")
+                                    : (mySqlContainer == MYSQL8_CONTAINER
+                                            ? "{\"key1\": \"value1\", \"key2\": \"value2\", \"num1\": 16708304.0, \"num2\": 16708305}, "
+                                            : "{\"key1\": \"value1\", \"key2\": \"value2\", \"num1\": 16708304, \"num2\": 16708305}, "))
                             + expectedPointJsonText
                             + ", "
                             + expectedGeometryJsonText

@@ -29,6 +29,7 @@ import org.apache.flink.cdc.connectors.mysql.source.utils.StatementUtils;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.DeserializationFeature;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.debezium.DebeziumException;
@@ -367,7 +368,8 @@ public class MySqlSnapshotSplitReadTask
     private String jsonDataToString(String s) {
         try {
             final ObjectMapper objectMapper = new ObjectMapper();
-            return objectMapper.readTree(s).toString();
+            objectMapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+            return objectMapper.writeValueAsString(objectMapper.readTree(s));
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to parse json string: " + s, e);
         }

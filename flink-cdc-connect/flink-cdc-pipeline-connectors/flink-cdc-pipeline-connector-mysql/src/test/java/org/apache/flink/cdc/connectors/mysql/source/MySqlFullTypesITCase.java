@@ -385,7 +385,7 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     new byte[] {16},
                     2021,
                     BinaryStringData.fromString("red"),
-                    BinaryStringData.fromString("{\"key1\": \"value1\"}"),
+                    BinaryStringData.fromString("{\"key1\":\"value1\"}"),
                     BinaryStringData.fromString(expectedPointJsonText),
                     BinaryStringData.fromString(expectedGeometryJsonText),
                     BinaryStringData.fromString(expectLinestringJsonText),
