@@ -315,39 +315,53 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
                 "Requesting RDS archived binlog files between {} and {}",
                 startTimestampMs,
                 stopTimestampMs);
-        DescribeBinlogFilesRequest request = new DescribeBinlogFilesRequest();
-        request.setDBInstanceId(rdsConfig.getDbInstanceId());
-        request.setStartTime(toDateTime(startTimestampMs));
-        request.setEndTime(toDateTime(stopTimestampMs));
         DescribeBinlogFilesResponse response;
         try {
-            response = rdsClient.describeBinlogFiles(request);
-            checkState(
-                    response.statusCode == STATUS_CODE_SUCCESS,
-                    "Unexpected status code %d in the response",
-                    response.statusCode);
-            response.getBody().getItems().getBinLogFile().stream()
-                    .filter(
-                            payload -> {
-                                if (rdsConfig.getMainDbId() != null) {
-                                    return payload.getHostInstanceID()
-                                            .equals(rdsConfig.getMainDbId());
-                                } else {
-                                    return true;
-                                }
-                            })
-                    .map(payload -> RdsBinlogFile.fromRdsResponsePayload(payload, useIntranetLink))
-                    .sorted()
-                    .forEach(
-                            file -> {
-                                if (!rdsBinlogFileQueue.contains(file)) {
-                                    rdsBinlogFileQueue.add(file);
-                                }
-                            });
+            int currentPage = 0;
+            while (true) {
+                // PageNumber should be greater than 0.
+                currentPage++;
+                DescribeBinlogFilesRequest request = new DescribeBinlogFilesRequest();
+                request.setDBInstanceId(rdsConfig.getDbInstanceId());
+                request.setStartTime(toDateTime(startTimestampMs));
+                request.setEndTime(toDateTime(stopTimestampMs));
+                request.setPageNumber(currentPage);
+                // default page size is 30.
+                response = rdsClient.describeBinlogFiles(request);
+                checkState(
+                        response.statusCode == STATUS_CODE_SUCCESS,
+                        "Unexpected status code %d in the response",
+                        response.statusCode);
+                if (response.getBody().getItems().getBinLogFile().isEmpty()) {
+                    LOG.info("Got no binlog files in page " + currentPage);
+                    break;
+                }
+                response.getBody().getItems().getBinLogFile().stream()
+                        .filter(
+                                payload -> {
+                                    if (rdsConfig.getMainDbId() != null) {
+                                        return payload.getHostInstanceID()
+                                                .equals(rdsConfig.getMainDbId());
+                                    } else {
+                                        return true;
+                                    }
+                                })
+                        .map(
+                                payload ->
+                                        RdsBinlogFile.fromRdsResponsePayload(
+                                                payload, useIntranetLink))
+                        .sorted()
+                        .forEach(
+                                file -> {
+                                    if (!rdsBinlogFileQueue.contains(file)) {
+                                        rdsBinlogFileQueue.add(file);
+                                    }
+                                });
+                LOG.info(
+                        "Approximate binlog size to download: {}",
+                        FileUtils.byteCountToDisplaySize(response.getBody().getTotalFileSize()));
+            }
             LOG.info("Received response from RDS: {}", rdsBinlogFileQueue);
-            LOG.info(
-                    "Approximate binlog size to download: {}",
-                    FileUtils.byteCountToDisplaySize(response.getBody().getTotalFileSize()));
         } catch (Exception e) {
             throw new RuntimeException("Failed to list binlog files on RDS", e);
         }

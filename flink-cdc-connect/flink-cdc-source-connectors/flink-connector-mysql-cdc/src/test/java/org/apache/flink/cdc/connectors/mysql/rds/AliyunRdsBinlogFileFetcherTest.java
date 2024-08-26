@@ -23,6 +23,7 @@ import org.apache.flink.cdc.connectors.mysql.testutils.junit5.rds.AliyunRdsExten
 
 import com.github.shyiko.mysql.binlog.BinaryLogFileReader;
 import com.github.shyiko.mysql.binlog.event.Event;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -37,12 +38,24 @@ class AliyunRdsBinlogFileFetcherTest {
     @RegisterExtension static final AliyunRdsExtension RDS = new AliyunRdsExtension();
 
     @Test
+    void testGetAllRdsBinlogFiles() throws Exception {
+        long stopTimestampMs = System.currentTimeMillis();
+        long startTimestampMs = 0;
+        try (AliyunRdsBinlogFileFetcher fetcher =
+                createFetcher(RDS, startTimestampMs, stopTimestampMs)) {
+            int numRdsBinlogFiles = fetcher.getRdsBinlogFileQueue().size();
+            // Check that we have retrieved file information larger than one page.
+            Assertions.assertTrue(numRdsBinlogFiles > 30);
+        }
+    }
+
+    @Test
     void testFetchingBinlogFiles() throws Exception {
         // Get archived binlog files between T-48h and T-24h
         long stopTimestampMs = System.currentTimeMillis() - Duration.ofDays(1).toMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(startTimestampMs, stopTimestampMs)) {
+                createFetcher(RDS, startTimestampMs, stopTimestampMs)) {
             int numRdsBinlogFiles = fetcher.getRdsBinlogFileQueue().size();
             int numLocalBinlogFiles = 0;
             LocalBinlogFile lastFile = null;
@@ -78,7 +91,7 @@ class AliyunRdsBinlogFileFetcherTest {
     void testNoBinlogFiles() throws Exception {
         // Use the same value for both start and stop timestamp
         long timestamp = System.currentTimeMillis();
-        try (AliyunRdsBinlogFileFetcher fetcher = createFetcher(timestamp, timestamp)) {
+        try (AliyunRdsBinlogFileFetcher fetcher = createFetcher(RDS, timestamp, timestamp)) {
             assertThat(fetcher.getRdsBinlogFileQueue()).isEmpty();
             assertThat(fetcher.hasNext()).isFalse();
         }
@@ -90,7 +103,7 @@ class AliyunRdsBinlogFileFetcherTest {
         long stopTimestampMs = System.currentTimeMillis() - Duration.ofDays(1).toMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(startTimestampMs, stopTimestampMs)) {
+                createFetcher(RDS, startTimestampMs, stopTimestampMs)) {
             LocalBinlogFile lastFile = null;
             while (fetcher.hasNext()) {
                 LocalBinlogFile file = fetcher.next();
@@ -103,10 +116,13 @@ class AliyunRdsBinlogFileFetcherTest {
         }
     }
 
-    private AliyunRdsBinlogFileFetcher createFetcher(long startTimestampMs, long stopTimestampMs) {
+    private AliyunRdsBinlogFileFetcher createFetcher(
+            AliyunRdsExtension aliyunRdsExtension, long startTimestampMs, long stopTimestampMs) {
         AliyunRdsBinlogFileFetcher fetcher =
                 new AliyunRdsBinlogFileFetcher(
-                        RDS.getRdsConfigBuilder().build(), startTimestampMs, stopTimestampMs);
+                        aliyunRdsExtension.getRdsConfigBuilder().build(),
+                        startTimestampMs,
+                        stopTimestampMs);
         fetcher.initialize(BinlogOffset.ofBinlogFilePosition("mysql-bin.000001", 4));
         return fetcher;
     }
