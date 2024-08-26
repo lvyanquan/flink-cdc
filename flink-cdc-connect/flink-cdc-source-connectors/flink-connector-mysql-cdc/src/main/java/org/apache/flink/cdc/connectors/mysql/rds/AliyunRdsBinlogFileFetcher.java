@@ -289,6 +289,9 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         config.setRegionId(rdsConfig.getRegionId());
         config.setReadTimeout(((int) requestTimeout.toMillis()));
         config.setConnectTimeout(((int) requestTimeout.toMillis()));
+        if (rdsConfig.getEndpoint() != null) {
+            config.setEndpoint(rdsConfig.getEndpoint());
+        }
         try {
             return new Client(config);
         } catch (Exception e) {

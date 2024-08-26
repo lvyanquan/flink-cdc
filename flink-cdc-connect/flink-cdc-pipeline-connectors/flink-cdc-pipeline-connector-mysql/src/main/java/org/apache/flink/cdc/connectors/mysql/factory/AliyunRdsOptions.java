@@ -99,6 +99,13 @@ public class AliyunRdsOptions {
                     .noDefaultValue()
                     .withDescription("The identifier of main database instance");
 
+    @Experimental
+    public static final ConfigOption<String> RDS_BINLOG_ENDPOINT =
+            ConfigOptions.key("rds.endpoint")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("RDS Endpoint.");
+
     public static AliyunRdsConfig fromConfig(Configuration other) {
         sanityCheck(other);
 
@@ -121,7 +128,12 @@ public class AliyunRdsOptions {
                 factoryOptions.get(RDS_BINLOG_DIRECTORY_PREFIX.key()));
         configuration.put(
                 RDS_USE_INTRANET_LINK.key(), factoryOptions.get(RDS_USE_INTRANET_LINK.key()));
-        configuration.put(RDS_MAIN_DB_ID.key(), factoryOptions.get(RDS_MAIN_DB_ID));
+        if (factoryOptions.get(RDS_MAIN_DB_ID.key()) != null) {
+            configuration.put(RDS_MAIN_DB_ID.key(), factoryOptions.get(RDS_MAIN_DB_ID.key()));
+        }
+        if (factoryOptions.get(RDS_BINLOG_ENDPOINT.key()) != null) {
+            configuration.put(RDS_BINLOG_ENDPOINT.key(), factoryOptions.get(RDS_BINLOG_ENDPOINT.key()));
+        }
         return new AliyunRdsConfig(
                 org.apache.flink.configuration.Configuration.fromMap(configuration));
     }

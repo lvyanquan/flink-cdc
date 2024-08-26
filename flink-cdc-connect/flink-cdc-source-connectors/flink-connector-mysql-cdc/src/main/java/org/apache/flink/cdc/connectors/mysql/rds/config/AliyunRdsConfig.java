@@ -23,6 +23,8 @@ import org.apache.flink.configuration.ReadableConfig;
 
 import org.apache.commons.lang3.RandomStringUtils;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
@@ -36,6 +38,7 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_BINLOG_ENDPOINT;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
@@ -70,7 +73,12 @@ public class AliyunRdsConfig implements Serializable {
         }
         configuration.set(RDS_BINLOG_DIRECTORY_PREFIX, other.get(RDS_BINLOG_DIRECTORY_PREFIX));
         configuration.set(RDS_USE_INTRANET_LINK, other.get(RDS_USE_INTRANET_LINK));
-        configuration.set(RDS_MAIN_DB_ID, other.get(RDS_MAIN_DB_ID));
+        if (other.getOptional(RDS_MAIN_DB_ID).isPresent()) {
+            configuration.set(RDS_MAIN_DB_ID, other.get(RDS_MAIN_DB_ID));
+        }
+        if (other.getOptional(RDS_BINLOG_ENDPOINT).isPresent()) {
+            configuration.set(RDS_BINLOG_ENDPOINT, other.get(RDS_BINLOG_ENDPOINT));
+        }
         return new AliyunRdsConfig(configuration);
     }
 
@@ -97,6 +105,11 @@ public class AliyunRdsConfig implements Serializable {
 
     public Duration getDownloadTimeout() {
         return configuration.get(RDS_DOWNLOAD_TIMEOUT);
+    }
+
+    @Nullable
+    public String getEndpoint() {
+        return configuration.getOptional(RDS_BINLOG_ENDPOINT).orElse(null);
     }
 
     public Path getRandomBinlogDirectoryPath() {
@@ -189,6 +202,12 @@ public class AliyunRdsConfig implements Serializable {
         /** The identifier of main database instance. */
         public RdsConfigBuilder mainDbId(String mainDbId) {
             configuration.set(RDS_MAIN_DB_ID, mainDbId);
+            return this;
+        }
+
+        /** The endpoint of rds client. */
+        public RdsConfigBuilder endpoint(String endpoint) {
+            configuration.set(RDS_BINLOG_ENDPOINT, endpoint);
             return this;
         }
 

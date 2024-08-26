@@ -66,6 +66,7 @@ public class AliyunRdsExtension implements BeforeAllCallback, AfterAllCallback, 
     private static final String DB_INSTANCE_ID_ENV = "RDS_BINLOG_ARCHIVE_TEST_DB_INSTANCE_ID";
 
     public static final String MAIN_DB_ID_ENV = "RDB_BINLOG_ARCHIVE_TEST_MAIN_DB_ID";
+    private static final String ENDPOINT_ENV = "RDS_BINLOG_ARCHIVE_TEST_ENDPOINT";
 
     // Environment variables of JDBC connections
     private static final String HOST_ENV = "RDS_BINLOG_ARCHIVE_TEST_HOST";
@@ -314,6 +315,7 @@ public class AliyunRdsExtension implements BeforeAllCallback, AfterAllCallback, 
                 .accessKeySecret(getEnvironmentVariable(ACCESS_KEY_SECRET_ENV))
                 .dbInstanceId(getEnvironmentVariable(DB_INSTANCE_ID_ENV))
                 .mainDbId(getEnvironmentVariable(MAIN_DB_ID_ENV))
+                .endpoint(getEnvironmentVariable(ENDPOINT_ENV))
                 .useIntranetLink(false);
     }
 

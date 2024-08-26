@@ -92,4 +92,11 @@ public class AliyunRdsOptions {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The identifier of main database instance");
+
+    @Experimental
+    public static final ConfigOption<String> RDS_BINLOG_ENDPOINT =
+            ConfigOptions.key("rds.endpoint")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("RDS Endpoint.");
 }
