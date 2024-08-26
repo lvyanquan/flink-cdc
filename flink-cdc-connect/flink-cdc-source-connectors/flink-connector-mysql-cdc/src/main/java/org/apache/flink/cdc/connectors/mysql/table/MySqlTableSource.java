@@ -21,6 +21,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
+import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
@@ -97,6 +98,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     /** Metadata that is appended at the end of a physical source row. */
     protected List<String> metadataKeys;
 
+    private AssignStrategy scanChunkAssignStrategy;
+
     public MySqlTableSource(
             ResolvedSchema physicalSchema,
             int port,
@@ -124,7 +127,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
             Duration heartbeatInterval,
             @Nullable String chunkKeyColumn,
             boolean skipSnapshotBackFill,
-            @Nullable AliyunRdsConfig rdsConfig) {
+            @Nullable AliyunRdsConfig rdsConfig,
+            AssignStrategy scanChunkAssignStrategy) {
         this.physicalSchema = physicalSchema;
         this.port = port;
         this.hostname = checkNotNull(hostname);
@@ -155,6 +159,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
         this.chunkKeyColumn = chunkKeyColumn;
         this.skipSnapshotBackFill = skipSnapshotBackFill;
         this.rdsConfig = rdsConfig;
+        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
     }
 
     @Override
@@ -209,7 +214,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                     .jdbcProperties(jdbcProperties)
                     .heartbeatInterval(heartbeatInterval)
                     .chunkKeyColumn(new ObjectPath(database, tableName), chunkKeyColumn)
-                    .skipSnapshotBackfill(skipSnapshotBackFill);
+                    .skipSnapshotBackfill(skipSnapshotBackFill)
+                    .scanChunkAssignStrategy(scanChunkAssignStrategy);
             if (rdsConfig != null) {
                 parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
             }
@@ -298,7 +304,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                         heartbeatInterval,
                         chunkKeyColumn,
                         skipSnapshotBackFill,
-                        rdsConfig);
+                        rdsConfig,
+                        scanChunkAssignStrategy);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         return source;
@@ -341,7 +348,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 && Objects.equals(heartbeatInterval, that.heartbeatInterval)
                 && Objects.equals(chunkKeyColumn, that.chunkKeyColumn)
                 && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
-                && Objects.equals(rdsConfig, that.rdsConfig);
+                && Objects.equals(rdsConfig, that.rdsConfig)
+                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy);
     }
 
     @Override
@@ -375,7 +383,8 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 heartbeatInterval,
                 chunkKeyColumn,
                 skipSnapshotBackFill,
-                rdsConfig);
+                rdsConfig,
+                scanChunkAssignStrategy);
     }
 
     @Override

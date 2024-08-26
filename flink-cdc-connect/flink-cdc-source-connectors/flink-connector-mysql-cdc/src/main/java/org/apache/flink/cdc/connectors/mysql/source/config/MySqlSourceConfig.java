@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.mysql.source.config;
 
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
+import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.table.catalog.ObjectPath;
 
@@ -76,6 +77,8 @@ public class MySqlSourceConfig implements Serializable {
     // --------------------------------------------------------------------------------------------
     @Nullable private final AliyunRdsConfig rdsConfig;
 
+    private AssignStrategy scanChunkAssignStrategy;
+
     MySqlSourceConfig(
             String hostname,
             int port,
@@ -101,7 +104,8 @@ public class MySqlSourceConfig implements Serializable {
             Properties jdbcProperties,
             Map<ObjectPath, String> chunkKeyColumns,
             boolean skipSnapshotBackfill,
-            @Nullable AliyunRdsConfig rdsConfig) {
+            @Nullable AliyunRdsConfig rdsConfig,
+            AssignStrategy scanChunkAssignStrategy) {
         this.hostname = checkNotNull(hostname);
         this.port = port;
         this.username = checkNotNull(username);
@@ -129,6 +133,7 @@ public class MySqlSourceConfig implements Serializable {
         this.chunkKeyColumns = chunkKeyColumns;
         this.skipSnapshotBackfill = skipSnapshotBackfill;
         this.rdsConfig = rdsConfig;
+        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
     }
 
     public String getHostname() {
@@ -247,5 +252,9 @@ public class MySqlSourceConfig implements Serializable {
     @Nullable
     public AliyunRdsConfig getRdsConfig() {
         return rdsConfig;
+    }
+
+    public AssignStrategy getScanChunkAssignStrategy() {
+        return scanChunkAssignStrategy;
     }
 }

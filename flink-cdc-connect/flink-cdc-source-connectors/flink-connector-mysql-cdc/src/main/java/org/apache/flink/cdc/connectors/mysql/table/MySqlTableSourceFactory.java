@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
+import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions;
 import org.apache.flink.cdc.connectors.mysql.source.config.ServerIdRange;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
@@ -58,6 +59,7 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -129,6 +131,7 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         }
 
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
+        AssignStrategy scanChunkAssignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
 
         // RDS related options
         AliyunRdsConfig rdsConfig = null;
@@ -163,7 +166,8 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 heartbeatInterval,
                 chunkKeyColumn,
                 skipSnapshotBackFill,
-                rdsConfig);
+                rdsConfig,
+                scanChunkAssignStrategy);
     }
 
     @Override
@@ -220,6 +224,7 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(RDS_USE_INTRANET_LINK);
         options.add(RDS_MAIN_DB_ID);
         options.add(RDS_BINLOG_ENDPOINT);
+        options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
         return options;
     }
 
