@@ -116,7 +116,7 @@ INSERT INTO polardbx_full_types VALUES (
     '2020-07-17', '18:00:22', '2020-07-17 18:00:22.123', '2020-07-17 18:00:22.123456', '2020-07-17 18:00:22',
     unhex(replace('651aed08-390f-4893-b2f1-36923e7b7400','-','')), b'0000010000000100000001000000010000000100000001000000010000000100',
     'text',UNHEX(HEX(16)),UNHEX(HEX(16)),UNHEX(HEX(16)),UNHEX(HEX(16)), 2021,
-    'red', 'a,b,a', '{"key1": "value1"}',
+    'red', 'a,b,a', '{"key1": "value1", "key2": "value2", "num1": 1.6708304E7, "num2": 16708305}',
     ST_GeomFromText('POINT(1 1)'),
     ST_GeomFromText('POLYGON((1 1, 2 1, 2 2,  1 2, 1 1))'),
     ST_GeomFromText('LINESTRING(3 0, 3 3, 3 5)'),

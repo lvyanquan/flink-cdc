@@ -91,7 +91,7 @@ VALUES (DEFAULT, 127, 255, 255, 32767, 65535, 65535, 8388607, 16777215, 16777215
         b'0000010000000100000001000000010000000100000001000000010000000100',
         'text', UNHEX(HEX(16)), UNHEX(HEX(16)), UNHEX(HEX(16)), UNHEX(HEX(16)), 2021,
         'red', 'a,b,a', '{
-    "key1": "value1"
+    "key1": "value1", "key2": "value2", "num1": 1.6708304E7, "num2": 16708305
   }',
         ST_GeomFromText('POINT(1 1)'),
         ST_GeomFromText('POLYGON((1 1, 2 1, 2 2,  1 2, 1 1))'),

@@ -28,6 +28,9 @@ import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSnapshotSplit;
 import org.apache.flink.cdc.connectors.mysql.source.utils.StatementUtils;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
 
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.debezium.DebeziumException;
 import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
@@ -351,7 +354,22 @@ public class MySqlSnapshotSplitReadTask
             // read it again to get correct scale
             return rs.getObject(fieldNo) == null ? null : rs.getInt(fieldNo);
         } else {
-            return rs.getObject(fieldNo);
+            Object o = rs.getObject(fieldNo);
+            if (o == null) {
+                return null;
+            }
+            return "json".equalsIgnoreCase(actualColumn.typeName())
+                    ? jsonDataToString((String) o)
+                    : o;
+        }
+    }
+
+    private String jsonDataToString(String s) {
+        try {
+            final ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.readTree(s).toString();
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to parse json string: " + s, e);
         }
     }
 
