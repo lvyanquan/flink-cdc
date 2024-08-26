@@ -25,10 +25,12 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlBinlogSplitAssigner;
+import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlHybridSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlSnapshotSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.source.events.FinishedSnapshotSplitsAckEvent;
+import org.apache.flink.cdc.connectors.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
@@ -82,6 +84,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -104,6 +107,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests for {@link MySqlSourceReader}. */
 public class MySqlSourceReaderTest extends MySqlSourceTestBase {
@@ -112,6 +116,13 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             new UniqueDatabase(MYSQL_CONTAINER, "customer", "mysqluser", "mysqlpw");
     private final UniqueDatabase inventoryDatabase =
             new UniqueDatabase(MYSQL_CONTAINER, "inventory", "mysqluser", "mysqlpw");
+
+    private static final DataType CUSTOMER_DATA_TYPE =
+            DataTypes.ROW(
+                    DataTypes.FIELD("id", DataTypes.BIGINT()),
+                    DataTypes.FIELD("name", DataTypes.STRING()),
+                    DataTypes.FIELD("address", DataTypes.STRING()),
+                    DataTypes.FIELD("phone_number", DataTypes.STRING()));
 
     @After
     public void clear() {
@@ -547,6 +558,224 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             }
         }
         reader.close();
+    }
+
+    @Test
+    public void testBackfillInSnapshotPhase() throws Exception {
+        customerDatabase.createAndInitialize();
+        String tableName = customerDatabase.getDatabaseName() + ".customers";
+        // use default split size which is large to make sure we only have one snapshot split
+        MySqlSourceConfig sourceConfig =
+                getConfigFactory(customerDatabase, tableName).createConfig(0);
+        MySqlSnapshotSplitAssigner assigner =
+                new MySqlSnapshotSplitAssigner(
+                        sourceConfig,
+                        DEFAULT_PARALLELISM,
+                        Collections.singletonList(TableId.parse(tableName)),
+                        false);
+        assigner.open();
+        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
+        MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
+        // should contain only one split
+        assertFalse(assigner.getNext().isPresent());
+        // and the split is a full range one
+        assertNull(snapshotSplit.getSplitStart());
+        assertNull(snapshotSplit.getSplitEnd());
+        assigner.close();
+
+        // Make some changes to the table before emitting high watermark. These changes should be
+        // back-filled into snapshot
+        String[] statementsBeforeHighWatermark =
+                new String[] {
+                    String.format(
+                            "INSERT INTO %s VALUES (15213, 'user_15213', 'Pittsburgh', '15213')",
+                            tableName),
+                    String.format("UPDATE %s SET address='Hangzhou' WHERE id=2000", tableName),
+                    String.format("DELETE FROM %s WHERE id<1019", tableName)
+                };
+
+        SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
+        snapshotHooks.setPreHighWatermarkAction(
+                (connection, splitId) -> {
+                    connection.setAutoCommit(false);
+                    connection.execute(statementsBeforeHighWatermark);
+                    connection.commit();
+                });
+
+        // Insert another row to validate that this one will not be backfilled
+        snapshotHooks.setPostHighWatermarkAction(
+                (connection, splitId) -> {
+                    connection.setAutoCommit(false);
+                    connection.execute(
+                            String.format(
+                                    "INSERT INTO %s VALUES (15513, 'user_15513', 'Pittsburgh', '15513')",
+                                    tableName));
+                    connection.commit();
+                });
+
+        MySqlSourceReader<SourceRecord> reader =
+                createReader(sourceConfig, new TestingReaderContext(), 0, snapshotHooks);
+        reader.start();
+        reader.addSplits(Collections.singletonList(snapshotSplit));
+
+        List<String> snapshotRecords = consumeRecords(reader, CUSTOMER_DATA_TYPE);
+        List<String> expectedSnapshotRecords =
+                Arrays.asList(
+                        "+I[1019, user_20, Shanghai, 123567891234]",
+                        "+I[2000, user_21, Hangzhou, 123567891234]",
+                        "+I[15213, user_15213, Pittsburgh, 15213]");
+
+        assertEqualsInAnyOrder(expectedSnapshotRecords, snapshotRecords);
+    }
+
+    @Test
+    public void testSkippingBackfillInSnapshotPhase() throws Exception {
+        // Preparation
+        customerDatabase.createAndInitialize();
+        String tableName = customerDatabase.getDatabaseName() + ".customers";
+
+        // Set skipping snapshot backfill to true
+        MySqlSourceConfig sourceConfig =
+                getConfigFactory(customerDatabase, tableName)
+                        .skipSnapshotBackfill(true)
+                        .createConfig(0);
+
+        // Create assigner for generating splits
+        MySqlHybridSplitAssigner assigner =
+                new MySqlHybridSplitAssigner(
+                        sourceConfig,
+                        1,
+                        new ArrayList<>(),
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.open();
+        MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
+        // should contain only one split
+        assertFalse(assigner.getNext().isPresent());
+        // and the split is a full range one
+        assertNull(snapshotSplit.getSplitStart());
+        assertNull(snapshotSplit.getSplitEnd());
+
+        TestingReaderContext readerContext = new TestingReaderContext();
+
+        // Make some changes to the table before emitting high watermark
+        String[] statementsBeforeHighWatermark =
+                new String[] {
+                    String.format(
+                            "INSERT INTO %s VALUES (15213, 'user_15213', 'Pittsburgh', '15213')",
+                            tableName),
+                    String.format("UPDATE %s SET address='Hangzhou' WHERE id=2000", tableName),
+                    String.format("DELETE FROM %s WHERE id<1019", tableName)
+                };
+
+        SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
+        snapshotHooks.setPreHighWatermarkAction(
+                (connection, splitId) -> {
+                    connection.setAutoCommit(false);
+                    connection.execute(statementsBeforeHighWatermark);
+                    connection.commit();
+                });
+
+        MySqlSourceReader<SourceRecord> reader =
+                createReader(sourceConfig, readerContext, 0, snapshotHooks);
+        reader.start();
+        reader.addSplits(Collections.singletonList(snapshotSplit));
+
+        List<String> snapshotRecords = consumeRecords(reader, CUSTOMER_DATA_TYPE);
+
+        // All records in the original table are expected as backfill is skipped
+        List<String> expectedSnapshotRecords =
+                Arrays.asList(
+                        "+I[101, user_1, Shanghai, 123567891234]",
+                        "+I[102, user_2, Shanghai, 123567891234]",
+                        "+I[103, user_3, Shanghai, 123567891234]",
+                        "+I[109, user_4, Shanghai, 123567891234]",
+                        "+I[110, user_5, Shanghai, 123567891234]",
+                        "+I[111, user_6, Shanghai, 123567891234]",
+                        "+I[118, user_7, Shanghai, 123567891234]",
+                        "+I[121, user_8, Shanghai, 123567891234]",
+                        "+I[123, user_9, Shanghai, 123567891234]",
+                        "+I[1009, user_10, Shanghai, 123567891234]",
+                        "+I[1010, user_11, Shanghai, 123567891234]",
+                        "+I[1011, user_12, Shanghai, 123567891234]",
+                        "+I[1012, user_13, Shanghai, 123567891234]",
+                        "+I[1013, user_14, Shanghai, 123567891234]",
+                        "+I[1014, user_15, Shanghai, 123567891234]",
+                        "+I[1015, user_16, Shanghai, 123567891234]",
+                        "+I[1016, user_17, Shanghai, 123567891234]",
+                        "+I[1017, user_18, Shanghai, 123567891234]",
+                        "+I[1018, user_19, Shanghai, 123567891234]",
+                        "+I[1019, user_20, Shanghai, 123567891234]",
+                        "+I[2000, user_21, Shanghai, 123567891234]");
+
+        Collections.sort(expectedSnapshotRecords);
+        Collections.sort(snapshotRecords);
+        assertEqualsInOrder(expectedSnapshotRecords, snapshotRecords);
+
+        // Binlog phase
+        List<FinishedSnapshotSplitsReportEvent> reportEvents =
+                readerContext.getSentEvents().stream()
+                        .filter(event -> event instanceof FinishedSnapshotSplitsReportEvent)
+                        .map(event -> (FinishedSnapshotSplitsReportEvent) event)
+                        .collect(Collectors.toList());
+
+        for (FinishedSnapshotSplitsReportEvent reportEvent : reportEvents) {
+            assigner.onFinishedSplits(reportEvent.getFinishedOffsets());
+        }
+        assertFalse(assigner.waitingForFinishedSplits());
+
+        // The assigner will return empty at the first request.
+        Optional<MySqlSplit> split = assigner.getNext();
+        // The assigner will return a BinlogSplit at the second request.
+        split = assigner.getNext();
+        assertTrue(split.isPresent());
+        assertTrue(split.get() instanceof MySqlBinlogSplit);
+        MySqlBinlogSplit binlogSplit = split.get().asBinlogSplit();
+
+        reader.addSplits(Collections.singletonList(binlogSplit));
+        reader.notifyNoMoreSplits();
+
+        List<String> binlogRecords = consumeRecords(reader, CUSTOMER_DATA_TYPE);
+        List<String> expectedBinlogRecords =
+                Arrays.asList(
+                        "+I[15213, user_15213, Pittsburgh, 15213]",
+                        "-U[2000, user_21, Shanghai, 123567891234]",
+                        "+U[2000, user_21, Hangzhou, 123567891234]",
+                        "-D[101, user_1, Shanghai, 123567891234]",
+                        "-D[102, user_2, Shanghai, 123567891234]",
+                        "-D[103, user_3, Shanghai, 123567891234]",
+                        "-D[109, user_4, Shanghai, 123567891234]",
+                        "-D[110, user_5, Shanghai, 123567891234]",
+                        "-D[111, user_6, Shanghai, 123567891234]",
+                        "-D[118, user_7, Shanghai, 123567891234]",
+                        "-D[121, user_8, Shanghai, 123567891234]",
+                        "-D[123, user_9, Shanghai, 123567891234]",
+                        "-D[1009, user_10, Shanghai, 123567891234]",
+                        "-D[1010, user_11, Shanghai, 123567891234]",
+                        "-D[1011, user_12, Shanghai, 123567891234]",
+                        "-D[1012, user_13, Shanghai, 123567891234]",
+                        "-D[1013, user_14, Shanghai, 123567891234]",
+                        "-D[1014, user_15, Shanghai, 123567891234]",
+                        "-D[1015, user_16, Shanghai, 123567891234]",
+                        "-D[1016, user_17, Shanghai, 123567891234]",
+                        "-D[1017, user_18, Shanghai, 123567891234]",
+                        "-D[1018, user_19, Shanghai, 123567891234]");
+
+        assertEqualsInAnyOrder(expectedBinlogRecords, binlogRecords);
+    }
+
+    private MySqlSourceConfigFactory getConfigFactory(
+            UniqueDatabase database, String... tableName) {
+        return new MySqlSourceConfigFactory()
+                .startupOptions(StartupOptions.initial())
+                .databaseList(database.getDatabaseName())
+                .tableList(tableName)
+                .includeSchemaChanges(false)
+                .hostname(MYSQL_CONTAINER.getHost())
+                .port(MYSQL_CONTAINER.getDatabasePort())
+                .username(database.getUsername())
+                .password(database.getPassword())
+                .serverTimeZone(ZoneId.of("UTC").toString());
     }
 
     private MySqlSourceReader<SourceRecord> createReader(MySqlSourceConfig configuration, int limit)

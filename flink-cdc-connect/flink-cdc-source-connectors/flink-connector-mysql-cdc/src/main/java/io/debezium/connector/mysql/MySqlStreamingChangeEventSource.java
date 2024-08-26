@@ -15,6 +15,7 @@ import com.github.shyiko.mysql.binlog.event.EventHeader;
 import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 import com.github.shyiko.mysql.binlog.event.EventType;
 import com.github.shyiko.mysql.binlog.event.GtidEventData;
+import com.github.shyiko.mysql.binlog.event.PreviousGtidSetEventData;
 import com.github.shyiko.mysql.binlog.event.QueryEventData;
 import com.github.shyiko.mysql.binlog.event.RotateEventData;
 import com.github.shyiko.mysql.binlog.event.RowsQueryEventData;
@@ -90,10 +91,13 @@ import static io.debezium.util.Strings.isNullOrEmpty;
  * <p>Line 260-262: Skip null events in event deserializer to compatible with {@link
  * com.github.shyiko.mysql.binlog.BinaryLogFileReader} which reads local binlog files.
  *
- * <p>Line 1434-1440 : Adjust GTID merging logic to support recovering from job which previously
+ * <p>Line 553-571 : Add PREVIOUS_GTIDS event handler to use the PREVIOUS_GTID event at the
+ * beginning of the binlog file to update internal GTID set.
+ *
+ * <p>Line 1461-1467 : Adjust GTID merging logic to support recovering from job which previously
  * specifying starting offset on start.
  *
- * <p>Line 1494 : Add more error details for some exceptions.
+ * <p>Line 1521 : Add more error details for some exceptions.
  */
 public class MySqlStreamingChangeEventSource
         implements StreamingChangeEventSource<MySqlPartition, MySqlOffsetContext> {
@@ -544,6 +548,26 @@ public class MySqlStreamingChangeEventSource
         RotateEventData command = unwrapData(event);
         assert command != null;
         taskContext.getSchema().clearTableMappings();
+    }
+
+    protected void handlePreviousGtidsEvent(MySqlOffsetContext offsetContext, Event event) {
+        PreviousGtidSetEventData previousGtidSetEventData = unwrapData(event);
+        LOGGER.info(
+                "Handling PREVIOUS_GTID_EVENT: {}. Current GTID set: {}",
+                previousGtidSetEventData,
+                gtidSet);
+        com.github.shyiko.mysql.binlog.GtidSet previousGtidSet =
+                new com.github.shyiko.mysql.binlog.GtidSet(previousGtidSetEventData.getGtidSet());
+        if (previousGtidSet.isContainedWithin(gtidSet)) {
+            LOGGER.info(
+                    "Current GTID set already contains previous GTID set and will not be updated.");
+            return;
+        }
+        LOGGER.info(
+                "Updating GTID set with previous GTID set: {}",
+                previousGtidSetEventData.getGtidSet());
+        gtidSet = previousGtidSet;
+        offsetContext.setCompletedGtidSet(gtidSet.toString());
     }
 
     /**
@@ -1126,6 +1150,9 @@ public class MySqlStreamingChangeEventSource
             // The server is using GTIDs, so enable the handler ...
             eventHandlers.put(
                     EventType.GTID, (event) -> handleGtidEvent(effectiveOffsetContext, event));
+            eventHandlers.put(
+                    EventType.PREVIOUS_GTIDS,
+                    (event) -> handlePreviousGtidsEvent(effectiveOffsetContext, event));
 
             // Now look at the GTID set from the server and what we've previously seen ...
             GtidSet availableServerGtidSet = new GtidSet(availableServerGtidStr);
