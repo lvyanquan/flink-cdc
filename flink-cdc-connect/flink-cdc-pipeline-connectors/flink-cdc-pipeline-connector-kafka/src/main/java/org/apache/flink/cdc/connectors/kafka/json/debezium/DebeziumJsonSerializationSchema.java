@@ -78,6 +78,9 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
 
     private final boolean writeNullProperties;
 
+    /** key for extracting operation timestamp in {@link DataChangeEvent#meta()}. */
+    public static final String OPERATION_TIMESTAMP_KEY = "op_ts";
+
     public DebeziumJsonSerializationSchema(
             TimestampFormat timestampFormat,
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
@@ -137,11 +140,13 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
         }
 
         DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
+        String opTs = dataChangeEvent.meta().get(OPERATION_TIMESTAMP_KEY);
         reuseGenericRowData.setField(
                 3,
                 GenericRowData.of(
                         StringData.fromString(dataChangeEvent.tableId().getSchemaName()),
-                        StringData.fromString(dataChangeEvent.tableId().getTableName())));
+                        StringData.fromString(dataChangeEvent.tableId().getTableName()),
+                        opTs == null ? 0L : Long.parseLong(opTs)));
         try {
             switch (dataChangeEvent.op()) {
                 case INSERT:
@@ -211,7 +216,8 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
                                         "source",
                                         DataTypes.ROW(
                                                 DataTypes.FIELD("db", DataTypes.STRING()),
-                                                DataTypes.FIELD("table", DataTypes.STRING()))))
+                                                DataTypes.FIELD("table", DataTypes.STRING()),
+                                                DataTypes.FIELD("ts_ms", DataTypes.BIGINT()))))
                         .getLogicalType();
     }
 }

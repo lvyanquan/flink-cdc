@@ -39,10 +39,13 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.ZoneId;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,8 +55,9 @@ public class CanalJsonSerializationSchemaTest {
     public static final TableId TABLE_1 =
             TableId.tableId("default_namespace", "default_schema", "table1");
 
-    @Test
-    public void testSerialize() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "false"})
+    public void testSerialize(boolean emitOperationTimestampFromSource) throws Exception {
         ObjectMapper mapper =
                 JacksonMapperFactory.createObjectMapper()
                         .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, false);
@@ -74,6 +78,12 @@ public class CanalJsonSerializationSchemaTest {
         CreateTableEvent createTableEvent = new CreateTableEvent(TABLE_1, schema);
         Assertions.assertNull(serializationSchema.serialize(createTableEvent));
 
+        Map<String, String> meta = new HashMap<>();
+        long timestamp = 0;
+        if (emitOperationTimestampFromSource) {
+            timestamp = System.currentTimeMillis();
+            meta.put("op_ts", String.valueOf(timestamp));
+        }
         // insert
         BinaryRecordDataGenerator generator =
                 new BinaryRecordDataGenerator(RowType.of(DataTypes.STRING(), DataTypes.STRING()));
@@ -84,10 +94,13 @@ public class CanalJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("1")
-                                }));
+                                }),
+                        meta);
         JsonNode expected =
                 mapper.readTree(
-                        "{\"old\":null,\"data\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}");
+                        String.format(
+                                "{\"old\":null,\"data\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"],\"ts\":%s}",
+                                timestamp));
         JsonNode actual = mapper.readTree(serializationSchema.serialize(insertEvent1));
         Assertions.assertEquals(expected, actual);
 
@@ -98,10 +111,13 @@ public class CanalJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"old\":null,\"data\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}");
+                        String.format(
+                                "{\"old\":null,\"data\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"],\"ts\":%s}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(insertEvent2));
         Assertions.assertEquals(expected, actual);
 
@@ -112,10 +128,13 @@ public class CanalJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"old\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"data\":null,\"type\":\"DELETE\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}");
+                        String.format(
+                                "{\"old\":[{\"col1\":\"2\",\"col2\":\"2\"}],\"data\":null,\"type\":\"DELETE\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"],\"ts\":%s}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(deleteEvent));
         Assertions.assertEquals(expected, actual);
 
@@ -131,10 +150,13 @@ public class CanalJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("x")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"old\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"data\":[{\"col1\":\"1\",\"col2\":\"x\"}],\"type\":\"UPDATE\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}");
+                        String.format(
+                                "{\"old\":[{\"col1\":\"1\",\"col2\":\"1\"}],\"data\":[{\"col1\":\"1\",\"col2\":\"x\"}],\"type\":\"UPDATE\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"],\"ts\":%s}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(updateEvent));
         Assertions.assertEquals(expected, actual);
 
@@ -145,10 +167,13 @@ public class CanalJsonSerializationSchemaTest {
         DataChangeEvent insertEvent3 =
                 DataChangeEvent.insertEvent(
                         TABLE_1,
-                        generator.generate(new Object[] {BinaryStringData.fromString("20")}));
+                        generator.generate(new Object[] {BinaryStringData.fromString("20")}),
+                        meta);
         assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
                 .isEqualTo(
                         mapper.readTree(
-                                "{\"old\":null,\"data\":[{\"col2\":\"20\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"]}"));
+                                String.format(
+                                        "{\"old\":null,\"data\":[{\"col2\":\"20\"}],\"type\":\"INSERT\",\"database\":\"default_schema\",\"table\":\"table1\",\"pkNames\":[\"col1\"],\"ts\":%s}",
+                                        timestamp)));
     }
 }

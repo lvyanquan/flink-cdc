@@ -79,6 +79,9 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
 
     private final boolean writeNullProperties;
 
+    /** key for extracting operation timestamp in {@link DataChangeEvent#meta()}. */
+    public static final String OPERATION_TIMESTAMP_KEY = "op_ts";
+
     public CanalJsonSerializationSchema(
             TimestampFormat timestampFormat,
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
@@ -98,7 +101,7 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
     @Override
     public void open(InitializationContext context) {
         this.context = context;
-        reuseGenericRowData = new GenericRowData(6);
+        reuseGenericRowData = new GenericRowData(7);
     }
 
     @Override
@@ -149,6 +152,9 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
                                 .stream()
                                 .map(StringData::fromString)
                                 .toArray()));
+        String opTs = dataChangeEvent.meta().get(OPERATION_TIMESTAMP_KEY);
+        reuseGenericRowData.setField(6, opTs == null ? 0L : Long.parseLong(opTs));
+
         try {
             switch (dataChangeEvent.op()) {
                 case INSERT:
@@ -224,7 +230,7 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
      * href="https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/formats/canal/#available-metadata">Canal
      * | Apache Flink</a> for more details.
      */
-    private static RowType createJsonRowType(DataType databaseSchema) {
+    private RowType createJsonRowType(DataType databaseSchema) {
         return (RowType)
                 DataTypes.ROW(
                                 DataTypes.FIELD("old", DataTypes.ARRAY(databaseSchema)),
@@ -232,7 +238,8 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
                                 DataTypes.FIELD("type", DataTypes.STRING()),
                                 DataTypes.FIELD("database", DataTypes.STRING()),
                                 DataTypes.FIELD("table", DataTypes.STRING()),
-                                DataTypes.FIELD("pkNames", DataTypes.ARRAY(DataTypes.STRING())))
+                                DataTypes.FIELD("pkNames", DataTypes.ARRAY(DataTypes.STRING())),
+                                DataTypes.FIELD("ts", DataTypes.BIGINT()))
                         .getLogicalType();
     }
 }

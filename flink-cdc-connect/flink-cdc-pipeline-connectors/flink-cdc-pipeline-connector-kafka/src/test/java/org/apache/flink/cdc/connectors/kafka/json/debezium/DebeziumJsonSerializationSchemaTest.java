@@ -39,10 +39,13 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.ZoneId;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,8 +55,9 @@ public class DebeziumJsonSerializationSchemaTest {
     public static final TableId TABLE_1 =
             TableId.tableId("default_namespace", "default_schema", "table1");
 
-    @Test
-    public void testSerialize() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "false"})
+    public void testSerialize(boolean emitOperationTimestampFromSource) throws Exception {
         ObjectMapper mapper =
                 JacksonMapperFactory.createObjectMapper()
                         .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, false);
@@ -74,6 +78,12 @@ public class DebeziumJsonSerializationSchemaTest {
         Assertions.assertNull(serializationSchema.serialize(createTableEvent));
         BinaryRecordDataGenerator generator =
                 new BinaryRecordDataGenerator(RowType.of(DataTypes.STRING(), DataTypes.STRING()));
+        Map<String, String> meta = new HashMap<>();
+        long timestamp = 0;
+        if (emitOperationTimestampFromSource) {
+            timestamp = System.currentTimeMillis();
+            meta.put("op_ts", String.valueOf(timestamp));
+        }
         // insert
         DataChangeEvent insertEvent1 =
                 DataChangeEvent.insertEvent(
@@ -82,10 +92,13 @@ public class DebeziumJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("1")
-                                }));
+                                }),
+                        meta);
         JsonNode expected =
                 mapper.readTree(
-                        "{\"before\":null,\"after\":{\"col1\":\"1\",\"col2\":\"1\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}");
+                        String.format(
+                                "{\"before\":null,\"after\":{\"col1\":\"1\",\"col2\":\"1\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\",\"ts_ms\":%s}}",
+                                timestamp));
         JsonNode actual = mapper.readTree(serializationSchema.serialize(insertEvent1));
         Assertions.assertEquals(expected, actual);
         DataChangeEvent insertEvent2 =
@@ -95,10 +108,13 @@ public class DebeziumJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"before\":null,\"after\":{\"col1\":\"2\",\"col2\":\"2\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}");
+                        String.format(
+                                "{\"before\":null,\"after\":{\"col1\":\"2\",\"col2\":\"2\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\",\"ts_ms\":%s}}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(insertEvent2));
         Assertions.assertEquals(expected, actual);
         DataChangeEvent deleteEvent =
@@ -108,10 +124,13 @@ public class DebeziumJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("2"),
                                     BinaryStringData.fromString("2")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"before\":{\"col1\":\"2\",\"col2\":\"2\"},\"after\":null,\"op\":\"d\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}");
+                        String.format(
+                                "{\"before\":{\"col1\":\"2\",\"col2\":\"2\"},\"after\":null,\"op\":\"d\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\",\"ts_ms\":%s}}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(deleteEvent));
         Assertions.assertEquals(expected, actual);
         DataChangeEvent updateEvent =
@@ -126,10 +145,13 @@ public class DebeziumJsonSerializationSchemaTest {
                                 new Object[] {
                                     BinaryStringData.fromString("1"),
                                     BinaryStringData.fromString("x")
-                                }));
+                                }),
+                        meta);
         expected =
                 mapper.readTree(
-                        "{\"before\":{\"col1\":\"1\",\"col2\":\"1\"},\"after\":{\"col1\":\"1\",\"col2\":\"x\"},\"op\":\"u\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}");
+                        String.format(
+                                "{\"before\":{\"col1\":\"1\",\"col2\":\"1\"},\"after\":{\"col1\":\"1\",\"col2\":\"x\"},\"op\":\"u\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\",\"ts_ms\":%s}}",
+                                timestamp));
         actual = mapper.readTree(serializationSchema.serialize(updateEvent));
         Assertions.assertEquals(expected, actual);
 
@@ -140,10 +162,13 @@ public class DebeziumJsonSerializationSchemaTest {
         DataChangeEvent insertEvent3 =
                 DataChangeEvent.insertEvent(
                         TABLE_1,
-                        generator.generate(new Object[] {BinaryStringData.fromString("20")}));
+                        generator.generate(new Object[] {BinaryStringData.fromString("20")}),
+                        meta);
         assertThat(mapper.readTree(serializationSchema.serialize(insertEvent3)))
                 .isEqualTo(
                         mapper.readTree(
-                                "{\"before\":null,\"after\":{\"col2\":\"20\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\"}}"));
+                                String.format(
+                                        "{\"before\":null,\"after\":{\"col2\":\"20\"},\"op\":\"c\",\"source\":{\"db\":\"default_schema\",\"table\":\"table1\",\"ts_ms\":%s}}",
+                                        timestamp)));
     }
 }
