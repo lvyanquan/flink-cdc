@@ -109,6 +109,7 @@ import static io.debezium.util.Strings.isNullOrEmpty;
  * specifying starting offset on start.
  *
  * <p>Line 1521 : Add more error details for some exceptions.
+ *
  * <p>Line 1485 : Add more error details for some exceptions.
  *
  * <p>Line 342-380 : Choose whether to use the new EventDataDeserializers based on configuration.

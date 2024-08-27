@@ -280,6 +280,7 @@ public class MySqlSourceOptions {
                             .defaultValue(false)
                             .withDescription(
                                     "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+
     public static final ConfigOption<Boolean> SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED =
             ConfigOptions.key("scan.read-changelog-as-append-only.enabled")
                     .booleanType()
