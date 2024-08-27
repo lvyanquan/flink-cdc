@@ -40,6 +40,7 @@ import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeResultResponse;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,15 +97,19 @@ public class SchemaRegistryRequestHandler implements Closeable {
 
     private final SchemaChangeBehavior schemaChangeBehavior;
 
+    private final OperatorCoordinator.Context context;
+
     public SchemaRegistryRequestHandler(
             MetadataApplier metadataApplier,
             SchemaManager schemaManager,
             SchemaDerivation schemaDerivation,
-            SchemaChangeBehavior schemaChangeBehavior) {
+            SchemaChangeBehavior schemaChangeBehavior,
+            OperatorCoordinator.Context context) {
         this.metadataApplier = metadataApplier;
         this.schemaManager = schemaManager;
         this.schemaDerivation = schemaDerivation;
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.context = context;
 
         this.activeSinkWriters = ConcurrentHashMap.newKeySet();
         this.flushedSinkWriters = ConcurrentHashMap.newKeySet();
@@ -124,8 +129,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
      *
      * @param request the received SchemaChangeRequest
      */
-    public CompletableFuture<CoordinationResponse> handleSchemaChangeRequest(
-            SchemaChangeRequest request) {
+    public void handleSchemaChangeRequest(
+            SchemaChangeRequest request, CompletableFuture<CoordinationResponse> response) {
 
         // We use requester subTask ID as the pending ticket, because there will be at most 1 schema
         // change requests simultaneously from each subTask
@@ -158,7 +163,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
                     if (!pendingSubTaskIds.contains(requestSubTaskId)) {
                         pendingSubTaskIds.add(requestSubTaskId);
                     }
-                    return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.busy()));
+                    response.complete(wrap(SchemaChangeResponse.busy()));
+                    return;
                 }
 
                 SchemaChangeEvent event = request.getSchemaChangeEvent();
@@ -170,8 +176,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
                     LOG.info(
                             "SchemaChangeStatus switched from WAITING_FOR_FLUSH to IDLE for request {} due to duplicated request.",
                             request);
-                    return CompletableFuture.completedFuture(
-                            wrap(SchemaChangeResponse.duplicate()));
+                    response.complete(wrap(SchemaChangeResponse.duplicate()));
+                    return;
                 }
                 schemaManager.applyOriginalSchemaChange(event);
                 List<SchemaChangeEvent> derivedSchemaChangeEvents =
@@ -185,7 +191,9 @@ public class SchemaRegistryRequestHandler implements Closeable {
                     LOG.info(
                             "SchemaChangeStatus switched from WAITING_FOR_FLUSH to IDLE for request {} due to ignored request.",
                             request);
-                    return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.ignored()));
+
+                    response.complete(wrap(SchemaChangeResponse.ignored()));
+                    return;
                 }
 
                 LOG.info(
@@ -207,8 +215,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
                             }
                         });
                 currentDerivedSchemaChangeEvents = new ArrayList<>(derivedSchemaChangeEvents);
-                return CompletableFuture.completedFuture(
-                        wrap(SchemaChangeResponse.accepted(derivedSchemaChangeEvents)));
+
+                response.complete(wrap(SchemaChangeResponse.accepted(derivedSchemaChangeEvents)));
             } else {
                 LOG.info(
                         "Schema Registry is busy processing a schema change request, could not handle request {} for now. Added {} to pending list ({}).",
@@ -218,7 +226,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
                 if (!pendingSubTaskIds.contains(requestSubTaskId)) {
                     pendingSubTaskIds.add(requestSubTaskId);
                 }
-                return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.busy()));
+                response.complete(wrap(SchemaChangeResponse.busy()));
             }
         }
     }
@@ -315,7 +323,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
         }
     }
 
-    public CompletableFuture<CoordinationResponse> getSchemaChangeResult() {
+    public void getSchemaChangeResult(CompletableFuture<CoordinationResponse> response) {
         Preconditions.checkState(
                 schemaChangeStatus != RequestStatus.IDLE,
                 "Illegal schemaChangeStatus: should not be IDLE before getting schema change request results.");
@@ -327,11 +335,12 @@ public class SchemaRegistryRequestHandler implements Closeable {
 
             // This request has been finished, return it and prepare for the next request
             List<SchemaChangeEvent> finishedEvents = clearCurrentSchemaChangeRequest();
-            return CompletableFuture.supplyAsync(
-                    () -> wrap(new SchemaChangeResultResponse(finishedEvents)));
+            SchemaChangeResultResponse resultResponse =
+                    new SchemaChangeResultResponse(finishedEvents);
+            response.complete(wrap(resultResponse));
         } else {
             // Still working on schema change request, waiting it
-            return CompletableFuture.supplyAsync(() -> wrap(new SchemaChangeProcessingResponse()));
+            response.complete(wrap(new SchemaChangeProcessingResponse()));
         }
     }
 
@@ -465,7 +474,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
 
     private List<SchemaChangeEvent> clearCurrentSchemaChangeRequest() {
         if (currentChangeException != null) {
-            throw new RuntimeException("Failed to apply schema change.", currentChangeException);
+            context.failJob(
+                    new RuntimeException("Failed to apply schema change.", currentChangeException));
         }
         List<SchemaChangeEvent> finishedSchemaChanges =
                 new ArrayList<>(currentFinishedSchemaChanges);
