@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.EnvironmentUtils.checkSupportCheckpointsAfterTasksFinished;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
