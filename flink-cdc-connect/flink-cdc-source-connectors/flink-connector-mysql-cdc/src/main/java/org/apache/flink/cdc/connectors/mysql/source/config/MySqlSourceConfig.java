@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.source.config;
 
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
+import org.apache.flink.cdc.connectors.mysql.schema.Selectors;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
@@ -26,6 +27,7 @@ import org.apache.flink.table.catalog.ObjectPath;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.relational.RelationalTableFilters;
+import io.debezium.relational.TableId;
 
 import javax.annotation.Nullable;
 
@@ -34,6 +36,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Predicate;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -47,6 +50,7 @@ public class MySqlSourceConfig implements Serializable {
     private final String password;
     private final List<String> databaseList;
     private final List<String> tableList;
+    private final String excludeTableList;
     @Nullable private final ServerIdRange serverIdRange;
     private final StartupOptions startupOptions;
     private final int splitSize;
@@ -86,6 +90,7 @@ public class MySqlSourceConfig implements Serializable {
             String password,
             List<String> databaseList,
             List<String> tableList,
+            @Nullable String excludeTableList,
             @Nullable ServerIdRange serverIdRange,
             StartupOptions startupOptions,
             int splitSize,
@@ -112,6 +117,7 @@ public class MySqlSourceConfig implements Serializable {
         this.password = password;
         this.databaseList = checkNotNull(databaseList);
         this.tableList = checkNotNull(tableList);
+        this.excludeTableList = excludeTableList;
         this.serverIdRange = serverIdRange;
         this.startupOptions = checkNotNull(startupOptions);
         this.splitSize = splitSize;
@@ -229,8 +235,25 @@ public class MySqlSourceConfig implements Serializable {
         return dbzMySqlConfig;
     }
 
+    @Deprecated
     public RelationalTableFilters getTableFilters() {
         return dbzMySqlConfig.getTableFilters();
+    }
+
+    public Predicate<String> getDatabaseFilter() {
+        RelationalTableFilters tableFilters = dbzMySqlConfig.getTableFilters();
+        return (String databaseName) -> tableFilters.databaseFilter().test(databaseName);
+    }
+
+    public Predicate<TableId> getTableFilter() {
+        RelationalTableFilters tableFilters = dbzMySqlConfig.getTableFilters();
+        Selectors excludeTableFilter =
+                (excludeTableList == null
+                        ? null
+                        : new Selectors.SelectorsBuilder().includeTables(excludeTableList).build());
+        return (TableId tableId) ->
+                tableFilters.dataCollectionFilter().isIncluded(tableId)
+                        && (excludeTableFilter == null || !excludeTableFilter.isMatch(tableId));
     }
 
     public Properties getJdbcProperties() {
