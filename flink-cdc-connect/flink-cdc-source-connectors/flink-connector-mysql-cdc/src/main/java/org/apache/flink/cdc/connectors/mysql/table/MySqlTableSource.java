@@ -100,6 +100,12 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
 
     private AssignStrategy scanChunkAssignStrategy;
 
+    protected boolean scanParallelDeserializeChangelog;
+
+    protected int scanParallelDeserializeHandlerSize;
+
+    private final boolean scanOnlyDeserializeCapturedTablesChangelog;
+
     public MySqlTableSource(
             ResolvedSchema physicalSchema,
             int port,
@@ -128,7 +134,10 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
             @Nullable String chunkKeyColumn,
             boolean skipSnapshotBackFill,
             @Nullable AliyunRdsConfig rdsConfig,
-            AssignStrategy scanChunkAssignStrategy) {
+            AssignStrategy scanChunkAssignStrategy,
+            boolean scanOnlyDeserializeCapturedTablesChangelog,
+            boolean scanParallelDeserializeChangelog,
+            int scanParallelDeserializeHandlerSize) {
         this.physicalSchema = physicalSchema;
         this.port = port;
         this.hostname = checkNotNull(hostname);
@@ -160,6 +169,10 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
         this.skipSnapshotBackFill = skipSnapshotBackFill;
         this.rdsConfig = rdsConfig;
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
+        this.scanOnlyDeserializeCapturedTablesChangelog =
+                scanOnlyDeserializeCapturedTablesChangelog;
+        this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
+        this.scanParallelDeserializeHandlerSize = scanParallelDeserializeHandlerSize;
     }
 
     @Override
@@ -305,7 +318,10 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                         chunkKeyColumn,
                         skipSnapshotBackFill,
                         rdsConfig,
-                        scanChunkAssignStrategy);
+                        scanChunkAssignStrategy,
+                        scanOnlyDeserializeCapturedTablesChangelog,
+                        scanParallelDeserializeChangelog,
+                        scanParallelDeserializeHandlerSize);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         return source;
@@ -349,7 +365,15 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 && Objects.equals(chunkKeyColumn, that.chunkKeyColumn)
                 && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
                 && Objects.equals(rdsConfig, that.rdsConfig)
-                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy);
+                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy)
+                && Objects.equals(
+                        scanOnlyDeserializeCapturedTablesChangelog,
+                        that.scanOnlyDeserializeCapturedTablesChangelog)
+                && Objects.equals(
+                        scanParallelDeserializeChangelog, that.scanParallelDeserializeChangelog)
+                && Objects.equals(
+                        scanParallelDeserializeHandlerSize,
+                        that.scanParallelDeserializeHandlerSize);
     }
 
     @Override

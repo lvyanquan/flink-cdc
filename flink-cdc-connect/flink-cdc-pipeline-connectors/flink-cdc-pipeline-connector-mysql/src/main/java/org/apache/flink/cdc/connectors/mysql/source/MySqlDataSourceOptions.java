@@ -263,6 +263,30 @@ public class MySqlDataSourceOptions {
                                     + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
 
     @Experimental
+    public static final ConfigOption<Boolean>
+            SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED =
+                    ConfigOptions.key("scan.only.deserialize.captured.tables.changelog.enabled")
+                            .booleanType()
+                            .defaultValue(false)
+                            .withDescription(
+                                    "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+
+    @Experimental
+    public static final ConfigOption<Boolean> SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED =
+            ConfigOptions.key("scan.parallel-deserialize-changelog.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
+
+    @Experimental
+    public static final ConfigOption<Integer> SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE =
+            ConfigOptions.key("scan.parallel-deserialize-changelog.handler.size")
+                    .intType()
+                    .defaultValue(2)
+                    .withDescription("The size of the event handler during parallel conversion.");
+
+    @Experimental
     public static final ConfigOption<String> METADATA_COLUMN_INCLUDE_LIST =
             ConfigOptions.key("metadata-column.include-list")
                     .stringType()

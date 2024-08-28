@@ -60,6 +60,9 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -138,6 +141,12 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         if (isReadingArchivedBinlogEnabled(config)) {
             rdsConfig = AliyunRdsConfig.fromConfig(config);
         }
+        boolean scanOnlyDeserializeCapturedTablesChangelog =
+                config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+        boolean scanParallelDeserializeChangelog =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        int scanParallelDeserializeHandlerSize =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
 
         return new MySqlTableSource(
                 physicalSchema,
@@ -167,7 +176,10 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 chunkKeyColumn,
                 skipSnapshotBackFill,
                 rdsConfig,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+                scanOnlyDeserializeCapturedTablesChangelog,
+                scanParallelDeserializeChangelog,
+                scanParallelDeserializeHandlerSize);
     }
 
     @Override
@@ -213,6 +225,9 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(MySqlSourceOptions.HEARTBEAT_INTERVAL);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+        options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+        options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
 
         options.add(RDS_REGION_ID);
         options.add(RDS_ACCESS_KEY_ID);

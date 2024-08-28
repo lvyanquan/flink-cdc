@@ -131,7 +131,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -179,7 +182,10 @@ public class MySqlTableSourceFactoryTest {
                         "testCol",
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -223,7 +229,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -265,7 +274,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -317,7 +329,10 @@ public class MySqlTableSourceFactoryTest {
                         "testCol",
                         true,
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -365,7 +380,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -405,7 +423,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -446,7 +467,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -488,7 +512,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -528,7 +555,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -573,7 +603,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         expectedSource.producedDataType = SCHEMA_WITH_METADATA.toSourceRowDataType();
         expectedSource.metadataKeys = Arrays.asList("op_ts", "database_name");
 
@@ -636,7 +669,10 @@ public class MySqlTableSourceFactoryTest {
                         null,
                         false,
                         expectedConfig,
-                        AssignStrategy.DESCENDING_ORDER);
+                        AssignStrategy.DESCENDING_ORDER,
+                        false,
+                        false,
+                        2);
         assertEquals(expected, actual);
     }
 

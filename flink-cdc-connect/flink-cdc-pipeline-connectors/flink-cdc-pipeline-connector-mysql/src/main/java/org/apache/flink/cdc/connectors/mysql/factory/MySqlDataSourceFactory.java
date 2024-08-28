@@ -81,6 +81,9 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE;
@@ -146,7 +149,12 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         int connectMaxRetries = config.get(CONNECT_MAX_RETRIES);
         int connectionPoolSize = config.get(CONNECTION_POOL_SIZE);
         boolean scanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
-
+        boolean scanOnlyDeserializeCapturedTablesChangelog =
+                config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+        boolean scanParallelDeserializeChangelog =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        int scanParallelDeserializeHandlerSize =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
         validateIntegerOption(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
         validateIntegerOption(CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
         validateIntegerOption(SCAN_SNAPSHOT_FETCH_SIZE, fetchSize, 1);
@@ -183,7 +191,11 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .scanNewlyAddedTableEnabled(config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED))
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap))
-                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled);
+                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                        .scanOnlyDeserializeCapturedTablesChangelog(
+                                scanOnlyDeserializeCapturedTablesChangelog)
+                        .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
+                        .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
 
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         List<String> capturedTables = getTableList(configFactory.createConfig(0), selectors);
