@@ -26,6 +26,7 @@ import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.schema.Selectors;
 import org.apache.flink.cdc.common.source.DataSource;
+import org.apache.flink.cdc.common.utils.StringUtils;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlDataSource;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
@@ -33,6 +34,7 @@ import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFact
 import org.apache.flink.cdc.connectors.mysql.source.config.ServerIdRange;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffsetBuilder;
+import org.apache.flink.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import org.apache.flink.cdc.connectors.mysql.utils.OptionUtils;
@@ -44,6 +46,8 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,6 +74,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CONNECT_TIMEOUT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HEARTBEAT_INTERVAL;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_COLUMN_INCLUDE_LIST;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
@@ -104,6 +109,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
     private static final Logger LOG = LoggerFactory.getLogger(MySqlDataSourceFactory.class);
 
     public static final String IDENTIFIER = "mysql";
+
+    public static final String DELIMITER_SEMICOLON = ";";
 
     @Override
     public DataSource createDataSource(Context context) {
@@ -234,8 +241,25 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
             LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);
             configFactory.chunkKeyColumn(chunkKeyColumnMap);
         }
+        String metadataList = config.get(METADATA_COLUMN_INCLUDE_LIST);
+        List<MySqlReadableMetadata> readableMetadataList = listReadableMetadata(metadataList);
 
-        return new MySqlDataSource(configFactory);
+        return new MySqlDataSource(configFactory, readableMetadataList);
+    }
+
+    private List<MySqlReadableMetadata> listReadableMetadata(String metadataList) {
+        if (StringUtils.isNullOrWhitespaceOnly(metadataList)) {
+            return new ArrayList<>();
+        }
+        List<String> readableMetadataList =
+                Arrays.stream(metadataList.split(DELIMITER_SEMICOLON))
+                        .map(String::trim)
+                        .collect(Collectors.toList());
+        return Arrays.stream(MySqlReadableMetadata.values())
+                .filter(
+                        (mySqlReadableMetadata ->
+                                readableMetadataList.contains(mySqlReadableMetadata.getKey())))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -278,6 +302,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(VVR_START_TIME_MS);
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+        options.add(METADATA_COLUMN_INCLUDE_LIST);
 
         // rds config
         options.add(RDS_REGION_ID);

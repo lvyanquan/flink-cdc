@@ -261,4 +261,13 @@ public class MySqlDataSourceOptions {
                                     + "If there is a need to use a dot (.) in a regular expression to match any character, "
                                     + "it is necessary to escape the dot with a backslash."
                                     + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
+
+    @Experimental
+    public static final ConfigOption<String> METADATA_COLUMN_INCLUDE_LIST =
+            ConfigOptions.key("metadata-column.include-list")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "List of readable metadata from SourceRecord to be passed to downstream, split by `;`. "
+                                    + "Refer to MySqlReadableMetadata, available readable metadata are: table_name,database_name,op_ts,row_kind.");
 }
