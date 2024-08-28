@@ -281,8 +281,9 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
                             handleGetOriginalSchemaRequest(
                                     (GetOriginalSchemaRequest) request, responseFuture);
                         } else if (request instanceof GetTokenRequest) {
-                            requestHandler.getTokenResult(((GetTokenRequest) request).getTableId(), responseFuture);
-                        }   else {
+                            requestHandler.getTokenResult(
+                                    ((GetTokenRequest) request).getTableId(), responseFuture);
+                        } else {
                             throw new IllegalArgumentException(
                                     "Unrecognized CoordinationRequest type: " + request);
                         }

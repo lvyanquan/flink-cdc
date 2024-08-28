@@ -33,8 +33,8 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
-import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenResponse;
 import org.apache.flink.cdc.common.utils.Preconditions;
+import org.apache.flink.cdc.runtime.operators.schema.event.GetTokenResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeProcessingResponse;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import org.apache.flink.cdc.runtime.operators.schema.event.SchemaChangeResponse;
@@ -351,9 +351,8 @@ public class SchemaRegistryRequestHandler implements Closeable {
         }
     }
 
-    public CompletableFuture<CoordinationResponse> getTokenResult(TableId tableId) {
-        return CompletableFuture.completedFuture(
-                wrap(new GetTokenResponse(metadataApplier.getToken(tableId))));
+    public void getTokenResult(TableId tableId, CompletableFuture<CoordinationResponse> response) {
+        response.complete(wrap(new GetTokenResponse(metadataApplier.getToken(tableId))));
     }
 
     private List<SchemaChangeEvent> calculateDerivedSchemaChangeEvents(SchemaChangeEvent event) {

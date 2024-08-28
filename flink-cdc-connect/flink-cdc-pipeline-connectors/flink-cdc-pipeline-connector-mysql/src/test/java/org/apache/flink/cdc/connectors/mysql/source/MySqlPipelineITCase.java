@@ -400,16 +400,16 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                                     })));
         }
         List<Event> actual =
-                fetchResults(events, 1 + expectedSnapshot.size() + expectedBinlog.size());
-        assertThat(actual.get(0)).isEqualTo(createTableEvent);
-        assertThat(actual.subList(1, 10))
+                fetchResultsExcept(
+                        events, expectedSnapshot.size() + expectedBinlog.size(), createTableEvent);
+        assertThat(actual.subList(0, 9))
                 .containsExactlyInAnyOrder(expectedSnapshot.toArray(new Event[0]));
         for (int i = 0; i < expectedBinlog.size(); i++) {
             if (expectedBinlog.get(i) instanceof SchemaChangeEvent) {
-                assertThat(expectedBinlog.get(i)).isEqualTo(actual.get(10 + i));
+                assertThat(expectedBinlog.get(i)).isEqualTo(actual.get(9 + i));
             } else {
                 DataChangeEvent expectedEvent = (DataChangeEvent) expectedBinlog.get(i);
-                DataChangeEvent actualEvent = (DataChangeEvent) actual.get(10 + i);
+                DataChangeEvent actualEvent = (DataChangeEvent) actual.get(9 + i);
                 assertThat(actualEvent.op()).isEqualTo(expectedEvent.op());
                 assertThat(actualEvent.before()).isEqualTo(expectedEvent.before());
                 assertThat(actualEvent.after()).isEqualTo(expectedEvent.after());

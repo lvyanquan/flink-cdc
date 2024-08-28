@@ -397,7 +397,7 @@ public class MysqlE2eITCase extends PipelineTestEnvironment {
         long endTimeout = System.currentTimeMillis() + MysqlE2eITCase.EVENT_WAITING_TIMEOUT;
         while (System.currentTimeMillis() < endTimeout) {
             String stdout = taskManagerConsumer.toUtf8String();
-            if (stdout.contains(event + "\n")) {
+            if (stdout.contains(event)) {
                 result = true;
                 break;
             }

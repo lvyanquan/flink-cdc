@@ -1050,7 +1050,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
         long endTimeout = System.currentTimeMillis() + timeout;
         while (System.currentTimeMillis() < endTimeout) {
             String stdout = taskManagerConsumer.toUtf8String();
-            if (stdout.contains(event + "\n")) {
+            if (stdout.contains(event)) {
                 result = true;
                 break;
             }

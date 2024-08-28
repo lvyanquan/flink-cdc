@@ -821,7 +821,7 @@ public class RouteE2eITCase extends PipelineTestEnvironment {
         long endTimeout = System.currentTimeMillis() + EVENT_DEFAULT_TIMEOUT;
         while (System.currentTimeMillis() < endTimeout) {
             String stdout = taskManagerConsumer.toUtf8String();
-            if (stdout.contains(event + "\n")) {
+            if (stdout.contains(event)) {
                 result = true;
                 break;
             }

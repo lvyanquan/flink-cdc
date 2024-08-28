@@ -77,7 +77,8 @@ public class UpsertKafkaDataSinkFactoryTest {
                                 Thread.currentThread().getContextClassLoader()));
         Assertions.assertTrue(dataSink instanceof UpsertKafkaDataSink);
 
-        UpsertKafkaMetadataApplier applier = (UpsertKafkaMetadataApplier) dataSink.getMetadataApplier();
+        UpsertKafkaMetadataApplier applier =
+                (UpsertKafkaMetadataApplier) dataSink.getMetadataApplier();
         assertThat(applier.getBootstrapServers()).isEqualTo("test1");
         assertThat(applier.getKafkaProperties().getProperty("test")).isEqualTo("test2");
         assertThat(applier.getAliyunKafkaParams().getAccessKeyId()).isEqualTo("1");
