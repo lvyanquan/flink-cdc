@@ -19,8 +19,14 @@ package org.apache.flink.cdc.connectors.paimon.sink.dlf;
 
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.configuration.dlf.DlfOptions;
+import org.apache.flink.runtime.dlf.DlfDataTokenDirUtils;
+import org.apache.flink.runtime.dlf.DlfResourceInfosCollector;
 import org.apache.flink.util.StringUtils;
 
+import com.aliyun.datalake.common.DlfDataToken;
+import com.aliyun.datalake.core.constant.DataLakeConfig;
+import com.aliyun.datalake.external.com.fasterxml.jackson.databind.JsonNode;
+import com.aliyun.datalake.external.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.paimon.options.Options;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +62,29 @@ public class DlfCatalogUtil {
                         "secrets://"
                                 + flinkConfig.get(DlfOptions.DLF_DATA_CREDENTIAL_PROVIDER_PATH));
                 catalogOptions.set("fs.dlf.impl.disable.cache", "true");
+                String dataTokenDir =
+                        "secrets://" + DlfDataTokenDirUtils.getLocalDataTokenDir(flinkConfig);
+                if (!dataTokenDir.endsWith("/")) {
+                    dataTokenDir += "/";
+                }
+                catalogOptions.set(DataLakeConfig.DATA_CREDENTIAL_PROVIDER_URL, dataTokenDir);
                 LOGGER.debug("DlfPaimon catalog options: {}", catalogOptions.toMap());
+            }
+        }
+    }
+
+    public static void setTokenToLocalDir(Options options, ReadableConfig flinkConf, String token) {
+        if (options.containsKey("metastore") && options.get("metastore").equals("dlf-paimon")) {
+            try {
+                LOGGER.debug("Try to write token: " + token);
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode root = mapper.readTree(token);
+                String identifier = root.get("Identifier").asText();
+                DlfDataToken dlfDataToken = DlfDataToken.fromJson(token, identifier);
+                DlfResourceInfosCollector.setDataTokenLocally(flinkConf, dlfDataToken);
+                LOGGER.debug("Succeed to write token: " + token + " for identifier" + identifier);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
     }

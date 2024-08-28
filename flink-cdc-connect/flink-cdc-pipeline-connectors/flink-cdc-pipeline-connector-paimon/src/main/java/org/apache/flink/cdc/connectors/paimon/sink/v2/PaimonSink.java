@@ -95,9 +95,7 @@ public class PaimonSink<InputT> implements WithPreCommitTopology<InputT, MultiTa
         // shuffle MultiTableCommittable by tables
         DataStream<CommittableMessage<MultiTableCommittable>> partitioned =
                 FlinkStreamPartitioner.partition(
-                        committables,
-                        new MultiTableCommittableChannelComputer(),
-                        committables.getParallelism());
+                        committables, new MultiTableCommittableChannelComputer(), null);
 
         // add correct checkpointId to MultiTableCommittable and recreate CommittableSummary.
         return partitioned

@@ -28,6 +28,7 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.utils.Preconditions;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
+import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.OperatorIDGenerator;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.PaimonWriterHelper;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.TableSchemaInfo;
@@ -45,7 +46,7 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.data.GenericRow;
-import org.apache.paimon.flink.VvrCatalogFactory;
+import org.apache.paimon.flink.FlinkCatalogFactory;
 import org.apache.paimon.index.BucketAssigner;
 import org.apache.paimon.index.HashBucketAssigner;
 import org.apache.paimon.options.Options;
@@ -131,7 +132,8 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
     @Override
     public void processElement(StreamRecord<Event> streamRecord) throws Exception {
         if (catalog == null) {
-            this.catalog = VvrCatalogFactory.createPaimonCatalog(catalogOptions, flinkConf);
+            DlfCatalogUtil.convertOptionToDlf(catalogOptions, flinkConf);
+            this.catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
         }
         Event event = streamRecord.getValue();
         if (event instanceof FlushEvent) {
@@ -148,6 +150,10 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                 Optional<Schema> schema =
                         schemaEvolutionClient.getLatestEvolvedSchema(dataChangeEvent.tableId());
                 if (schema.isPresent()) {
+                    String token =
+                            schemaEvolutionClient.getLatestToken(
+                                    ((DataChangeEvent) event).tableId());
+                    DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
                     schemaMaps.put(
                             dataChangeEvent.tableId(), new TableSchemaInfo(schema.get(), zoneId));
                 } else {
@@ -193,6 +199,9 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
             output.collect(
                     new StreamRecord<>(new BucketWrapperChangeEvent(bucket, (ChangeEvent) event)));
         } else if (event instanceof CreateTableEvent) {
+            String token =
+                    schemaEvolutionClient.getLatestToken(((SchemaChangeEvent) event).tableId());
+            DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
             CreateTableEvent createTableEvent = (CreateTableEvent) event;
             schemaMaps.put(
                     createTableEvent.tableId(),
@@ -201,6 +210,9 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                     new StreamRecord<>(
                             new BucketWrapperChangeEvent(currentTaskNumber, (ChangeEvent) event)));
         } else if (event instanceof SchemaChangeEvent) {
+            String token =
+                    schemaEvolutionClient.getLatestToken(((SchemaChangeEvent) event).tableId());
+            DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
             SchemaChangeEvent schemaChangeEvent = (SchemaChangeEvent) event;
             Schema schema =
                     SchemaUtils.applySchemaChangeEvent(
