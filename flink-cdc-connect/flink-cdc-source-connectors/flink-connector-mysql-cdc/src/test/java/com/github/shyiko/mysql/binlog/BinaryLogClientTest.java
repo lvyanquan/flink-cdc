@@ -1,11 +1,12 @@
 /*
- * Copyright 2023 Ververica Inc.
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,13 +17,14 @@
 
 package com.github.shyiko.mysql.binlog;
 
-import com.ververica.cdc.connectors.mysql.debezium.DebeziumUtils;
-import com.ververica.cdc.connectors.mysql.source.MySqlSourceTestBase;
-import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfig;
-import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
-import com.ververica.cdc.connectors.mysql.table.StartupOptions;
-import com.ververica.cdc.connectors.mysql.testutils.MySqlContainer;
-import com.ververica.cdc.connectors.mysql.testutils.UniqueDatabase;
+import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
+import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
+import org.apache.flink.cdc.connectors.mysql.testutils.MySqlContainer;
+import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runners.Parameterized;
