@@ -43,7 +43,7 @@ import java.util.concurrent.TimeoutException;
 
 /** E2e tests for User-defined functions. */
 public class UdfE2eITCase extends PipelineTestEnvironment {
-    private static final Logger LOG = LoggerFactory.getLogger(TransformE2eITCase.class);
+    private static final Logger LOG = LoggerFactory.getLogger(UdfE2eITCase.class);
 
     // ------------------------------------------------------------------------------------------
     // MySQL Variables (we always use MySQL as the data source for easier verifying)

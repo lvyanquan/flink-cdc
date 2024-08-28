@@ -689,6 +689,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: values\n"
+                                + "  sink.print.logger: true\n"
                                 + "transform:\n"
                                 + "  - source-table: %s.\\.*\n"
                                 + "    projection: ID, LOCALTIME as lcl_t, CURRENT_TIME as cur_t, CAST(CURRENT_TIMESTAMP AS TIMESTAMP) as cur_ts, CAST(NOW() AS TIMESTAMP) as now_ts, LOCALTIMESTAMP as lcl_ts, CURRENT_DATE as cur_dt\n"
@@ -1097,13 +1098,14 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
     boolean extractDataLines(String line) {
         // In multiple parallelism mode, a prefix with subTaskId (like '1> ') will be appended.
         // Should trim it before extracting data fields.
-        if (!line.startsWith("DataChangeEvent{", 3)) {
+        if (!line.contains("DataChangeEvent{")) {
             return false;
         }
+        int beginIndex = line.indexOf("DataChangeEvent{");
         Stream.of("before", "after")
                 .forEach(
                         tag -> {
-                            String[] arr = line.split(tag + "=\\[", 2);
+                            String[] arr = line.substring(beginIndex).split(tag + "=\\[", 2);
                             String dataRecord = arr[arr.length - 1].split("]", 2)[0];
                             if (!dataRecord.isEmpty()) {
                                 verifyDataRecord(dataRecord);
