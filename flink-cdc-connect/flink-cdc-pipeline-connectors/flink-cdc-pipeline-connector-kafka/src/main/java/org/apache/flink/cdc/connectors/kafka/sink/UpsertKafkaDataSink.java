@@ -141,6 +141,6 @@ public class UpsertKafkaDataSink implements DataSink {
 
     @Override
     public MetadataApplier getMetadataApplier() {
-        return new KafkaMetadataApplier(true, kafkaProperties, aliyunKafkaParams);
+        return new UpsertKafkaMetadataApplier(true, kafkaProperties, aliyunKafkaParams);
     }
 }

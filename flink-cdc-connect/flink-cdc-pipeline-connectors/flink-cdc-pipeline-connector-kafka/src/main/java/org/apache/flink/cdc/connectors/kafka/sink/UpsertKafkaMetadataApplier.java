@@ -52,9 +52,9 @@ import static org.apache.flink.cdc.connectors.kafka.sink.KafkaSinkUtil.generateK
  * A {@code MetadataApplier} that applies metadata changes to Upsert Kafka. Support primary key
  * table only.
  */
-public class KafkaMetadataApplier implements MetadataApplier {
+public class UpsertKafkaMetadataApplier implements MetadataApplier {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaMetadataApplier.class);
+    private static final Logger LOG = LoggerFactory.getLogger(UpsertKafkaMetadataApplier.class);
 
     private static final Duration ADMIN_CLIENT_TIMEOUT = Duration.ofMinutes(1);
 
@@ -66,7 +66,7 @@ public class KafkaMetadataApplier implements MetadataApplier {
     @Nullable private AdminClient adminClient;
     @Nullable private AliyunKafkaClient aliyunKafkaClient;
 
-    public KafkaMetadataApplier(
+    public UpsertKafkaMetadataApplier(
             boolean isUpsertKafka,
             Properties kafkaProperties,
             AliyunKafkaClientParams aliyunKafkaParams) {
