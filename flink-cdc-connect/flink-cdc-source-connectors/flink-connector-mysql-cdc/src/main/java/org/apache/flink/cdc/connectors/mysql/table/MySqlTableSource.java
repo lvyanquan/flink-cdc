@@ -408,7 +408,10 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 chunkKeyColumn,
                 skipSnapshotBackFill,
                 rdsConfig,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+                scanOnlyDeserializeCapturedTablesChangelog,
+                scanParallelDeserializeChangelog,
+                scanParallelDeserializeHandlerSize);
     }
 
     @Override

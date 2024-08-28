@@ -61,8 +61,10 @@ import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_ENDPOINT;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.fromConfig;
@@ -314,6 +316,9 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(VVR_START_TIME_MS);
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+        options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+        options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
         options.add(METADATA_COLUMN_INCLUDE_LIST);
 
         // rds config
@@ -325,6 +330,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(RDS_BINLOG_DIRECTORIES_PARENT_PATH);
         options.add(RDS_BINLOG_DIRECTORY_PREFIX);
         options.add(RDS_USE_INTRANET_LINK);
+        options.add(RDS_MAIN_DB_ID);
+        options.add(RDS_BINLOG_ENDPOINT);
         return options;
     }
 
