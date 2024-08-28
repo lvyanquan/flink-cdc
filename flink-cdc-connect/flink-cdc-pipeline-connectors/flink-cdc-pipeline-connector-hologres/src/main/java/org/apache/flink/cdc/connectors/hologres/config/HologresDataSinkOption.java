@@ -106,7 +106,7 @@ public class HologresDataSinkOption {
                     .withDescription("Whether to use a fixed frontend for writing and reading");
 
     public static final ConfigOption<TypeNormalizationStrategy> TYPE_NORMALIZATION_STRATEGY =
-            ConfigOptions.key("sink.type-normalize-stategy".toLowerCase())
+            ConfigOptions.key("sink.type-normalize-strategy".toLowerCase())
                     .enumType(TypeNormalizationStrategy.class)
                     .defaultValue(TypeNormalizationStrategy.STANDARD)
                     .withDescription(
