@@ -30,15 +30,15 @@ import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
 import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.runtime.dlf.DlfResourceInfosCollector;
+import org.apache.flink.runtime.dlf.api.DlfDataToken;
+import org.apache.flink.runtime.dlf.api.DlfResource;
+import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
+import org.apache.flink.runtime.dlf.api.VvrDataLakeConfig;
 import org.apache.flink.runtime.dlf.client.DefaultDlfTokenClientFactory;
 import org.apache.flink.runtime.dlf.client.DlfTokenClient;
 import org.apache.flink.runtime.dlf.client.DlfTokenClientFactory;
 import org.apache.flink.util.Preconditions;
 
-import com.aliyun.datalake.common.DlfDataToken;
-import com.aliyun.datalake.common.DlfResource;
-import com.aliyun.datalake.core.constant.DataLakeConfig;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.FlinkCatalogFactory;
@@ -104,12 +104,12 @@ public class PaimonMetadataApplier implements MetadataApplier {
         try {
             String endpoint =
                     Preconditions.checkNotNull(
-                            catalogOptions.get(DataLakeConfig.DLF_ENDPOINT),
-                            String.format("%s cannot be null", DataLakeConfig.DLF_ENDPOINT));
+                            catalogOptions.get(VvrDataLakeConfig.DLF_ENDPOINT),
+                            String.format("%s cannot be null", VvrDataLakeConfig.DLF_ENDPOINT));
             String region =
                     Preconditions.checkNotNull(
-                            catalogOptions.get(DataLakeConfig.DLF_REGION),
-                            String.format("%s cannot be null", DataLakeConfig.DLF_REGION));
+                            catalogOptions.get(VvrDataLakeConfig.DLF_REGION),
+                            String.format("%s cannot be null", VvrDataLakeConfig.DLF_REGION));
             // Get the data token and store it to the data token dir locally. This is required
             // during
             // sql planning.
@@ -118,13 +118,15 @@ public class PaimonMetadataApplier implements MetadataApplier {
             DlfDataToken token =
                     DlfResourceInfosCollector.getDataTokenLocally(
                             flinkConf,
+                            endpoint,
+                            region,
                             DlfResource.builder()
                                     .catalogInstanceId(
-                                            catalogOptions.get(DataLakeConfig.CATALOG_INSTANCE_ID))
+                                            catalogOptions.get(
+                                                    VvrDataLakeConfig.CATALOG_INSTANCE_ID))
                                     .databaseName(tableId.getSchemaName())
                                     .tableName(tableId.getTableName())
-                                    .build(),
-                            tokenClient);
+                                    .build());
             LOGGER.debug("Get table token: " + token + " for table:" + tableId);
             return token.toJson();
         } catch (Exception e) {
@@ -314,7 +316,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
                     catalogOptions.toMap(),
                     DlfResource.builder()
                             .catalogInstanceId(
-                                    catalogOptions.get(DataLakeConfig.CATALOG_INSTANCE_ID))
+                                    catalogOptions.get(VvrDataLakeConfig.CATALOG_INSTANCE_ID))
                             .databaseName(database)
                             .build());
             LOGGER.debug("Succeed to get database permission for " + database);
@@ -329,7 +331,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
                     catalogOptions.toMap(),
                     DlfResource.builder()
                             .catalogInstanceId(
-                                    catalogOptions.get(DataLakeConfig.CATALOG_INSTANCE_ID))
+                                    catalogOptions.get(VvrDataLakeConfig.CATALOG_INSTANCE_ID))
                             .databaseName(database)
                             .tableName(tableName)
                             .build());

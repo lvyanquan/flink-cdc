@@ -18,15 +18,13 @@
 package org.apache.flink.cdc.connectors.paimon.sink.dlf;
 
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.configuration.dlf.DlfOptions;
-import org.apache.flink.runtime.dlf.DlfDataTokenDirUtils;
-import org.apache.flink.runtime.dlf.DlfResourceInfosCollector;
-import org.apache.flink.util.StringUtils;
+import org.apache.flink.runtime.dlf.api.DlfDataToken;
+import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
 
-import com.aliyun.datalake.common.DlfDataToken;
-import com.aliyun.datalake.core.constant.DataLakeConfig;
-import com.aliyun.datalake.external.com.fasterxml.jackson.databind.JsonNode;
-import com.aliyun.datalake.external.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.com.aliyun.datalake.external.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.flink.shaded.com.aliyun.datalake.external.com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.apache.paimon.dlf.DlfUtils;
 import org.apache.paimon.options.Options;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,36 +38,8 @@ public class DlfCatalogUtil {
         if (catalogOptions.containsKey("metastore")
                 && catalogOptions.get("metastore").equals("dlf-paimon")) {
             LOGGER.debug("Adding option for dlf-paimon catalog");
-            String userName =
-                    flinkConfig.get(
-                            org.apache.flink.configuration.PipelineOptions.ROLE_SESSION_NAME);
-            if (StringUtils.isNullOrWhitespaceOnly(userName)) {
-                throw new IllegalArgumentException("role-session-name must not be null or empty");
-            } else {
-                catalogOptions.set("dlf.user.name", userName);
-                catalogOptions.set(
-                        "dlf.tokenCache.meta.credential.provider",
-                        flinkConfig.get(DlfOptions.DLF_META_CREDENTIAL_PROVIDER));
-                catalogOptions.set(
-                        "dlf.tokenCache.meta.credential.provider.url",
-                        "secrets://"
-                                + flinkConfig.get(DlfOptions.DLF_META_CREDENTIAL_PROVIDER_PATH));
-                catalogOptions.set(
-                        "dlf.tokenCache.data.credential.provider",
-                        flinkConfig.get(DlfOptions.DLF_DATA_CREDENTIAL_PROVIDER));
-                catalogOptions.set(
-                        "dlf.tokenCache.data.credential.provider.url",
-                        "secrets://"
-                                + flinkConfig.get(DlfOptions.DLF_DATA_CREDENTIAL_PROVIDER_PATH));
-                catalogOptions.set("fs.dlf.impl.disable.cache", "true");
-                String dataTokenDir =
-                        "secrets://" + DlfDataTokenDirUtils.getLocalDataTokenDir(flinkConfig);
-                if (!dataTokenDir.endsWith("/")) {
-                    dataTokenDir += "/";
-                }
-                catalogOptions.set(DataLakeConfig.DATA_CREDENTIAL_PROVIDER_URL, dataTokenDir);
-                LOGGER.debug("DlfPaimon catalog options: {}", catalogOptions.toMap());
-            }
+            DlfUtils.forwardDlfOptions(flinkConfig, catalogOptions);
+            LOGGER.debug("DlfPaimon catalog options: {}", catalogOptions.toMap());
         }
     }
 
