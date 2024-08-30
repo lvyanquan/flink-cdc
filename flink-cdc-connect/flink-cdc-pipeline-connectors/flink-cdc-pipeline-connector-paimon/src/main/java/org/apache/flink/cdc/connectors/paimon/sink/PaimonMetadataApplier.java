@@ -100,6 +100,10 @@ public class PaimonMetadataApplier implements MetadataApplier {
 
     @Override
     public synchronized String getToken(TableId tableId) {
+        if (!catalogOptions.containsKey("metastore")
+                || !"dlf-paimon".equals(catalogOptions.get("metastore"))) {
+            return null;
+        }
         LOGGER.debug("Try to get token for " + tableId);
         try {
             String endpoint =
