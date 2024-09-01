@@ -133,6 +133,8 @@ public class PaimonCommitter implements Committer<MultiTableCommittable> {
 
     @Override
     public void close() throws Exception {
-        storeMultiCommitter.close();
+        if (storeMultiCommitter != null) {
+            storeMultiCommitter.close();
+        }
     }
 }

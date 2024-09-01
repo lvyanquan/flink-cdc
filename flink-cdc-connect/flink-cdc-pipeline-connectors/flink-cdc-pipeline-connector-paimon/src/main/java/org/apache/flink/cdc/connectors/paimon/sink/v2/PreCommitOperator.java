@@ -141,19 +141,21 @@ public class PreCommitOperator
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
-        multiTableCommittables.forEach(
-                (multiTableCommittable) -> {
-                    LOGGER.debug(
-                            "Try to commit: "
-                                    + multiTableCommittable
-                                    + " in checkpoint "
-                                    + checkpointId);
-                });
-        WrappedManifestCommittable wrappedManifestCommittable =
-                storeMultiCommitter.combine(checkpointId, checkpointId, multiTableCommittables);
-        storeMultiCommitter.commit(Arrays.asList(wrappedManifestCommittable));
-        LOGGER.debug("Succeeded checkpoint " + checkpointId);
-        multiTableCommittables.clear();
+        if (!multiTableCommittables.isEmpty()) {
+            multiTableCommittables.forEach(
+                    (multiTableCommittable) -> {
+                        LOGGER.debug(
+                                "Try to commit: "
+                                        + multiTableCommittable
+                                        + " in checkpoint "
+                                        + checkpointId);
+                    });
+            WrappedManifestCommittable wrappedManifestCommittable =
+                    storeMultiCommitter.combine(checkpointId, checkpointId, multiTableCommittables);
+            storeMultiCommitter.commit(Arrays.asList(wrappedManifestCommittable));
+            LOGGER.debug("Succeeded checkpoint " + checkpointId);
+            multiTableCommittables.clear();
+        }
     }
 
     @Override

@@ -180,6 +180,9 @@ public class PaimonMetadataApplier implements MetadataApplier {
                                                         .getLogicalType())));
         builder.primaryKey(schema.primaryKeys().toArray(new String[0]));
         if (partitionMaps.containsKey(event.tableId())) {
+            List<String> primaryKeys = schema.primaryKeys();
+            primaryKeys.addAll(partitionMaps.get(event.tableId()));
+            builder.primaryKey(primaryKeys);
             builder.partitionKeys(partitionMaps.get(event.tableId()));
         } else if (schema.partitionKeys() != null && !schema.partitionKeys().isEmpty()) {
             builder.partitionKeys(schema.partitionKeys());
