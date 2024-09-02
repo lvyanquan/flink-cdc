@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.EnvironmentUtils.checkSupportCheckpointsAfterTasksFinished;
@@ -396,7 +397,8 @@ public class MySqlSourceConfigFactory implements Serializable {
 
         if (scanOnlyDeserializeCapturedTablesChangelog) {
             props.setProperty(
-                    "scan.only.deserialize.captured.tables.changelog", String.valueOf(true));
+                    SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.key(),
+                    String.valueOf(true));
         }
         if (scanParallelDeserializeChangelog) {
             props.setProperty(
