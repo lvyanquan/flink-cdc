@@ -536,6 +536,31 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
+    public void testAddColumnNoTable() throws HoloClientException {
+        TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+        try (HoloClient holoClient = getHoloClient()) {
+            HologresMetadataApplier applier = getHologresMetadataApplier();
+            // add column
+            List<AddColumnEvent.ColumnWithPosition> addedColumns = new ArrayList<>();
+            addedColumns.add(
+                    new AddColumnEvent.ColumnWithPosition(
+                            Column.physicalColumn("c", DataTypes.DOUBLE())));
+            addedColumns.add(
+                    new AddColumnEvent.ColumnWithPosition(
+                            Column.physicalColumn("d", DataTypes.BOOLEAN().notNull())));
+            AddColumnEvent addColumnEvent = new AddColumnEvent(tableId, addedColumns);
+            applier.applySchemaChange(addColumnEvent);
+        } catch (Exception ex) {
+            Assertions.assertThat(ex)
+                    .rootCause()
+                    .hasMessageContaining(String.format("can not found table"));
+
+        } finally {
+            dropTable(sinkTable);
+        }
+    }
+
+    @Test
     public void testAddColumnWithPosition() throws HoloClientException {
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier = getHologresMetadataApplier();
@@ -622,6 +647,29 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             Assertions.assertThat(ex)
                     .rootCause()
                     .hasMessageContaining("Hologres not support alter columnType now");
+
+        } finally {
+            dropTable(sinkTable);
+        }
+    }
+
+    @Test
+    public void testAlterColumnWithNoTable() {
+        TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+        try {
+            HologresMetadataApplier applier = getHologresMetadataApplier();
+
+            // alter column
+            HashMap<String, DataType> dataTypeHashMap = new HashMap<>();
+            dataTypeHashMap.put("b", DataTypes.VARBINARY(2));
+            AlterColumnTypeEvent alterColumnTypeEvent =
+                    new AlterColumnTypeEvent(tableId, dataTypeHashMap);
+            applier.applySchemaChange(alterColumnTypeEvent);
+            throw new Exception("If throw this exception, mean that job execute successfully.");
+        } catch (Exception ex) {
+            Assertions.assertThat(ex)
+                    .rootCause()
+                    .hasMessageContaining(String.format("can not found table"));
 
         } finally {
             dropTable(sinkTable);
@@ -801,7 +849,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
     }
 
     @Test
-    public void testAlterColumnWithOnlyBroadenStrategy() {
+    public void testAlterColumnWithOnlyBroadenStrategy() throws HoloClientException {
 
         try (HoloClient holoClient = getHoloClient()) {
             HologresMetadataApplier applier =
@@ -839,7 +887,7 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             // 2. alter column
             HashMap<String, DataType> dataTypeHashMap = new HashMap<>();
             dataTypeHashMap.put("a", DataTypes.BIGINT());
-            dataTypeHashMap.put("b", DataTypes.VARBINARY(2));
+            dataTypeHashMap.put("b", DataTypes.VARCHAR(2));
             dataTypeHashMap.put("c", DataTypes.DOUBLE());
             AlterColumnTypeEvent alterColumnTypeEvent =
                     new AlterColumnTypeEvent(tableId, dataTypeHashMap);
@@ -857,17 +905,17 @@ public class HologresMetadataApplierTest extends HologresTestBase {
             Assert.assertEquals(
                     tableSchema.getColumn(2).getTypeName(), HologresTypes.PG_DOUBLE_PRECISION);
             Assert.assertTrue(tableSchema.getColumn(2).getAllowNull());
+            try {
 
-            // 3. alter column which is not compatibility in TypeNormalization.
-            dataTypeHashMap.put("a", DataTypes.STRING());
-            applier.applySchemaChange(alterColumnTypeEvent);
-
-            throw new Exception("If throw this exception, mean that job execute successfully.");
-        } catch (Exception ex) {
-            Assertions.assertThat(ex)
-                    .rootCause()
-                    .hasMessageContaining("Hologres not support alter columnType now");
-
+                // 3. alter column which is not compatibility in TypeNormalization.
+                dataTypeHashMap.put("a", DataTypes.STRING());
+                applier.applySchemaChange(alterColumnTypeEvent);
+                throw new Exception("If throw this exception, mean that job execute successfully.");
+            } catch (Exception ex) {
+                Assertions.assertThat(ex)
+                        .rootCause()
+                        .hasMessageContaining("Hologres not support alter columnType now");
+            }
         } finally {
             dropTable(sinkTable);
         }

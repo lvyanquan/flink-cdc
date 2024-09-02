@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
@@ -132,12 +133,11 @@ public class HologresMetadataApplier implements MetadataApplier {
     private void applyAddColumn(AddColumnEvent addColumnEvent) {
         TableId tableId = addColumnEvent.tableId();
         try {
+            HoloClient client = getHologresJDBCClientProvider().getClient();
             HologresTableSchema hologresTableSchema =
-                    HologresTableSchema.get(
-                            hologresJDBCClientProvider.getClient(), getQualifiedPath(tableId));
+                    HologresTableSchema.get(client, getQualifiedPath(tableId));
             List<String> addColumnList = new ArrayList<>();
             LinkedList<String> addColumnDdlList = new LinkedList<>();
-            HoloClient client = getHologresJDBCClientProvider().getClient();
             List<AddColumnEvent.ColumnWithPosition> addedColumns = addColumnEvent.getAddedColumns();
             String pgTableName = getQualifiedPath(addColumnEvent.tableId());
             for (AddColumnEvent.ColumnWithPosition addColumn : addedColumns) {
@@ -234,6 +234,8 @@ public class HologresMetadataApplier implements MetadataApplier {
             LOG.error(String.format("Failed to rename column <%s>", tableId), t);
             throw new FlinkRuntimeException(
                     String.format("Failed to rename column <%s>", tableId), t);
+        } finally {
+            getHologresJDBCClientProvider().closeClient();
         }
     }
 
@@ -241,9 +243,10 @@ public class HologresMetadataApplier implements MetadataApplier {
         // Comparing to decide whether to apply AlterColumnTypeEvent
         TableId tableId = event.tableId();
         try {
+            HoloClient client = getHologresJDBCClientProvider().getClient();
             HologresTableSchema tableSchema =
-                    HologresTableSchema.get(
-                            hologresJDBCClientProvider.getClient(), getQualifiedPath(tableId));
+                    HologresTableSchema.get(client, getQualifiedPath(tableId));
+
             boolean needApplyAlterColumn = false;
             for (Map.Entry<String, DataType> typeMapping : event.getTypeMapping().entrySet()) {
                 Optional<Column> columnOptional = tableSchema.getColumn(typeMapping.getKey());
@@ -257,9 +260,10 @@ public class HologresMetadataApplier implements MetadataApplier {
                 Column currentColumn = columnOptional.get();
                 Column columnAlter =
                         hologresTypeNormalizer.transformToHoloColumn(typeMapping.getValue(), false);
-                if (columnAlter.getArrayType() != currentColumn.getArrayType()
-                        || columnAlter.getType() != currentColumn.getType()
-                        || columnAlter.getTypeName() != currentColumn.getTypeName()) {
+                if (!Objects.equals(columnAlter.getArrayType(), currentColumn.getArrayType())
+                        || !Objects.equals(columnAlter.getType(), currentColumn.getType())
+                        || !Objects.equals(
+                                columnAlter.getTypeName(), currentColumn.getTypeName())) {
                     needApplyAlterColumn = true;
                     break;
                 }
