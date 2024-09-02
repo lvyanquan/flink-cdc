@@ -43,15 +43,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
 import static org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope.FULL_DOCUMENT_FIELD;
@@ -68,7 +65,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** MongoDB stream split reader test case. */
-@RunWith(Parameterized.class)
 public class MongoDBStreamSplitReaderTest extends MongoDBSourceTestBase {
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
@@ -89,22 +85,13 @@ public class MongoDBStreamSplitReaderTest extends MongoDBSourceTestBase {
 
     private BsonDocument startupResumeToken;
 
-    public MongoDBStreamSplitReaderTest(String mongoVersion) {
-        super(mongoVersion);
-    }
-
-    @Parameterized.Parameters(name = "mongoVersion: {0}")
-    public static Object[] parameters() {
-        return Stream.of(MONGO_VERSIONS).map(e -> new Object[] {e}).toArray();
-    }
-
     @Before
     public void before() {
-        database = mongoContainer.executeCommandFileInSeparateDatabase("chunk_test");
+        database = CONTAINER.executeCommandFileInSeparateDatabase("chunk_test");
 
         MongoDBSourceConfigFactory configFactory =
                 new MongoDBSourceConfigFactory()
-                        .hosts(mongoContainer.getHostAndPort())
+                        .hosts(CONTAINER.getHostAndPort())
                         .databaseList(database)
                         .collectionList(database + ".shopping_cart")
                         .username(FLINK_USER)

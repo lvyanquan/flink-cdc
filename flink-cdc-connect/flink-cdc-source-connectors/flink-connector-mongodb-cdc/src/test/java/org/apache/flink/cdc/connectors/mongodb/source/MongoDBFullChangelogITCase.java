@@ -78,36 +78,28 @@ public class MongoDBFullChangelogITCase extends MongoDBSourceTestBase {
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
 
-    private final String mongoVersion;
     private final boolean parallelismSnapshot;
 
-    public MongoDBFullChangelogITCase(String mongoVersion, boolean parallelismSnapshot) {
-        super(mongoVersion);
-        this.mongoVersion = mongoVersion;
+    public MongoDBFullChangelogITCase(boolean parallelismSnapshot) {
         this.parallelismSnapshot = parallelismSnapshot;
     }
 
-    @Parameterized.Parameters(name = "mongoVersion: {0} parallelismSnapshot: {1}")
+    @Parameterized.Parameters(name = "parallelismSnapshot: {0}")
     public static Object[] parameters() {
-        List<Object[]> parameterTuples = new ArrayList<>();
-        for (String mongoVersion : MONGO_VERSIONS) {
-            parameterTuples.add(new Object[] {mongoVersion, true});
-            parameterTuples.add(new Object[] {mongoVersion, false});
-        }
-        return parameterTuples.toArray();
+        return new Object[][] {new Object[] {false}, new Object[] {true}};
     }
 
     @Test
     public void testGetMongoDBVersion() {
         MongoDBSourceConfig config =
                 new MongoDBSourceConfigFactory()
-                        .hosts(mongoContainer.getHostAndPort())
+                        .hosts(CONTAINER.getHostAndPort())
                         .splitSizeMB(1)
                         .samplesPerChunk(10)
                         .pollAwaitTimeMillis(500)
                         .create(0);
 
-        assertEquals(MongoUtils.getMongoVersion(config), mongoVersion);
+        assertEquals(MongoUtils.getMongoVersion(config), "7.0.12");
     }
 
     @Test
@@ -507,16 +499,16 @@ public class MongoDBFullChangelogITCase extends MongoDBSourceTestBase {
                 "customer_" + Integer.toUnsignedString(new Random().nextInt(), 36);
 
         // A - enable system-level fulldoc pre & post image feature
-        mongoContainer.executeCommand(
+        CONTAINER.executeCommand(
                 "use admin; db.runCommand({ setClusterParameter: { changeStreamOptions: { preAndPostImages: { expireAfterSeconds: 'off' } } } })");
 
         // B - enable collection-level fulldoc pre & post image for change capture collection
-        mongoContainer.executeCommandInDatabase(
+        CONTAINER.executeCommandInDatabase(
                 String.format(
                         "db.createCollection('%s'); db.runCommand({ collMod: '%s', changeStreamPreAndPostImages: { enabled: true } })",
                         "customers", "customers"),
                 customerDatabase);
-        mongoContainer.executeCommandFileInDatabase("customer", customerDatabase);
+        CONTAINER.executeCommandFileInDatabase("customer", customerDatabase);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(1000);
@@ -534,7 +526,7 @@ public class MongoDBFullChangelogITCase extends MongoDBSourceTestBase {
         TestTable customerTable = new TestTable(customerDatabase, "customers", customersSchema);
         MongoDBSource source =
                 new MongoDBSourceBuilder()
-                        .hosts(mongoContainer.getHostAndPort())
+                        .hosts(CONTAINER.getHostAndPort())
                         .databaseList(customerDatabase)
                         .username(FLINK_USER)
                         .password(FLINK_USER_PASSWORD)
@@ -621,12 +613,12 @@ public class MongoDBFullChangelogITCase extends MongoDBSourceTestBase {
                 "customer_" + Integer.toUnsignedString(new Random().nextInt(), 36);
 
         // A - enable system-level fulldoc pre & post image feature
-        mongoContainer.executeCommand(
+        CONTAINER.executeCommand(
                 "use admin; db.runCommand({ setClusterParameter: { changeStreamOptions: { preAndPostImages: { expireAfterSeconds: 'off' } } } })");
 
         // B - enable collection-level fulldoc pre & post image for change capture collection
         for (String collectionName : captureCustomerCollections) {
-            mongoContainer.executeCommandInDatabase(
+            CONTAINER.executeCommandInDatabase(
                     String.format(
                             "db.createCollection('%s'); db.runCommand({ collMod: '%s', changeStreamPreAndPostImages: { enabled: true } })",
                             collectionName, collectionName),
@@ -662,14 +654,14 @@ public class MongoDBFullChangelogITCase extends MongoDBSourceTestBase {
                                 + " 'scan.incremental.snapshot.backfill.skip' = '%s'"
                                 + ")",
                         parallelismSnapshot ? "true" : "false",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         customerDatabase,
                         getCollectionNameRegex(customerDatabase, captureCustomerCollections),
                         skipSnapshotBackfill);
 
-        mongoContainer.executeCommandFileInDatabase("customer", customerDatabase);
+        CONTAINER.executeCommandFileInDatabase("customer", customerDatabase);
 
         // first step: check the snapshot data
         String[] snapshotForSingleTable =

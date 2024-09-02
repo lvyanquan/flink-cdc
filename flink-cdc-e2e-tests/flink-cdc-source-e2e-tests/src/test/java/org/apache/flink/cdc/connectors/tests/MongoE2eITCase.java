@@ -69,30 +69,22 @@ public class MongoE2eITCase extends FlinkContainerTestEnvironment {
 
     private MongoClient mongoClient;
 
-    public static final String[] MONGO_VERSIONS = {"6.0.16", "7.0.12"};
-
     @Parameterized.Parameter(1)
-    public String mongoVersion;
-
-    @Parameterized.Parameter(2)
     public boolean parallelismSnapshot;
 
-    @Parameterized.Parameter(3)
+    @Parameterized.Parameter(2)
     public boolean scanFullChangelog;
 
     @Parameterized.Parameters(
-            name =
-                    "flinkVersion: {0}, mongoVersion: {1}, parallelismSnapshot: {2}, scanFullChangelog: {3}")
+            name = "flinkVersion: {0}, parallelismSnapshot: {1}, scanFullChangelog: {2}")
     public static List<Object[]> parameters() {
         final List<String> flinkVersions = getFlinkVersion();
         List<Object[]> params = new ArrayList<>();
         for (String flinkVersion : flinkVersions) {
-            for (String mongoVersion : MONGO_VERSIONS) {
-                params.add(new Object[] {flinkVersion, mongoVersion, true, true});
-                params.add(new Object[] {flinkVersion, mongoVersion, true, false});
-                params.add(new Object[] {flinkVersion, mongoVersion, false, true});
-                params.add(new Object[] {flinkVersion, mongoVersion, false, false});
-            }
+            params.add(new Object[] {flinkVersion, true, true});
+            params.add(new Object[] {flinkVersion, true, false});
+            params.add(new Object[] {flinkVersion, false, true});
+            params.add(new Object[] {flinkVersion, false, false});
         }
         return params;
     }

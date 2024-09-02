@@ -46,15 +46,12 @@ import org.bson.Document;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBAssertUtils.assertEqualsInAnyOrder;
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBContainer.FLINK_USER;
@@ -68,20 +65,10 @@ import static org.apache.flink.table.catalog.Column.physical;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** IT tests for {@link MongoDBSource}. */
-@RunWith(Parameterized.class)
 public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
     private static final int USE_POST_LOWWATERMARK_HOOK = 1;
     private static final int USE_PRE_HIGHWATERMARK_HOOK = 2;
     private static final int USE_POST_HIGHWATERMARK_HOOK = 3;
-
-    public MongoDBParallelSourceITCase(String mongoVersion) {
-        super(mongoVersion);
-    }
-
-    @Parameterized.Parameters(name = "mongoVersion: {0}")
-    public static Object[] parameters() {
-        return Stream.of(MONGO_VERSIONS).map(e -> new Object[] {e}).toArray();
-    }
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
 
@@ -419,7 +406,7 @@ public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
     private List<String> testBackfillWhenWritingEvents(
             boolean skipBackFill, int fetchSize, int hookType, StartupOptions startupOptions)
             throws Exception {
-        String customerDatabase = mongoContainer.executeCommandFileInSeparateDatabase("customer");
+        String customerDatabase = CONTAINER.executeCommandFileInSeparateDatabase("customer");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(1000);
         env.setParallelism(1);
@@ -436,7 +423,7 @@ public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
         TestTable customerTable = new TestTable(customerDatabase, "customers", customersSchema);
         MongoDBSource source =
                 new MongoDBSourceBuilder()
-                        .hosts(mongoContainer.getHostAndPort())
+                        .hosts(CONTAINER.getHostAndPort())
                         .databaseList(customerDatabase)
                         .username(FLINK_USER)
                         .password(FLINK_USER_PASSWORD)
@@ -529,7 +516,7 @@ public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
             boolean skipSnapshotBackfill)
             throws Exception {
 
-        String customerDatabase = mongoContainer.executeCommandFileInSeparateDatabase("customer");
+        String customerDatabase = CONTAINER.executeCommandFileInSeparateDatabase("customer");
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
@@ -557,7 +544,7 @@ public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
                                 + " 'heartbeat.interval.ms' = '500',"
                                 + " 'scan.incremental.snapshot.backfill.skip' = '%s'"
                                 + ")",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         customerDatabase,

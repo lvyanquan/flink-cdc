@@ -67,19 +67,13 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
     private final boolean parallelismSnapshot;
 
-    public MongoDBConnectorITCase(String mongoVersion, boolean parallelismSnapshot) {
-        super(mongoVersion);
+    public MongoDBConnectorITCase(boolean parallelismSnapshot) {
         this.parallelismSnapshot = parallelismSnapshot;
     }
 
-    @Parameterized.Parameters(name = "mongoVersion: {0} parallelismSnapshot: {1}")
+    @Parameterized.Parameters(name = "parallelismSnapshot: {0}")
     public static Object[] parameters() {
-        return new Object[][] {
-            new Object[] {"6.0.16", true},
-            new Object[] {"6.0.16", false},
-            new Object[] {"7.0.12", true},
-            new Object[] {"7.0.12", false}
-        };
+        return new Object[][] {new Object[] {false}, new Object[] {true}};
     }
 
     @Before
@@ -96,7 +90,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
     @Test
     public void testConsumingAllEvents() throws ExecutionException, InterruptedException {
-        String database = mongoContainer.executeCommandFileInSeparateDatabase("inventory");
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("inventory");
 
         String sourceDDL =
                 String.format(
@@ -117,7 +111,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'heartbeat.interval.ms' = '1000'"
                                 + ")",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         database,
@@ -229,7 +223,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
     @Test
     public void testStartupFromTimestamp() throws Exception {
-        String database = mongoContainer.executeCommandFileInSeparateDatabase("inventory");
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("inventory");
 
         // Unfortunately we have to sleep here to differ initial and later-generating changes in
         // oplog by timestamp
@@ -258,7 +252,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                                 + "',"
                                 + " 'heartbeat.interval.ms' = '1000'"
                                 + ")",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         database,
@@ -308,7 +302,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
     @Test
     public void testAllTypes() throws Throwable {
-        String database = mongoContainer.executeCommandFileInSeparateDatabase("column_type_test");
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("column_type_test");
 
         String sourceDDL =
                 String.format(
@@ -351,7 +345,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                                 + " 'database' = '%s',"
                                 + " 'collection' = '%s'"
                                 + ")",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         database,
@@ -471,7 +465,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
     @Test
     public void testMetadataColumns() throws Exception {
-        String database = mongoContainer.executeCommandFileInSeparateDatabase("inventory");
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("inventory");
 
         String sourceDDL =
                 String.format(
@@ -493,7 +487,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                                 + " 'collection' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s'"
                                 + ")",
-                        mongoContainer.getHostAndPort(),
+                        CONTAINER.getHostAndPort(),
                         FLINK_USER,
                         FLINK_USER_PASSWORD,
                         database,

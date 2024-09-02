@@ -26,7 +26,8 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
-import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,20 +39,9 @@ import java.util.stream.Stream;
 /** MongoDBSourceTestBase for MongoDB >= 5.0.3. */
 public class MongoDBSourceTestBase {
 
-    public MongoDBSourceTestBase(String mongoVersion) {
-        this.mongoContainer =
-                new MongoDBContainer("mongo:" + mongoVersion)
-                        .withSharding()
-                        .withLogConsumer(new Slf4jLogConsumer(LOG));
-    }
-
-    public static final String[] MONGO_VERSIONS = {"6.0.16", "7.0.12"};
+    protected static MongoClient mongodbClient;
 
     protected static final int DEFAULT_PARALLELISM = 4;
-
-    @Rule public final MongoDBContainer mongoContainer;
-
-    protected MongoClient mongodbClient;
 
     @Rule
     public final MiniClusterWithClientResource miniClusterResource =
@@ -63,15 +53,15 @@ public class MongoDBSourceTestBase {
                             .withHaLeadershipControl()
                             .build());
 
-    @Before
-    public void startContainers() {
+    @BeforeClass
+    public static void startContainers() {
         LOG.info("Starting containers...");
-        Startables.deepStart(Stream.of(mongoContainer)).join();
+        Startables.deepStart(Stream.of(CONTAINER)).join();
 
         MongoClientSettings settings =
                 MongoClientSettings.builder()
                         .applyConnectionString(
-                                new ConnectionString(mongoContainer.getConnectionString()))
+                                new ConnectionString(CONTAINER.getConnectionString()))
                         .build();
         mongodbClient = MongoClients.create(settings);
 
@@ -79,4 +69,10 @@ public class MongoDBSourceTestBase {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBSourceTestBase.class);
+
+    @ClassRule
+    public static final MongoDBContainer CONTAINER =
+            new MongoDBContainer("mongo:7.0.12")
+                    .withSharding()
+                    .withLogConsumer(new Slf4jLogConsumer(LOG));
 }

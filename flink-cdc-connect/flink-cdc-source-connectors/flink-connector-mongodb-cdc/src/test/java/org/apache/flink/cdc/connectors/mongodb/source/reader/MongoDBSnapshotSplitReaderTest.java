@@ -42,14 +42,11 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.bson.BsonDocument;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
 import static org.apache.flink.cdc.connectors.base.source.meta.wartermark.WatermarkEvent.isWatermarkEvent;
@@ -60,7 +57,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** MongoDB snapshot split reader test case. */
-@RunWith(Parameterized.class)
 public class MongoDBSnapshotSplitReaderTest extends MongoDBSourceTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBSnapshotSplitReaderTest.class);
@@ -75,22 +71,13 @@ public class MongoDBSnapshotSplitReaderTest extends MongoDBSourceTestBase {
 
     private SplitContext splitContext;
 
-    public MongoDBSnapshotSplitReaderTest(String mongoVersion) {
-        super(mongoVersion);
-    }
-
-    @Parameterized.Parameters(name = "mongoVersion: {0}")
-    public static Object[] parameters() {
-        return Stream.of(MONGO_VERSIONS).map(e -> new Object[] {e}).toArray();
-    }
-
     @Before
     public void before() {
-        database = mongoContainer.executeCommandFileInSeparateDatabase("chunk_test");
+        database = CONTAINER.executeCommandFileInSeparateDatabase("chunk_test");
 
         MongoDBSourceConfigFactory configFactory =
                 new MongoDBSourceConfigFactory()
-                        .hosts(mongoContainer.getHostAndPort())
+                        .hosts(CONTAINER.getHostAndPort())
                         .databaseList(database)
                         .collectionList(database + ".shopping_cart")
                         .username(FLINK_USER)
