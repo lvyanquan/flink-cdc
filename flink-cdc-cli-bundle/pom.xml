@@ -105,6 +105,10 @@ limitations under the License.
                                     <pattern>com.esri.core.geometry</pattern>
                                     <shadedPattern>org.apache.flink.cdc.calcite.shaded.com.esri.core.geometry</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.locationtech.jts.geom</pattern>
+                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.locationtech.jts.geom</shadedPattern>
+                                </relocation>
 
                                 <!-- Used for code generation -->
                                 <relocation>
