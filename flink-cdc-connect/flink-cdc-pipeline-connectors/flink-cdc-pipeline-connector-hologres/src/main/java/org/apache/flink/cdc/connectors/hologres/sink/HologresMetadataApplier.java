@@ -25,6 +25,8 @@ import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.DropTableEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
+import org.apache.flink.cdc.common.event.SchemaChangeEventType;
+import org.apache.flink.cdc.common.event.SchemaChangeEventTypeFamily;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.event.TruncateTableEvent;
 import org.apache.flink.cdc.common.schema.Schema;
@@ -47,11 +49,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.connectors.hologres.config.TypeNormalizationStrategy.getHologresTypeNormalizer;
 import static org.apache.flink.cdc.connectors.hologres.schema.HoloStatementUtils.executeDDL;
@@ -73,6 +79,21 @@ public class HologresMetadataApplier implements MetadataApplier {
         this.param = param;
         this.hologresTypeNormalizer =
                 getHologresTypeNormalizer(param.getTypeNormalizationStrategy());
+    }
+
+    private Set<SchemaChangeEventType> enabledEventTypes =
+            Arrays.stream(SchemaChangeEventTypeFamily.ALL).collect(Collectors.toSet());
+
+    @Override
+    public MetadataApplier setAcceptedSchemaEvolutionTypes(
+            Set<SchemaChangeEventType> schemaEvolutionTypes) {
+        enabledEventTypes = new HashSet<>(schemaEvolutionTypes);
+        return this;
+    }
+
+    @Override
+    public boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
+        return enabledEventTypes.contains(schemaChangeEventType);
     }
 
     @Override
