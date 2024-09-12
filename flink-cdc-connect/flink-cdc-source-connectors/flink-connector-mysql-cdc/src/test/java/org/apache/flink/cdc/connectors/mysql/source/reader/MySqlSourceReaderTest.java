@@ -369,6 +369,9 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
         reader.start();
         reader.addSplits(Collections.singletonList(binlogSplit));
 
+        // sleep a while to ensure the fetcher is started
+        Thread.sleep(500);
+
         // step-1: make 6 change events in one MySQL transaction
         TableId tableId = binlogSplit.getTableSchemas().keySet().iterator().next();
         makeBinlogEventsInOneTransaction(sourceConfig, tableId.toString());
