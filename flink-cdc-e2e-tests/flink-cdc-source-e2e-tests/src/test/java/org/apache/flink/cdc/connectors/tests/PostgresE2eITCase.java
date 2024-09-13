@@ -24,7 +24,6 @@ import org.apache.flink.cdc.connectors.tests.utils.FlinkContainerTestEnvironment
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +52,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
 /** End-to-end tests for postgres-cdc connector uber jar. */
-@Ignore
 public class PostgresE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(PostgresE2eITCase.class);

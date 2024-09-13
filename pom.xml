@@ -439,6 +439,7 @@ limitations under the License.
                         <exclude>**/*.log</exclude>
                         <!-- Build files -->
                         <exclude>**/*.iml</exclude>
+                        <exclude>**/*.yaml</exclude>
                         <!-- Docs -->
                         <exclude>docs/themes/book/**</exclude>
                         <exclude>docs/static/**</exclude>

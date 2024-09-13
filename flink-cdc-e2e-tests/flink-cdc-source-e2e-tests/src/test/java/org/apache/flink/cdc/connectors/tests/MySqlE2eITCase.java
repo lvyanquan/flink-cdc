@@ -21,7 +21,6 @@ import org.apache.flink.cdc.common.test.utils.JdbcProxy;
 import org.apache.flink.cdc.common.test.utils.TestUtils;
 import org.apache.flink.cdc.connectors.tests.utils.FlinkContainerTestEnvironment;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +37,6 @@ import java.util.List;
 import static org.apache.flink.cdc.connectors.base.utils.EnvironmentUtils.supportCheckpointsAfterTasksFinished;
 
 /** End-to-end tests for mysql-cdc connector uber jar. */
-@Ignore
 public class MySqlE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlE2eITCase.class);
