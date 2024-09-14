@@ -63,7 +63,7 @@ function get_compile_modules_for_stage() {
       ("core")
        echo "-pl $MODULES_CORE -am"
       ;;
-      ("pipeline_connectors")
+      ("pipeline")
        echo "-pl $MODULES_PIPELINE_CONNECTORS -am"
       ;;
       ("mongodb")
@@ -92,7 +92,7 @@ function get_test_modules_for_stage() {
       ("core")
        echo "-pl $MODULES_CORE"
       ;;
-      ("pipeline_connectors")
+      ("pipeline")
        echo "-pl $MODULES_PIPELINE_CONNECTORS"
       ;;
       ("mongodb")
