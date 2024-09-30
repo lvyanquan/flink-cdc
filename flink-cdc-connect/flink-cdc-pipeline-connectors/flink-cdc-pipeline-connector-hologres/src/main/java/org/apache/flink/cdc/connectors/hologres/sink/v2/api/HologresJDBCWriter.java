@@ -55,7 +55,7 @@ public class HologresJDBCWriter implements AbstractHologresWriter {
 
     @Override
     public long write(Record record) throws IOException {
-        LOG.info("Hologres insert or delete record in JDBC: {}", record);
+        LOG.debug("Hologres insert or delete record in JDBC: {}", record);
         try {
             hologresJDBCClientProvider.getClient().put(new Put(record));
         } catch (HoloClientException e) {
