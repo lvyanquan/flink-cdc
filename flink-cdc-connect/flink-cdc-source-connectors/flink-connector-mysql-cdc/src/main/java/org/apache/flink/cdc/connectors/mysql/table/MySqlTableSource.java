@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
@@ -38,6 +39,9 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 
 import java.time.Duration;
@@ -49,9 +53,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.debezium.config.CommonConnectorConfig.TOMBSTONES_ON_DELETE;
+import static io.debezium.connector.mysql.MySqlConnectorConfig.SNAPSHOT_MODE;
+import static io.debezium.engine.DebeziumEngine.OFFSET_FLUSH_INTERVAL_MS_PROP;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -59,6 +67,14 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * description.
  */
 public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadata {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlTableSource.class);
+    private final Set<String> exceptDbzProperties =
+            Stream.of(
+                            SNAPSHOT_MODE.name(),
+                            OFFSET_FLUSH_INTERVAL_MS_PROP,
+                            TOMBSTONES_ON_DELETE.name())
+                    .collect(Collectors.toSet());
 
     private final ResolvedSchema physicalSchema;
     private final int port;
@@ -219,7 +235,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                     .connectTimeout(connectTimeout)
                     .connectMaxRetries(connectMaxRetries)
                     .connectionPoolSize(connectionPoolSize)
-                    .debeziumProperties(dbzProperties)
+                    .debeziumProperties(getParallelDbzProperties(dbzProperties))
                     .startupOptions(startupOptions)
                     .deserializer(deserializer)
                     .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
@@ -417,5 +433,23 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     @Override
     public String asSummaryString() {
         return "MySQL-CDC";
+    }
+
+    @VisibleForTesting
+    Properties getDbzProperties() {
+        return dbzProperties;
+    }
+
+    @VisibleForTesting
+    Properties getParallelDbzProperties(Properties dbzProperties) {
+        Properties newDbzProperties = new Properties(dbzProperties);
+        for (String key : dbzProperties.stringPropertyNames()) {
+            if (exceptDbzProperties.contains(key)) {
+                LOG.warn("Cannot override debezium option {}.", key);
+            } else {
+                newDbzProperties.put(key, dbzProperties.get(key));
+            }
+        }
+        return newDbzProperties;
     }
 }
