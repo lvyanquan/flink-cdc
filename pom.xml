@@ -104,6 +104,8 @@ limitations under the License.
         <janino.version>3.1.10</janino.version>
         <!-- This is for Scala UDF testing purposes only. -->
         <scala.version>2.12.16</scala.version>
+        <!-- Maven shade plugin prior to 3.2.0 could not correctly shade nested classes with JDK 8+. -->
+        <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -577,6 +579,7 @@ limitations under the License.
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven.shade.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>shade-flink</id>
@@ -832,6 +835,27 @@ limitations under the License.
                         </plugin>
                     </plugins>
                 </pluginManagement>
+            </build>
+        </profile>
+        <profile>
+            <id>java11-target</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <source>11</source>
+                            <target>11</target>
+                            <compilerArgs combine.children="append">
+                                <arg>--add-exports=java.base/sun.net.util=ALL-UNNAMED</arg>
+                                <arg>--add-exports=java.management/sun.management=ALL-UNNAMED</arg>
+                                <arg>--add-exports=java.rmi/sun.rmi.registry=ALL-UNNAMED</arg>
+                                <arg>--add-exports=java.security.jgss/sun.security.krb5=ALL-UNNAMED</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
             </build>
         </profile>
     </profiles>
