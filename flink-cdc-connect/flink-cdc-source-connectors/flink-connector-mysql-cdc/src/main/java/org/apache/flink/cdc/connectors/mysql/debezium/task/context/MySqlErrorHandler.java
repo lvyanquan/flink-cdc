@@ -95,6 +95,7 @@ public class MySqlErrorHandler extends ErrorHandler {
         if (isTableNotFoundException(producerThrowable)) {
             Matcher matcher =
                     NOT_FOUND_TABLE_MSG_PATTERN.matcher(producerThrowable.getCause().getMessage());
+            matcher.find();
             String databaseName = matcher.group(1);
             String tableName = matcher.group(2);
             TableId tableId = new TableId(databaseName, null, tableName);
@@ -122,8 +123,7 @@ public class MySqlErrorHandler extends ErrorHandler {
         if (!(t.getCause() instanceof DebeziumException)) {
             return false;
         }
-        DebeziumException e = (DebeziumException) t.getCause();
-        String detailMessage = e.getMessage();
+        String detailMessage = t.getCause().getMessage();
         Matcher matcher = NOT_FOUND_TABLE_MSG_PATTERN.matcher(detailMessage);
         return matcher.find();
     }
