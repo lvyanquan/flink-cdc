@@ -15,27 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.kafka.json;
+package org.apache.flink.cdc.connectors.kafka.source.reader.deserializer;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
-import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
-import org.apache.flink.util.SimpleUserCodeClassLoader;
-import org.apache.flink.util.UserCodeClassLoader;
+import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaAware;
 
-/** A mock context for serialization/deserialization schema testing. */
-public class MockInitializationContext
-        implements SerializationSchema.InitializationContext,
-                DeserializationSchema.InitializationContext {
-
-    @Override
-    public MetricGroup getMetricGroup() {
-        return new UnregisteredMetricsGroup();
-    }
-
-    @Override
-    public UserCodeClassLoader getUserCodeClassLoader() {
-        return SimpleUserCodeClassLoader.create(MockInitializationContext.class.getClassLoader());
-    }
-}
+/**
+ * {@link SchemaAwareDeserializationSchema} is a @{link DeserializationSchema} which maintains table
+ * schemas.
+ */
+public interface SchemaAwareDeserializationSchema<T>
+        extends DeserializationSchema<T>, SchemaAware {}

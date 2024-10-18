@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.cdc.connectors.kafka.sink;
+package org.apache.flink.cdc.connectors.kafka;
 
 import org.apache.flink.util.StringUtils;
 

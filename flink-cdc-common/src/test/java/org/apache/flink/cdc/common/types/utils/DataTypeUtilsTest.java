@@ -17,16 +17,23 @@
 
 package org.apache.flink.cdc.common.types.utils;
 
-import org.apache.flink.cdc.common.types.DataField;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.common.types.DataTypeFamily;
+import org.apache.flink.cdc.common.types.DataTypeRoot;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.types.RowType;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.flink.table.api.DataTypes.ARRAY;
 import static org.apache.flink.table.api.DataTypes.BIGINT;
@@ -55,6 +62,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** A test for the {@link org.apache.flink.cdc.common.types.utils.DataTypeUtils}. */
 class DataTypeUtilsTest {
+    private static final int DEFAULT_PRECISION = 6;
+    private static final int DEFAULT_SCALE = 3;
+    private static final int DEFAULT_LEN = 10;
+
     private static final DataType[] ALL_TYPES =
             new DataType[] {
                 DataTypes.BOOLEAN(),
@@ -88,46 +99,225 @@ class DataTypeUtilsTest {
                 DataTypes.ROW(DataTypes.SMALLINT(), DataTypes.STRING())
             };
 
+    private static final org.apache.flink.table.types.DataType[] FLINK_TYPES =
+            new org.apache.flink.table.types.DataType[] {
+                BOOLEAN(),
+                BYTES(),
+                BINARY(10),
+                VARBINARY(10),
+                CHAR(10),
+                VARCHAR(10),
+                STRING(),
+                INT(),
+                TINYINT(),
+                SMALLINT(),
+                BIGINT(),
+                DOUBLE(),
+                FLOAT(),
+                DECIMAL(6, 3),
+                DATE(),
+                TIME(),
+                TIME(6),
+                TIMESTAMP(),
+                TIMESTAMP(6),
+                TIMESTAMP_LTZ(),
+                TIMESTAMP_LTZ(6),
+                TIMESTAMP_WITH_TIME_ZONE(),
+                TIMESTAMP_WITH_TIME_ZONE(6),
+                ARRAY(BIGINT()),
+                MAP(SMALLINT(), STRING()),
+                ROW(FIELD("f1", STRING()), FIELD("f2", STRING(), "desc")),
+                ROW(SMALLINT(), STRING())
+            };
+
     @Test
     void testToFlinkDataType() {
-        List<DataField> list =
-                IntStream.range(0, ALL_TYPES.length)
-                        .mapToObj(i -> DataTypes.FIELD("f" + i, ALL_TYPES[i]))
-                        .collect(Collectors.toList());
+        DataType cdcNullableDataType =
+                new RowType(
+                        IntStream.range(0, ALL_TYPES.length)
+                                .mapToObj(i -> DataTypes.FIELD("f" + i, ALL_TYPES[i]))
+                                .collect(Collectors.toList()));
+        DataType cdcNotNullDataType =
+                new RowType(
+                        IntStream.range(0, ALL_TYPES.length)
+                                .mapToObj(i -> DataTypes.FIELD("f" + i, ALL_TYPES[i].notNull()))
+                                .collect(Collectors.toList()));
 
-        org.apache.flink.table.types.DataType dataType =
-                DataTypeUtils.toFlinkDataType(new RowType(list));
+        org.apache.flink.table.types.DataType nullableDataType =
+                DataTypeUtils.toFlinkDataType(cdcNullableDataType);
+        org.apache.flink.table.types.DataType notNullDataType =
+                DataTypeUtils.toFlinkDataType(cdcNotNullDataType);
 
-        org.apache.flink.table.types.DataType expectedDataType =
+        org.apache.flink.table.types.DataType expectedNullableDataType =
                 ROW(
-                        FIELD("f0", BOOLEAN()),
-                        FIELD("f1", BYTES()),
-                        FIELD("f2", BINARY(10)),
-                        FIELD("f3", VARBINARY(10)),
-                        FIELD("f4", CHAR(10)),
-                        FIELD("f5", VARCHAR(10)),
-                        FIELD("f6", STRING()),
-                        FIELD("f7", INT()),
-                        FIELD("f8", TINYINT()),
-                        FIELD("f9", SMALLINT()),
-                        FIELD("f10", BIGINT()),
-                        FIELD("f11", DOUBLE()),
-                        FIELD("f12", FLOAT()),
-                        FIELD("f13", DECIMAL(6, 3)),
-                        FIELD("f14", DATE()),
-                        FIELD("f15", TIME()),
-                        FIELD("f16", TIME(6)),
-                        FIELD("f17", TIMESTAMP()),
-                        FIELD("f18", TIMESTAMP(6)),
-                        FIELD("f19", TIMESTAMP_LTZ()),
-                        FIELD("f20", TIMESTAMP_LTZ(6)),
-                        FIELD("f21", TIMESTAMP_WITH_TIME_ZONE()),
-                        FIELD("f22", TIMESTAMP_WITH_TIME_ZONE(6)),
-                        FIELD("f23", ARRAY(BIGINT())),
-                        FIELD("f24", MAP(SMALLINT(), STRING())),
-                        FIELD("f25", ROW(FIELD("f1", STRING()), FIELD("f2", STRING(), "desc"))),
-                        FIELD("f26", ROW(SMALLINT(), STRING())));
+                        IntStream.range(0, FLINK_TYPES.length)
+                                .mapToObj(i -> FIELD("f" + i, FLINK_TYPES[i]))
+                                .collect(Collectors.toList()));
+        org.apache.flink.table.types.DataType expectedNotNullDataType =
+                ROW(
+                        IntStream.range(0, FLINK_TYPES.length)
+                                .mapToObj(i -> FIELD("f" + i, FLINK_TYPES[i].notNull()))
+                                .collect(Collectors.toList()));
 
-        assertThat(dataType).isEqualTo(expectedDataType);
+        assertThat(nullableDataType).isEqualTo(expectedNullableDataType);
+        assertThat(notNullDataType).isEqualTo(expectedNotNullDataType);
+    }
+
+    @Test
+    public void testFromFlinkType() {
+        org.apache.flink.table.types.DataType flinkNullableDataType =
+                ROW(
+                        IntStream.range(0, FLINK_TYPES.length)
+                                .mapToObj(i -> FIELD("f" + i, FLINK_TYPES[i]))
+                                .collect(Collectors.toList()));
+
+        org.apache.flink.table.types.DataType flinkNotNullDataType =
+                ROW(
+                        IntStream.range(0, FLINK_TYPES.length)
+                                .mapToObj(i -> FIELD("f" + i, FLINK_TYPES[i].notNull()))
+                                .collect(Collectors.toList()));
+
+        DataType nullableDataType = DataTypeUtils.fromFlinkDataType(flinkNullableDataType);
+        DataType notNullDataType = DataTypeUtils.fromFlinkDataType(flinkNotNullDataType);
+
+        DataType expectedNullableDataType =
+                new RowType(
+                        IntStream.range(0, ALL_TYPES.length)
+                                .mapToObj(i -> DataTypes.FIELD("f" + i, ALL_TYPES[i]))
+                                .collect(Collectors.toList()));
+        DataType expectedNotNullDataType =
+                new RowType(
+                        IntStream.range(0, ALL_TYPES.length)
+                                .mapToObj(i -> DataTypes.FIELD("f" + i, ALL_TYPES[i].notNull()))
+                                .collect(Collectors.toList()));
+
+        assertThat(nullableDataType).isEqualTo(expectedNullableDataType);
+        assertThat(notNullDataType).isEqualTo(expectedNotNullDataType);
+    }
+
+    private static Stream<Arguments> parameterProvider() {
+        List<Arguments> testCases = new ArrayList<>();
+        // Same type
+        Arrays.stream(ALL_TYPES)
+                .forEach(dataType -> testCases.add(Arguments.of(dataType, dataType, dataType)));
+        // Different type whose common parent type is string
+        for (DataType left : ALL_TYPES) {
+            for (DataType right : ALL_TYPES) {
+                if (!isCompatibleType(left, right)) {
+                    testCases.add(Arguments.of(left, right, DataTypes.STRING()));
+                }
+            }
+        }
+        testCases.addAll(
+                Arrays.asList(
+                        // Same type with different length
+                        Arguments.of(
+                                DataTypes.CHAR(DEFAULT_LEN),
+                                DataTypes.CHAR(DEFAULT_LEN - 1),
+                                DataTypes.VARCHAR(DEFAULT_LEN)),
+                        Arguments.of(
+                                DataTypes.VARCHAR(DEFAULT_LEN),
+                                DataTypes.VARCHAR(DEFAULT_LEN - 1),
+                                DataTypes.VARCHAR(DEFAULT_LEN)),
+                        Arguments.of(
+                                DataTypes.VARBINARY(DEFAULT_LEN),
+                                DataTypes.VARBINARY(DEFAULT_LEN - 1),
+                                DataTypes.VARBINARY(DEFAULT_LEN)),
+                        // Same type with different precision
+                        Arguments.of(
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE),
+                                DataTypes.DECIMAL(DEFAULT_PRECISION - 1, DEFAULT_SCALE - 1),
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE)),
+                        Arguments.of(
+                                DataTypes.TIME(DEFAULT_PRECISION),
+                                DataTypes.TIME(DEFAULT_PRECISION - 1),
+                                DataTypes.TIME(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.TIMESTAMP(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP(DEFAULT_PRECISION - 1),
+                                DataTypes.TIMESTAMP(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.TIMESTAMP_LTZ(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP_LTZ(DEFAULT_PRECISION - 1),
+                                DataTypes.TIMESTAMP_LTZ(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.TIMESTAMP_TZ(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP_TZ(DEFAULT_PRECISION - 1),
+                                DataTypes.TIMESTAMP_TZ(DEFAULT_PRECISION)),
+                        // Different type whose common parent type is not varchar
+                        Arguments.of(
+                                DataTypes.BINARY(DEFAULT_LEN),
+                                DataTypes.VARBINARY(DEFAULT_LEN - 1),
+                                DataTypes.VARBINARY(DEFAULT_LEN)),
+                        Arguments.of(
+                                DataTypes.CHAR(DEFAULT_LEN),
+                                DataTypes.VARCHAR(DEFAULT_LEN - 1),
+                                DataTypes.VARCHAR(DEFAULT_LEN)),
+                        Arguments.of(
+                                DataTypes.DATE(),
+                                DataTypes.TIMESTAMP(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.DATE(),
+                                DataTypes.TIMESTAMP_TZ(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP_TZ(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.DATE(),
+                                DataTypes.TIMESTAMP_LTZ(DEFAULT_PRECISION),
+                                DataTypes.TIMESTAMP_LTZ(DEFAULT_PRECISION)),
+                        Arguments.of(
+                                DataTypes.TINYINT(), DataTypes.SMALLINT(), DataTypes.SMALLINT()),
+                        Arguments.of(DataTypes.TINYINT(), DataTypes.INT(), DataTypes.INT()),
+                        Arguments.of(DataTypes.TINYINT(), DataTypes.BIGINT(), DataTypes.BIGINT()),
+                        Arguments.of(
+                                DataTypes.TINYINT(),
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE),
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE)),
+                        Arguments.of(DataTypes.TINYINT(), DataTypes.FLOAT(), DataTypes.FLOAT()),
+                        Arguments.of(DataTypes.TINYINT(), DataTypes.DOUBLE(), DataTypes.DOUBLE()),
+                        Arguments.of(DataTypes.INT(), DataTypes.FLOAT(), DataTypes.FLOAT()),
+                        Arguments.of(DataTypes.INT(), DataTypes.DOUBLE(), DataTypes.DOUBLE()),
+                        Arguments.of(DataTypes.FLOAT(), DataTypes.DOUBLE(), DataTypes.DOUBLE()),
+                        Arguments.of(
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE),
+                                DataTypes.FLOAT(),
+                                DataTypes.DOUBLE()),
+                        Arguments.of(
+                                DataTypes.DECIMAL(DEFAULT_PRECISION, DEFAULT_SCALE),
+                                DataTypes.DOUBLE(),
+                                DataTypes.DOUBLE())));
+
+        return testCases.stream();
+    }
+
+    @ParameterizedTest(name = "{index}: merge {0} and {1}, expect {2}")
+    @MethodSource("parameterProvider")
+    public void testFindCommonType(
+            DataType dataType0, DataType dataType1, DataType expectedMergeType) {
+        assertThat(DataTypeUtils.findCommonType(Arrays.asList(dataType0, dataType1)))
+                .isEqualTo(expectedMergeType);
+    }
+
+    private static boolean isCompatibleType(DataType dataType0, DataType dataType1) {
+        if (dataType0.getTypeRoot() == dataType1.getTypeRoot()) {
+            return true;
+        }
+
+        if (dataType0.is(DataTypeFamily.NUMERIC) && dataType1.is(DataTypeFamily.NUMERIC)) {
+            return true;
+        }
+        if (dataType0.is(DataTypeFamily.CHARACTER_STRING)
+                && dataType1.is(DataTypeFamily.CHARACTER_STRING)) {
+            return true;
+        }
+        if (dataType0.is(DataTypeFamily.BINARY_STRING)
+                && dataType1.is(DataTypeFamily.BINARY_STRING)) {
+            return true;
+        }
+        if ((dataType0.is(DataTypeFamily.TIMESTAMP) || dataType0.is(DataTypeRoot.DATE))
+                && (dataType1.is(DataTypeFamily.TIMESTAMP) || dataType1.is(DataTypeRoot.DATE))) {
+            return true;
+        }
+        return false;
     }
 }

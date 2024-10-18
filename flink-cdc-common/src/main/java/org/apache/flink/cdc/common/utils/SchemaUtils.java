@@ -36,10 +36,17 @@ import org.apache.flink.cdc.common.types.DecimalType;
 import org.apache.flink.cdc.common.types.LocalZonedTimestampType;
 import org.apache.flink.cdc.common.types.TimestampType;
 import org.apache.flink.cdc.common.types.ZonedTimestampType;
+import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
+import org.apache.flink.table.data.ColumnSpec;
+import org.apache.flink.table.data.SchemaSpec;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.utils.AnsiLogicalTypeMerging;
+import org.apache.flink.table.types.utils.LogicalTypeDataTypeConverter;
 
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -458,5 +465,87 @@ public class SchemaUtils {
             evolvedSchemaChangeEvent = Optional.of(event);
         }
         return evolvedSchemaChangeEvent;
+    }
+
+    public static Schema convert(SchemaSpec schemaSpec) {
+        Schema.Builder builder = Schema.newBuilder();
+        schemaSpec
+                .getColumns()
+                .forEach(
+                        col ->
+                                builder.physicalColumn(
+                                        col.getName(),
+                                        DataTypeUtils.fromFlinkDataType(col.getDataType())));
+        return builder.build();
+    }
+
+    public static Schema convert(SchemaSpec schemaSpec, List<String> pkNames) {
+        Schema.Builder builder = Schema.newBuilder().primaryKey(pkNames);
+        schemaSpec
+                .getColumns()
+                .forEach(
+                        col ->
+                                builder.physicalColumn(
+                                        col.getName(),
+                                        DataTypeUtils.fromFlinkDataType(col.getDataType())));
+        return builder.build();
+    }
+
+    public static SchemaSpec mergeSchemaSpec(List<SchemaSpec> schemas) {
+        Preconditions.checkArgument(!schemas.isEmpty(), "List of schemas must not be empty.");
+        SchemaSpec schemaSpec = schemas.get(0);
+        for (int i = 1; i < schemas.size(); i++) {
+            schemaSpec = mergeSchemaSpec(schemaSpec, schemas.get(i));
+        }
+        return schemaSpec;
+    }
+
+    public static SchemaSpec mergeSchemaSpec(SchemaSpec schema1, SchemaSpec schema2) {
+        Map<String, org.apache.flink.table.types.DataType> columns1 =
+                schema1.getColumns().stream()
+                        .collect(Collectors.toMap(ColumnSpec::getName, ColumnSpec::getDataType));
+        Map<String, org.apache.flink.table.types.DataType> columns2 =
+                schema2.getColumns().stream()
+                        .collect(Collectors.toMap(ColumnSpec::getName, ColumnSpec::getDataType));
+        List<String> columnNames1 = schema1.getColumnNames();
+        List<String> columnNames2 = schema2.getColumnNames();
+
+        SchemaSpec.Builder builder = SchemaSpec.newBuilder();
+        for (String columnName : columnNames1) {
+            if (columns2.containsKey(columnName)) {
+                org.apache.flink.table.types.DataType type1 = columns1.get(columnName);
+                org.apache.flink.table.types.DataType type2 = columns2.get(columnName);
+                if (Objects.equals(type1, type2)) {
+                    builder.column(columnName, type1);
+                } else {
+                    builder.column(
+                            columnName,
+                            findCommonDataType(columns1.get(columnName), columns2.get(columnName)));
+                }
+            } else {
+                builder.column(columnName, columns1.get(columnName));
+            }
+        }
+        for (String columnName : columnNames2) {
+            if (!columns1.containsKey(columnName)) {
+                builder.column(columnName, columns2.get(columnName));
+            }
+        }
+        return builder.build();
+    }
+
+    private static org.apache.flink.table.types.DataType findCommonDataType(
+            org.apache.flink.table.types.DataType... types) {
+        Preconditions.checkArgument(types.length > 0, "List of types must not be empty.");
+        Optional<LogicalType> commonLogicalType =
+                AnsiLogicalTypeMerging.findCommonType(
+                        Arrays.stream(types)
+                                .map(org.apache.flink.table.types.DataType::getLogicalType)
+                                .collect(Collectors.toList()));
+        if (commonLogicalType.isPresent()) {
+            return LogicalTypeDataTypeConverter.toDataType(commonLogicalType.get());
+        }
+        throw new IllegalStateException(
+                "There must be a common data type to be found, some bug occurs.");
     }
 }
