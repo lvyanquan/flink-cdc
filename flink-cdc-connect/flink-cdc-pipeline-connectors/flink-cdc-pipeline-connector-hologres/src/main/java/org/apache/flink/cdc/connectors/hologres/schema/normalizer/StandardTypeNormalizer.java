@@ -199,7 +199,7 @@ public class StandardTypeNormalizer implements HologresTypeNormalizer {
         }
 
         return (record) -> {
-            if (record == null) {
+            if (record == null || record.isNullAt(fieldPos)) {
                 return null;
             } else {
                 return fieldGetter.getFieldOrNull(record);

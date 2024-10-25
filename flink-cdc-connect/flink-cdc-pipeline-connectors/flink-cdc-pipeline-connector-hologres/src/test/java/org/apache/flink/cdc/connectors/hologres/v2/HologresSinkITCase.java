@@ -78,6 +78,53 @@ public class HologresSinkITCase extends HologresTestBase {
     }
 
     @Test
+    public void testNullValues() throws Exception {
+        TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
+
+        String[] fieldNames =
+                new String[] {
+                    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"
+                };
+        String[] pkFieldNames = new String[] {"h"};
+
+        DataType[] dataTypes =
+                new DataType[] {
+                    DataTypes.CHAR(1),
+                    DataTypes.VARCHAR(20),
+                    DataTypes.STRING().notNull(),
+                    DataTypes.BOOLEAN(),
+                    DataTypes.DECIMAL(6, 2),
+                    DataTypes.TINYINT(),
+                    DataTypes.SMALLINT(),
+                    DataTypes.INT(),
+                    DataTypes.BIGINT(),
+                    DataTypes.FLOAT(),
+                    DataTypes.DOUBLE(),
+                    DataTypes.DATE(),
+                    DataTypes.TIME(),
+                    DataTypes.TIMESTAMP(),
+                    DataTypes.TIMESTAMP_TZ(6),
+                    DataTypes.TIMESTAMP_LTZ()
+                };
+
+        Object[][] insertedValues =
+                new Object[][] {
+                    new Object[] {
+                        null, null, null, null, null, null, null, 0, null, null, null, null, null,
+                        null, null, null,
+                    }
+                };
+
+        String[] expected =
+                new String[] {
+                    "null,null,null,null,null,null,null,0,null,null,null,null,null,null,null,null"
+                };
+
+        testaInsertSingleTable(
+                tableId, fieldNames, pkFieldNames, dataTypes, insertedValues, expected);
+    }
+
+    @Test
     public void testAllSingleType() throws Exception {
 
         TableId tableId = TableId.tableId("default_namespace", "public", sinkTable);
