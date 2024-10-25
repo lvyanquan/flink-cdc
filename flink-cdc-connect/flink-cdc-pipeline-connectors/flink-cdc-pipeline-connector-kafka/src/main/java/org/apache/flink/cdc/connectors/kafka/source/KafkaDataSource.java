@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.kafka.source;
 
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.common.source.EventSourceProvider;
@@ -181,5 +182,15 @@ public class KafkaDataSource implements DataSource {
                                                         .map(Enum::name)
                                                         .map(String::toLowerCase)
                                                         .collect(Collectors.joining(",")))));
+    }
+
+    @VisibleForTesting
+    StartupMode getStartupMode() {
+        return startupMode;
+    }
+
+    @VisibleForTesting
+    long getStartupTimestampMillis() {
+        return startupTimestampMillis;
     }
 }

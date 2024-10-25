@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPERTIES_PREFIX;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_BOOTSTRAP_SERVERS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_GROUP_ID;
@@ -161,6 +162,7 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_BOUNDED_TIMESTAMP_MILLIS);
         options.add(SCAN_TOPIC_PARTITION_DISCOVERY);
         options.add(SCAN_CHECK_DUPLICATED_GROUP_ID);
+        options.add(VVR_START_TIME_MS);
         return options;
     }
 

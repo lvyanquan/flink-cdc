@@ -22,12 +22,17 @@ import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
+import org.apache.flink.streaming.connectors.kafka.config.StartupMode;
 import org.apache.flink.table.api.ValidationException;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_BOOTSTRAP_SERVERS;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_STARTUP_MODE;
 
 /** Tests for {@link KafkaDataSourceFactory}. */
 public class KafkaDataSourceFactoryTest {
@@ -123,5 +128,31 @@ public class KafkaDataSourceFactoryTest {
                         new FactoryHelper.DefaultContext(
                                 conf, conf, Thread.currentThread().getContextClassLoader()));
         Assertions.assertThat(dataSource).isInstanceOf(KafkaDataSource.class);
+    }
+
+    @Test
+    public void testSetStartTimeMs() {
+        DataSourceFactory sourceFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSourceFactory.class);
+        Assertions.assertThat(sourceFactory).isInstanceOf(KafkaDataSourceFactory.class);
+
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put(PROPS_BOOTSTRAP_SERVERS.key(), "test")
+                                .put(SCAN_STARTUP_MODE.key(), "latest-offset")
+                                .put(VVR_START_TIME_MS.key(), "1234")
+                                .build());
+
+        KafkaDataSource dataSource =
+                (KafkaDataSource)
+                        sourceFactory.createDataSource(
+                                new FactoryHelper.DefaultContext(
+                                        conf,
+                                        conf,
+                                        Thread.currentThread().getContextClassLoader()));
+
+        Assertions.assertThat(dataSource.getStartupMode()).isEqualTo(StartupMode.TIMESTAMP);
+        Assertions.assertThat(dataSource.getStartupTimestampMillis()).isEqualTo(1234);
     }
 }
