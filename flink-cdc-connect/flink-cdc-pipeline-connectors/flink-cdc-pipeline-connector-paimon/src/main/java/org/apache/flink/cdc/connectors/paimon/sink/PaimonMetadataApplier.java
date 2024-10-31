@@ -21,9 +21,12 @@ import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DropColumnEvent;
+import org.apache.flink.cdc.common.event.DropTableEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.event.TruncateTableEvent;
+import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
@@ -46,6 +49,7 @@ import org.apache.paimon.flink.LogicalTypeConversion;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.schema.SchemaChange;
 import org.apache.paimon.table.Table;
+import org.apache.paimon.table.sink.BatchTableCommit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,6 +160,10 @@ public class PaimonMetadataApplier implements MetadataApplier {
                 applyRenameColumn((RenameColumnEvent) schemaChangeEvent);
             } else if (schemaChangeEvent instanceof AlterColumnTypeEvent) {
                 applyAlterColumn((AlterColumnTypeEvent) schemaChangeEvent);
+            } else if (schemaChangeEvent instanceof TruncateTableEvent) {
+                applyTruncateTable((TruncateTableEvent) schemaChangeEvent);
+            } else if (schemaChangeEvent instanceof DropTableEvent) {
+                applyDropTable((DropTableEvent) schemaChangeEvent);
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -189,20 +197,14 @@ public class PaimonMetadataApplier implements MetadataApplier {
         }
         builder.options(tableOptions);
         builder.options(schema.options());
-        catalog.createTable(
-                new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName()),
-                builder.build(),
-                true);
+        catalog.createTable(tableIdToIdentifier(event), builder.build(), true);
         tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
     }
 
     private void applyAddColumn(AddColumnEvent event) throws Exception {
         List<SchemaChange> tableChangeList = applyAddColumnEventWithPosition(event);
         tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(
-                new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName()),
-                tableChangeList,
-                true);
+        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
     }
 
     private List<SchemaChange> applyAddColumnEventWithPosition(AddColumnEvent event)
@@ -282,10 +284,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
         event.getDroppedColumnNames()
                 .forEach((column) -> tableChangeList.add(SchemaChangeProvider.drop(column)));
         tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(
-                new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName()),
-                tableChangeList,
-                true);
+        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
     }
 
     private void applyRenameColumn(RenameColumnEvent event) throws Exception {
@@ -295,10 +294,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
                         (oldName, newName) ->
                                 tableChangeList.add(SchemaChangeProvider.rename(oldName, newName)));
         tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(
-                new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName()),
-                tableChangeList,
-                true);
+        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
     }
 
     private void applyAlterColumn(AlterColumnTypeEvent event) throws Exception {
@@ -309,10 +305,22 @@ public class PaimonMetadataApplier implements MetadataApplier {
                                 tableChangeList.add(
                                         SchemaChangeProvider.updateColumnType(oldName, newType)));
         tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(
-                new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName()),
-                tableChangeList,
-                true);
+        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+    }
+
+    private void applyTruncateTable(TruncateTableEvent event) throws Exception {
+        try (BatchTableCommit batchTableCommit =
+                catalog.getTable(tableIdToIdentifier(event)).newBatchWriteBuilder().newCommit()) {
+            batchTableCommit.truncateTable();
+        }
+    }
+
+    private void applyDropTable(DropTableEvent event) throws SchemaEvolveException {
+        try {
+            catalog.dropTable(tableIdToIdentifier(event), true);
+        } catch (Catalog.TableNotExistException e) {
+            throw new SchemaEvolveException(event, "Failed to apply drop table event", e);
+        }
     }
 
     private void tryGetDlfDatabasePermission(String database) throws Exception {
@@ -344,5 +352,9 @@ public class PaimonMetadataApplier implements MetadataApplier {
                             .build());
             LOGGER.debug("Succeed to get table permission for " + database + "." + tableName);
         }
+    }
+
+    private static Identifier tableIdToIdentifier(SchemaChangeEvent event) {
+        return new Identifier(event.tableId().getSchemaName(), event.tableId().getTableName());
     }
 }
