@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.common.types.DataTypeChecks;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -31,7 +32,6 @@ import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.types.RowKind;
 
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -177,14 +177,11 @@ public class TableSchemaInfo {
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                 fieldGetter =
                         record ->
-                                TimestampData.fromLocalDateTime(
-                                        ZonedDateTime.ofInstant(
-                                                        record.getLocalZonedTimestampData(
-                                                                        fieldPos,
-                                                                        getPrecision(fieldType))
-                                                                .toInstant(),
-                                                        zoneId)
-                                                .toLocalDateTime());
+                                TimestampData.fromInstant(
+                                        record.getLocalZonedTimestampData(
+                                                        fieldPos,
+                                                        DataTypeChecks.getPrecision(fieldType))
+                                                .toInstant());
                 break;
             default:
                 throw new IllegalArgumentException(
