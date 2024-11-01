@@ -57,8 +57,7 @@ public class PaimonWriter<InputT>
 
     protected static final Logger LOGGER = LoggerFactory.getLogger(PaimonWriter.class);
 
-    // use `static` because Catalog is unSerializable.
-    private static Catalog catalog;
+    private transient Catalog catalog;
     private final IOManager ioManager;
 
     // Each job can only have one user name and this name must be consistent across restarts.
@@ -209,6 +208,9 @@ public class PaimonWriter<InputT>
         }
         if (compactExecutor != null) {
             compactExecutor.shutdownNow();
+        }
+        if (catalog != null) {
+            catalog.close();
         }
     }
 }
