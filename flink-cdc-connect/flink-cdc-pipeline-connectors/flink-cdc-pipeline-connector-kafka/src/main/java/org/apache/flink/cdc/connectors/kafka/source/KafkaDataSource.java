@@ -25,6 +25,7 @@ import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.source.MetadataAccessor;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.KafkaRecordSchemaAwareDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.NoStoppingOffsetsInitializer;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.connectors.kafka.config.BoundedMode;
@@ -49,6 +50,8 @@ import java.util.stream.Collectors;
 public class KafkaDataSource implements DataSource {
 
     private final SchemaAwareDeserializationSchema<Event> valueDeserialization;
+    private final RecordSchemaParser recordSchemaParser;
+    private final int maxFetchRecord;
     private final List<String> topics;
     private final Pattern topicPattern;
     private final Properties kafkaProperties;
@@ -61,6 +64,8 @@ public class KafkaDataSource implements DataSource {
 
     public KafkaDataSource(
             SchemaAwareDeserializationSchema<Event> valueDeserialization,
+            RecordSchemaParser recordSchemaParser,
+            int maxFetchRecord,
             List<String> topics,
             Pattern topicPattern,
             Properties kafkaProperties,
@@ -71,6 +76,8 @@ public class KafkaDataSource implements DataSource {
             Map<KafkaTopicPartition, Long> specificBoundedOffsets,
             long boundedTimestampMillis) {
         this.valueDeserialization = valueDeserialization;
+        this.recordSchemaParser = recordSchemaParser;
+        this.maxFetchRecord = maxFetchRecord;
         this.topics = topics;
         this.topicPattern = topicPattern;
         this.kafkaProperties =
@@ -152,6 +159,8 @@ public class KafkaDataSource implements DataSource {
         }
 
         kafkaSourceBuilder
+                .setRecordSchemaParser(recordSchemaParser)
+                .setMaxFetchRecords(maxFetchRecord)
                 .setProperties(kafkaProperties)
                 .setDeserializer(
                         KafkaRecordSchemaAwareDeserializationSchema.valueOnly(

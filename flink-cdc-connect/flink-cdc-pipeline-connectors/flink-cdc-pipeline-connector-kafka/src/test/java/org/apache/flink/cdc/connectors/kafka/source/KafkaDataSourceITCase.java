@@ -30,6 +30,7 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.connectors.kafka.KafkaUtil;
+import org.apache.flink.cdc.connectors.kafka.TestUtil;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
@@ -61,6 +62,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -69,6 +71,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -145,6 +149,7 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 value.toString()));
         config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
         config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "earliest-offset");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "0");
 
         KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
         FlinkSourceProvider sourceProvider =
@@ -208,6 +213,74 @@ public class KafkaDataSourceITCase extends TestLogger {
 
     @Test
     @Timeout(120)
+    public void testDebeziumJsonFormatPreFetch() throws Exception {
+        prepareData(readLines("debezium-data-schema-change.txt"));
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "debezium-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "earliest-offset");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "5");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        int expectedSize = 6;
+        Schema expectedSchema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.BIGINT())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .physicalColumn("description", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .build();
+        List<RecordData.FieldGetter> fieldGetters =
+                TestUtil.getFieldGettersBySchema(expectedSchema);
+
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        assertThat(actual.get(0)).isInstanceOf(CreateTableEvent.class);
+        CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
+        assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
+
+        List<String> expectedDataChangeEvents =
+                Arrays.asList(
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+        for (int i = 1; i < expectedSize; i++) {
+            assertThat(actual.get(i)).isInstanceOf(DataChangeEvent.class);
+            assertThat(TestUtil.convertEventToStr(actual.get(i), fieldGetters))
+                    .isEqualTo(expectedDataChangeEvents.get(i - 1));
+        }
+    }
+
+    @Test
+    @Timeout(120)
     public void testCanalJsonFormat() throws Exception {
         prepareData(readLines("canal-data.txt"));
 
@@ -221,6 +294,7 @@ public class KafkaDataSourceITCase extends TestLogger {
         config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
         config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "canal-json");
         config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "earliest-offset");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "0");
 
         KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
         FlinkSourceProvider sourceProvider =
@@ -283,6 +357,81 @@ public class KafkaDataSourceITCase extends TestLogger {
         assertThat(after.getString(2).toString()).isEqualTo("18oz carpenter hammer");
         assertThat(after.getString(3).toString()).isEqualTo("1.0");
         assertThat(after.getString(4).toString()).isEqualTo("val0");
+    }
+
+    @Test
+    @Timeout(120)
+    public void testCanalJsonFormatPreFetch() throws Exception {
+        prepareData(readLines("canal-data-schema-change.txt"));
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "canal-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "earliest-offset");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "5");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        int expectedSize = 6;
+        Schema expectedSchema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .physicalColumn("description", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .primaryKey("id")
+                        .build();
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        assertThat(actual.get(0)).isInstanceOf(CreateTableEvent.class);
+        CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
+        assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
+
+        List<String> expectedDataChangeEvents =
+                Arrays.asList(
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+
+        List<RecordData.FieldGetter> fieldGetters =
+                IntStream.range(0, expectedSchema.getColumnCount())
+                        .mapToObj(
+                                i ->
+                                        RecordData.createFieldGetter(
+                                                expectedSchema.getColumnDataTypes().get(i), i))
+                        .collect(Collectors.toList());
+
+        for (int i = 1; i < expectedSize; i++) {
+            assertThat(actual.get(i)).isInstanceOf(DataChangeEvent.class);
+            assertThat(TestUtil.convertEventToStr(actual.get(i), fieldGetters))
+                    .isEqualTo(expectedDataChangeEvents.get(i - 1));
+        }
     }
 
     private void prepareData(List<String> values) {

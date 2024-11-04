@@ -126,4 +126,11 @@ public class KafkaDataSourceOptions {
                             "Whether to check if the consumer group ID already exists on broker. "
                                     + "Kafka source will throw an exception for duplicated group "
                                     + "ID if this option is enabled.");
+
+    public static final ConfigOption<Integer> SCAN_MAX_PRE_FETCH_RECORDS =
+            key("scan.max.pre.fetch.records")
+                    .intType()
+                    .defaultValue(50)
+                    .withDescription(
+                            "The max number of records to be parsed for one kafka topic partition in order to get the initial table schemas.");
 }

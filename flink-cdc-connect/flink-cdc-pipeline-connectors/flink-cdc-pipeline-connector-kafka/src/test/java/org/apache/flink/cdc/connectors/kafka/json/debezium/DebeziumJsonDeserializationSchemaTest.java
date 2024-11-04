@@ -30,6 +30,7 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
+import org.apache.flink.cdc.connectors.kafka.TestUtil;
 import org.apache.flink.cdc.connectors.kafka.json.JsonDeserializationSchemaTestBase;
 import org.apache.flink.cdc.connectors.kafka.json.MockInitializationContext;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -72,7 +73,7 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
 
     @Test
     public void testDeserializeExcludeSchema() throws Exception {
-        List<String> lines = readLines("debezium-data-schema-exclude.txt");
+        List<String> lines = TestUtil.readLines("debezium-data-schema-exclude.txt");
         DebeziumJsonDeserializationSchema deserializationSchema =
                 new DebeziumJsonDeserializationSchema(
                         false, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
@@ -81,7 +82,7 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
 
     @Test
     public void testDeserializeIncludeSchema() throws Exception {
-        List<String> lines = readLines("debezium-data-schema-include.txt");
+        List<String> lines = TestUtil.readLines("debezium-data-schema-include.txt");
         DebeziumJsonDeserializationSchema deserializationSchema =
                 new DebeziumJsonDeserializationSchema(
                         true, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
@@ -162,7 +163,7 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
 
     @Test
     public void testPrimitiveAsString() throws Exception {
-        List<String> lines = readLines("debezium-data-schema-exclude.txt");
+        List<String> lines = TestUtil.readLines("debezium-data-schema-exclude.txt");
         DebeziumJsonDeserializationSchema deserializationSchema =
                 new DebeziumJsonDeserializationSchema(
                         false, false, true, TimestampFormat.SQL, ZoneId.systemDefault());

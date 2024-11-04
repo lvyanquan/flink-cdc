@@ -40,6 +40,7 @@ import org.apache.flink.formats.json.JsonToSourceRecordConverter;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.ArrayData;
+import org.apache.flink.table.data.ColumnSpec;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.SchemaSpec;
@@ -347,21 +348,30 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
     }
 
     private SourceRecord getCompleteBeforeSourceRecord(
-            SchemaSpec schemaSpec, SourceRecord old, SourceRecord data, JsonNode oldField) {
+            SchemaSpec mergedSchema, SourceRecord old, SourceRecord data, JsonNode oldField) {
         Map<String, Object> oldValues = getFieldValues(old);
         Map<String, Object> newValues = getFieldValues(data);
+        SchemaSpec.Builder builder = SchemaSpec.newBuilder();
 
-        GenericRowData rowData = new GenericRowData(schemaSpec.getColumnCount());
-        List<String> columnNames = schemaSpec.getColumnNames();
-        for (int i = 0; i < schemaSpec.getColumnCount(); i++) {
-            String columnName = columnNames.get(i);
+        GenericRowData rowData = new GenericRowData(mergedSchema.getColumnCount());
+        List<ColumnSpec> columns = mergedSchema.getColumns();
+
+        for (int i = 0; i < columns.size(); i++) {
+            String columnName = columns.get(i).getName();
             if (oldValues.containsKey(columnName)) {
+                // old value is not null
                 rowData.setField(i, oldValues.get(columnName));
-            } else if (oldField.findValue(columnName) == null) {
+                builder.column(old.getSchema().getColumn(columnName).get());
+            } else if (oldField.findValue(columnName) != null) {
+                // old value is null
+                builder.column(columns.get(i));
+            } else {
+                // old value is same as new value
                 rowData.setField(i, newValues.get(columnName));
+                builder.column(data.getSchema().getColumn(columnName).orElse(columns.get(i)));
             }
         }
-        return new SourceRecord(OBJECT_PATH_PLACEHOLDER, schemaSpec, rowData);
+        return new SourceRecord(OBJECT_PATH_PLACEHOLDER, builder.build(), rowData);
     }
 
     private Map<String, Object> getFieldValues(SourceRecord sourceRecord) {
@@ -373,7 +383,7 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
         return fieldValues;
     }
 
-    private List<String> getStringArray(GenericRowData row, int pos) {
+    private static List<String> getStringArray(GenericRowData row, int pos) {
         ArrayData arrayData = row.getArray(pos);
         if (arrayData == null) {
             return Collections.emptyList();

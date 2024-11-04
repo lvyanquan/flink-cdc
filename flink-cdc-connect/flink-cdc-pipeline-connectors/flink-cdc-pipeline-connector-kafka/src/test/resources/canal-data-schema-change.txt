@@ -1,0 +1,5 @@
+{"data":[{"id":"0","name":"test0"}],"database":"inventory","table":"products","old":null,"pkNames":["id"],"type":"INSERT"}
+{"data":[{"id":"1","name":"test1","description":null}],"database":"inventory","table":"products","old":null,"pkNames":["id"],"type":"INSERT"}
+{"data":[{"id":"2","name":"test2","description":"description for test2","weight":null}],"database":"inventory","table":"products","old":null,"pkNames":["id"],"type":"INSERT"}
+{"data":[{"id":"3","name":"test3","description":"description for test3","weight":3}],"database":"inventory","table":"products","old":null,"pkNames":["id"],"type":"INSERT"}
+{"data":[{"id":"3","name":"test3","description":"description for test3 update","weight":3.14}],"database":"inventory","table":"products","old":[{"description":"description for test3","weight":3}],"pkNames":["id"],"type":"UPDATE"}

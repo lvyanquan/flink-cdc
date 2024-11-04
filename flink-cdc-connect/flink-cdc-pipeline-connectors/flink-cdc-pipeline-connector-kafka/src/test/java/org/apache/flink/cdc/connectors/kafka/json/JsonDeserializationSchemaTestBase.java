@@ -20,24 +20,11 @@ package org.apache.flink.cdc.connectors.kafka.json;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.util.Collector;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /** Deserialize schema test base for the json format. */
 public abstract class JsonDeserializationSchemaTestBase {
-
-    protected List<String> readLines(String resource) throws IOException {
-        final URL url =
-                JsonDeserializationSchemaTestBase.class.getClassLoader().getResource(resource);
-        assert url != null;
-        Path path = new File(url.getFile()).toPath();
-        return Files.readAllLines(path);
-    }
 
     /** A collector that stores elements in a list. */
     public static class SimpleCollector implements Collector<Event> {

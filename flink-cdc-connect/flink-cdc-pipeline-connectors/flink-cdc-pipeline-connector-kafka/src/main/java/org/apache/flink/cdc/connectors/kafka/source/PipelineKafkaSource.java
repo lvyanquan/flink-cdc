@@ -27,6 +27,7 @@ import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.connectors.kafka.source.enumerator.PipelineKafkaSourceEnumerator;
 import org.apache.flink.cdc.connectors.kafka.source.reader.PipelineKafkaRecordEmitter;
 import org.apache.flink.cdc.connectors.kafka.source.reader.PipelineKafkaSourceReader;
+import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.cdc.connectors.kafka.source.split.PipelineKafkaPartitionSplitSerializer;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
@@ -57,13 +58,18 @@ import java.util.function.Supplier;
  */
 public class PipelineKafkaSource extends KafkaSource<Event> {
 
+    private final RecordSchemaParser recordSchemaParser;
+    private final int maxFetchRecords;
+
     PipelineKafkaSource(
             KafkaSubscriber subscriber,
             OffsetsInitializer startingOffsetsInitializer,
             @Nullable OffsetsInitializer stoppingOffsetsInitializer,
             Boundedness boundedness,
             KafkaRecordDeserializationSchema<Event> deserializationSchema,
-            Properties props) {
+            Properties props,
+            RecordSchemaParser recordSchemaParser,
+            int maxFetchRecords) {
         super(
                 subscriber,
                 startingOffsetsInitializer,
@@ -71,6 +77,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 boundedness,
                 deserializationSchema,
                 props);
+        this.recordSchemaParser = recordSchemaParser;
+        this.maxFetchRecords = maxFetchRecords;
     }
 
     public static PipelineKafkaSourceBuilder builder() {
@@ -99,6 +107,7 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                         return readerContext.getUserCodeClassLoader();
                     }
                 });
+        recordSchemaParser.open();
         final KafkaSourceReaderMetrics kafkaSourceReaderMetrics =
                 new KafkaSourceReaderMetrics(readerContext.metricGroup());
 
@@ -114,7 +123,10 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 recordEmitter,
                 toConfiguration(props),
                 readerContext,
-                kafkaSourceReaderMetrics);
+                kafkaSourceReaderMetrics,
+                recordSchemaParser,
+                maxFetchRecords,
+                props);
     }
 
     @Override

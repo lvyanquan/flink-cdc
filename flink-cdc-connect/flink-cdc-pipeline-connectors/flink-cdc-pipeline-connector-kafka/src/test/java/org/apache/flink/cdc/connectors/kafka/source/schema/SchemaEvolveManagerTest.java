@@ -51,10 +51,30 @@ public class SchemaEvolveManagerTest {
         SchemaEvolveResult result =
                 SchemaEvolveManager.evolveSchema(TABLE_ID, SCHEMA_BASE, SCHEMA_BASE);
         assertThat(result.isCompatibleAsIs()).isTrue();
+
+        Schema schema1 =
+                Schema.newBuilder()
+                        .physicalColumn("f2", DataTypes.DOUBLE())
+                        .physicalColumn("f1", DataTypes.STRING())
+                        .physicalColumn("f0", DataTypes.INT().notNull())
+                        .primaryKey("f0")
+                        .build();
+        result = SchemaEvolveManager.evolveSchema(TABLE_ID, SCHEMA_BASE, schema1);
+        assertThat(result.isCompatibleAsIs()).isTrue();
+
+        Schema schema2 =
+                Schema.newBuilder()
+                        .physicalColumn("f1", DataTypes.STRING())
+                        .physicalColumn("f0", DataTypes.INT().notNull())
+                        .primaryKey("f0")
+                        .build();
+        result = SchemaEvolveManager.evolveSchema(TABLE_ID, SCHEMA_BASE, schema2);
+        assertThat(result.isCompatibleAsIs()).isTrue();
     }
 
     @Test
-    public void testPrimaryKeyNameChange() {
+    public void testPrimaryKeyChange() {
+        // rename pk col
         Schema newSchema =
                 Schema.newBuilder()
                         .physicalColumn("id", DataTypes.BIGINT().notNull())
@@ -62,6 +82,17 @@ public class SchemaEvolveManagerTest {
                         .build();
         SchemaEvolveResult result =
                 SchemaEvolveManager.evolveSchema(TABLE_ID, SCHEMA_BASE, newSchema);
+        assertThat(result.isIncompatible()).isTrue();
+        assertThat(result.getIncompatibleReason()).isEqualTo("Primary keys should not be changed.");
+
+        // remove pk
+        newSchema =
+                Schema.newBuilder()
+                        .physicalColumn("f0", DataTypes.INT().notNull())
+                        .physicalColumn("f1", DataTypes.STRING())
+                        .physicalColumn("f2", DataTypes.DOUBLE())
+                        .build();
+        result = SchemaEvolveManager.evolveSchema(TABLE_ID, SCHEMA_BASE, newSchema);
         assertThat(result.isIncompatible()).isTrue();
         assertThat(result.getIncompatibleReason()).isEqualTo("Primary keys should not be changed.");
     }

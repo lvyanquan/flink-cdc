@@ -26,6 +26,8 @@ import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
 import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
+import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParserFactory;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.KafkaSourceOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.BoundedOptions;
@@ -49,6 +51,7 @@ import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOption
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_BOUNDED_SPECIFIC_OFFSETS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_BOUNDED_TIMESTAMP_MILLIS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_CHECK_DUPLICATED_GROUP_ID;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_STARTUP_MODE;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSETS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS;
@@ -92,6 +95,11 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         SchemaAwareDeserializationSchema<Event> valueDeserialization =
                 ChangeLogJsonFormatFactory.createDeserializationSchema(
                         configuration, jsonSerializationType, zoneId);
+        RecordSchemaParser recordSchemaParser =
+                RecordSchemaParserFactory.createRecordSchemaParser(
+                        configuration, jsonSerializationType, zoneId);
+
+        int maxFetchRecords = context.getFactoryConfiguration().get(SCAN_MAX_PRE_FETCH_RECORDS);
 
         final Properties kafkaProperties = new Properties();
         Map<String, String> allOptions = context.getFactoryConfiguration().toMap();
@@ -124,6 +132,8 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
 
         return new KafkaDataSource(
                 valueDeserialization,
+                recordSchemaParser,
+                maxFetchRecords,
                 getSourceTopics(configuration),
                 getSourceTopicPattern(configuration),
                 kafkaProperties,
@@ -162,6 +172,7 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_BOUNDED_TIMESTAMP_MILLIS);
         options.add(SCAN_TOPIC_PARTITION_DISCOVERY);
         options.add(SCAN_CHECK_DUPLICATED_GROUP_ID);
+        options.add(SCAN_MAX_PRE_FETCH_RECORDS);
         options.add(VVR_START_TIME_MS);
         return options;
     }

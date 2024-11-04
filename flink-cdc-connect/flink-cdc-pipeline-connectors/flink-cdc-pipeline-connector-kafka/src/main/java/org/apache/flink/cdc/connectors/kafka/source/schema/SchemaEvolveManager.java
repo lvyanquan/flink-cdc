@@ -86,6 +86,9 @@ public class SchemaEvolveManager {
                 }
             }
         }
+        if (columnsToAdd.isEmpty() && columnsToChangeType.isEmpty()) {
+            return SchemaEvolveResult.compatibleAsIs();
+        }
 
         List<SchemaChangeEvent> schemaChanges = new ArrayList<>();
         Schema.Builder builder = Schema.newBuilder();

@@ -1,0 +1,5 @@
+{"before":null,"after":{"id":0,"name":"test0"},"source":{"db":"inventory","table":"products"},"op":"c"}
+{"before":null,"after":{"id":1,"name":"test1","description":null},"source":{"db":"inventory","table":"products"},"op":"c"}
+{"before":null,"after":{"id":2,"name":"test2","description":"description for test2","weight":null},"source":{"db":"inventory","table":"products"},"op":"c"}
+{"before":null,"after":{"id":3,"name":"test3","description":"description for test3","weight":3},"source":{"db":"inventory","table":"products"},"op":"c"}
+{"before":{"id":3,"name":"test3","description":"description for test3","weight":3},"after":{"id":3,"name":"test3","description":"description for test3 update","weight":3.14},"source":{"db":"inventory","table":"products"},"op":"u"}

@@ -18,14 +18,28 @@
 package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
 
 /** The builder class for {@link PipelineKafkaSource}. */
 public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
 
+    private RecordSchemaParser recordSchemaParser;
+    private int maxFetchRecords;
+
     public PipelineKafkaSourceBuilder() {
         super();
+    }
+
+    public PipelineKafkaSourceBuilder setRecordSchemaParser(RecordSchemaParser recordSchemaParser) {
+        this.recordSchemaParser = recordSchemaParser;
+        return this;
+    }
+
+    public PipelineKafkaSourceBuilder setMaxFetchRecords(int maxFetchRecords) {
+        this.maxFetchRecords = maxFetchRecords;
+        return this;
     }
 
     @Override
@@ -38,6 +52,8 @@ public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
                 stoppingOffsetsInitializer,
                 boundedness,
                 deserializationSchema,
-                props);
+                props,
+                recordSchemaParser,
+                maxFetchRecords);
     }
 }

@@ -29,6 +29,7 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
+import org.apache.flink.cdc.connectors.kafka.TestUtil;
 import org.apache.flink.cdc.connectors.kafka.json.JsonDeserializationSchemaTestBase;
 import org.apache.flink.cdc.connectors.kafka.json.MockInitializationContext;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -139,7 +140,7 @@ public class CanalJsonDeserializationSchemaTest extends JsonDeserializationSchem
 
     @Test
     public void testDeserialize() throws Exception {
-        List<String> lines = readLines("canal-data.txt");
+        List<String> lines = TestUtil.readLines("canal-data.txt");
         CanalJsonDeserializationSchema deserializationSchema =
                 new CanalJsonDeserializationSchema(
                         null, null, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
@@ -274,7 +275,7 @@ public class CanalJsonDeserializationSchemaTest extends JsonDeserializationSchem
 
     @Test
     public void testFilteringTables() throws Exception {
-        List<String> lines = readLines("canal-data.txt");
+        List<String> lines = TestUtil.readLines("canal-data.txt");
         CanalJsonDeserializationSchema deserializationSchema =
                 new CanalJsonDeserializationSchema(
                         "^inventory",
@@ -308,5 +309,76 @@ public class CanalJsonDeserializationSchemaTest extends JsonDeserializationSchem
         assertThat(deserializationSchema.getAlreadySendCreateTableTables()).hasSize(1);
         assertThat(deserializationSchema.getTableSchemaConverters()).hasSize(1);
         assertThat(collector.getList()).isNotEmpty();
+    }
+
+    @Test
+    public void testDeserializeDataWithUpdateType() throws Exception {
+        String canalJson =
+                "{"
+                        + "    \"data\": ["
+                        + "        {"
+                        + "            \"id\": \"0\","
+                        + "            \"name\": \"test0\","
+                        + "            \"description\": \"desc\","
+                        + "            \"weight\": 3.14,"
+                        + "            \"other\": \"other0\""
+                        + "        },"
+                        + "        {"
+                        + "            \"id\": \"1\","
+                        + "            \"name\": \"test1\","
+                        + "            \"description\": null,"
+                        + "            \"weight\": null,"
+                        + "            \"other\": \"other1\""
+                        + "        }"
+                        + "    ],"
+                        + "    \"old\": ["
+                        + "        {"
+                        + "            \"name\": null,"
+                        + "            \"description\": null,"
+                        + "            \"weight\": 3"
+                        + "        },"
+                        + "        {"
+                        + "            \"name\": \"old_test1\","
+                        + "            \"description\": null,"
+                        + "            \"weight\": 1.0"
+                        + "        }"
+                        + "    ],"
+                        + "    \"database\": \"inventory\","
+                        + "    \"table\": \"products\","
+                        + "    \"pkNames\": [\"id\"],"
+                        + "    \"type\": \"UPDATE\""
+                        + "}";
+
+        CanalJsonDeserializationSchema deserializationSchema =
+                new CanalJsonDeserializationSchema(
+                        null, null, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
+        deserializationSchema.open(new MockInitializationContext());
+        TableId tableId = TableId.tableId("inventory", "products");
+        Schema schema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .physicalColumn("description", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .physicalColumn("other", DataTypes.STRING())
+                        .primaryKey("id")
+                        .build();
+        List<RecordData.FieldGetter> fieldGetters = TestUtil.getFieldGettersBySchema(schema);
+
+        SimpleCollector collector = new SimpleCollector();
+        deserializationSchema.deserialize(canalJson.getBytes(StandardCharsets.UTF_8), collector);
+        List<Event> events = collector.getList();
+
+        assertThat(events).hasSize(3);
+        assertThat(events.get(0)).isInstanceOf(CreateTableEvent.class);
+        assertThat(((CreateTableEvent) events.get(0)).getSchema()).isEqualTo(schema);
+        assertThat(((CreateTableEvent) events.get(0)).tableId()).isEqualTo(tableId);
+
+        assertThat(TestUtil.convertEventToStr(events.get(1), fieldGetters))
+                .isEqualTo(
+                        "DataChangeEvent{tableId=inventory.products, before=[0, null, null, 3.0, other0], after=[0, test0, desc, 3.14, other0], op=UPDATE, meta=()}");
+        assertThat(TestUtil.convertEventToStr(events.get(2), fieldGetters))
+                .isEqualTo(
+                        "DataChangeEvent{tableId=inventory.products, before=[1, old_test1, null, 1.0, other1], after=[1, test1, null, null, other1], op=UPDATE, meta=()}");
     }
 }
