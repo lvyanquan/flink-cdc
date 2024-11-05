@@ -134,6 +134,10 @@ public class StarRocksDataSinkFactory implements DataSinkFactory {
                 .getOptional(StarRocksDataSinkOptions.SINK_SEMANTIC)
                 .ifPresent(config -> sinkConfig.set(StarRocksSinkOptions.SINK_SEMANTIC, config));
 
+        cdcConfig
+                .getOptional(StarRocksDataSinkOptions.SINK_VERSION)
+                .ifPresent(config -> sinkConfig.set(StarRocksSinkOptions.SINK_VERSION, config));
+
         // specified sink configurations for cdc scenario
         sinkConfig.set(StarRocksSinkOptions.DATABASE_NAME, "*");
         sinkConfig.set(StarRocksSinkOptions.TABLE_NAME, "*");
@@ -191,6 +195,7 @@ public class StarRocksDataSinkFactory implements DataSinkFactory {
         optionalOptions.add(StarRocksDataSinkOptions.SINK_MAX_RETRIES);
         optionalOptions.add(StarRocksDataSinkOptions.SINK_BATCH_MAX_ROWS);
         optionalOptions.add(StarRocksDataSinkOptions.SINK_SEMANTIC);
+        optionalOptions.add(StarRocksDataSinkOptions.SINK_VERSION);
         return optionalOptions;
     }
 }
