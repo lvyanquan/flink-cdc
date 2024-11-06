@@ -18,10 +18,13 @@
 package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.configuration.Configuration;
+import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.streaming.connectors.kafka.config.StartupMode;
 import org.apache.flink.table.api.ValidationException;
 
@@ -154,5 +157,57 @@ public class KafkaDataSourceFactoryTest {
 
         Assertions.assertThat(dataSource.getStartupMode()).isEqualTo(StartupMode.TIMESTAMP);
         Assertions.assertThat(dataSource.getStartupTimestampMillis()).isEqualTo(1234);
+    }
+
+    @Test
+    public void testFormatOptions() {
+        DataSourceFactory sourceFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("kafka", DataSourceFactory.class);
+        Assertions.assertThat(sourceFactory).isInstanceOf(KafkaDataSourceFactory.class);
+
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put("properties.bootstrap.servers", "test")
+                                .put("debezium-json.schema-include", "true")
+                                .put("debezium-json.ignore-parse-errors", "true")
+                                .put("topic", "test-topic")
+                                .build());
+
+        DataSource dataSource =
+                sourceFactory.createDataSource(
+                        new FactoryHelper.DefaultContext(
+                                conf, conf, Thread.currentThread().getContextClassLoader()));
+        Assertions.assertThat(dataSource).isInstanceOf(KafkaDataSource.class);
+        KafkaDataSource kafkaDataSource = (KafkaDataSource) dataSource;
+
+        SchemaAwareDeserializationSchema<Event> valueDeserialization =
+                kafkaDataSource.getValueDeserialization();
+        Assertions.assertThat(valueDeserialization)
+                .isInstanceOf(DebeziumJsonDeserializationSchema.class);
+        DebeziumJsonDeserializationSchema deserializationSchema =
+                (DebeziumJsonDeserializationSchema) valueDeserialization;
+        Assertions.assertThat(deserializationSchema.isSchemaInclude()).isTrue();
+        Assertions.assertThat(deserializationSchema.isIgnoreParseErrors()).isTrue();
+
+        Configuration illegalConf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put("properties.bootstrap.servers", "test")
+                                .put("canal-json.ignore-parse-errors", "true")
+                                .put("topic", "test-topic")
+                                .build());
+        Assertions.assertThatThrownBy(
+                        () ->
+                                sourceFactory.createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                illegalConf,
+                                                illegalConf,
+                                                Thread.currentThread().getContextClassLoader())))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining(
+                        "Unsupported options found for 'kafka'.\n\n"
+                                + "Unsupported options:\n\n"
+                                + "canal-json.ignore-parse-errors");
     }
 }

@@ -126,8 +126,8 @@ public class ChangeLogJsonFormatFactory {
                         formatOptions.get(DebeziumJsonFormatOptions.IGNORE_PARSE_ERRORS);
                 return new DebeziumJsonDeserializationSchema(
                         schemaInclude,
-                        primitiveAsString,
                         ignoreParseErrors,
+                        primitiveAsString,
                         timestampFormat,
                         zoneId);
             case CANAL_JSON:

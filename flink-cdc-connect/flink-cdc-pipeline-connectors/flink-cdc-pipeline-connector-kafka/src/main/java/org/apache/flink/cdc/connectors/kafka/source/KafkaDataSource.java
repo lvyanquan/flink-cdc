@@ -202,4 +202,9 @@ public class KafkaDataSource implements DataSource {
     long getStartupTimestampMillis() {
         return startupTimestampMillis;
     }
+
+    @VisibleForTesting
+    SchemaAwareDeserializationSchema<Event> getValueDeserialization() {
+        return valueDeserialization;
+    }
 }

@@ -346,4 +346,14 @@ public class DebeziumJsonDeserializationSchema implements SchemaAwareDeserializa
     Set<TableId> getAlreadySendCreateTableTables() {
         return alreadySendCreateTableTables;
     }
+
+    @VisibleForTesting
+    public boolean isSchemaInclude() {
+        return schemaInclude;
+    }
+
+    @VisibleForTesting
+    public boolean isIgnoreParseErrors() {
+        return ignoreParseErrors;
+    }
 }

@@ -29,6 +29,7 @@ import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAw
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParserFactory;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.kafka.source.KafkaSourceOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.BoundedOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.StartupOptions;
@@ -71,14 +72,14 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
 
     @Override
     public DataSource createDataSource(Context context) {
-        FactoryHelper.createFactoryHelper(this, context)
-                .validateExcept(
-                        PROPERTIES_PREFIX,
-                        JsonSerializationType.DEBEZIUM_JSON.toString(),
-                        JsonSerializationType.CANAL_JSON.toString());
+        JsonSerializationType jsonSerializationType =
+                context.getFactoryConfiguration().get(VALUE_FORMAT);
 
+        FactoryHelper helper = FactoryHelper.createFactoryHelper(this, context);
+        helper.validateExcept(PROPERTIES_PREFIX, jsonSerializationType.toString());
         Configuration configuration =
                 Configuration.fromMap(context.getFactoryConfiguration().toMap());
+
         ZoneId zoneId = ZoneId.systemDefault();
         if (!Objects.equals(
                 context.getPipelineConfiguration().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),
@@ -89,15 +90,13 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
 
-        JsonSerializationType jsonSerializationType =
-                context.getFactoryConfiguration().get(VALUE_FORMAT);
-
+        ReadableConfig formatConfig = helper.getFormatConfig(jsonSerializationType.toString());
         SchemaAwareDeserializationSchema<Event> valueDeserialization =
                 ChangeLogJsonFormatFactory.createDeserializationSchema(
-                        configuration, jsonSerializationType, zoneId);
+                        formatConfig, jsonSerializationType, zoneId);
         RecordSchemaParser recordSchemaParser =
                 RecordSchemaParserFactory.createRecordSchemaParser(
-                        configuration, jsonSerializationType, zoneId);
+                        formatConfig, jsonSerializationType, zoneId);
 
         int maxFetchRecords = context.getFactoryConfiguration().get(SCAN_MAX_PRE_FETCH_RECORDS);
 
