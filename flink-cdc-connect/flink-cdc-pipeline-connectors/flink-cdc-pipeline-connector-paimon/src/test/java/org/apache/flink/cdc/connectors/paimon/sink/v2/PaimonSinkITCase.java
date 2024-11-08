@@ -194,6 +194,19 @@ public class PaimonSinkITCase {
                         Arrays.asList(Tuple2.of(STRING(), "2"), Tuple2.of(STRING(), "x"))));
         Assertions.assertThat(fetchResults(table1))
                 .isEqualTo(Collections.singletonList(Row.ofKind(RowKind.INSERT, "2", "x")));
+
+        List<Row> result = new ArrayList<>();
+        tEnv.sqlQuery("select max_sequence_number from paimon_catalog.test.`table1$files`")
+                .execute()
+                .collect()
+                .forEachRemaining(result::add);
+        // Each commit will generate one sequence number(equal to checkpointId).
+        org.junit.jupiter.api.Assertions.assertEquals(
+                Arrays.asList(
+                        Row.ofKind(RowKind.INSERT, 1L),
+                        Row.ofKind(RowKind.INSERT, 2L),
+                        Row.ofKind(RowKind.INSERT, 3L)),
+                result);
     }
 
     @ParameterizedTest
