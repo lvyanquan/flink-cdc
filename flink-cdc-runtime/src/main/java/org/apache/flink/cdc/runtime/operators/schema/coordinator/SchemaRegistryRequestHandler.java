@@ -396,7 +396,9 @@ public class SchemaRegistryRequestHandler implements Closeable {
                                                                                     .getType()
                                                                                     .nullable(),
                                                                             col.getAddColumn()
-                                                                                    .getComment())))
+                                                                                    .getComment(),
+                                                                            col.getAddColumn()
+                                                                                    .getDefaultValueExpression())))
                                             .collect(Collectors.toList())));
                 }
             case DROP_COLUMN:
@@ -448,7 +450,9 @@ public class SchemaRegistryRequestHandler implements Closeable {
                                                         Column.physicalColumn(
                                                                 value,
                                                                 column.getType().nullable(),
-                                                                column.getComment())));
+                                                                column.getComment(),
+                                                                column
+                                                                        .getDefaultValueExpression())));
                                     });
 
                     List<SchemaChangeEvent> events = new ArrayList<>();
