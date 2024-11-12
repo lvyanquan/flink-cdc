@@ -107,27 +107,23 @@ public class PaimonCommitter implements Committer<MultiTableCommittable> {
                         .collect(Collectors.toList());
         // All CommitRequest shared the same checkpointId.
         long checkpointId = committables.get(0).checkpointId();
-        int retriedNumber = commitRequests.stream().findFirst().get().getNumberOfRetries();
         WrappedManifestCommittable wrappedManifestCommittable =
                 storeMultiCommitter.combine(checkpointId, 1L, committables);
         try {
-            if (retriedNumber > 0) {
-                storeMultiCommitter.filterAndCommit(
-                        Collections.singletonList(wrappedManifestCommittable));
-            } else {
-                storeMultiCommitter.commit(Collections.singletonList(wrappedManifestCommittable));
-            }
+            storeMultiCommitter.filterAndCommit(
+                    Collections.singletonList(wrappedManifestCommittable));
             commitRequests.forEach(CommitRequest::signalAlreadyCommitted);
             LOGGER.info(
-                    String.format(
-                            "Commit succeeded for %s with %s committable",
-                            checkpointId, committables.size()));
+                    "Commit succeeded for {} with {} committable",
+                    checkpointId,
+                    committables.size());
         } catch (Exception e) {
             commitRequests.forEach(CommitRequest::retryLater);
             LOGGER.warn(
-                    String.format(
-                            "Commit failed for %s with %s committable",
-                            checkpointId, committables.size()));
+                    "Commit failed for {} with {} committable",
+                    checkpointId,
+                    committables.size(),
+                    e);
         }
     }
 

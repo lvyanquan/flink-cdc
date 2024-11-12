@@ -107,6 +107,8 @@ public class PaimonSinkITCase {
                                     .getResource("hive-conf-dir"))
                     .getPath();
 
+    private static int checkpointId = 1;
+
     private void initialize(String metastore)
             throws Catalog.DatabaseNotEmptyException, Catalog.DatabaseNotExistException {
         tEnv = TableEnvironment.create(EnvironmentSettings.newInstance().inBatchMode().build());
@@ -357,17 +359,112 @@ public class PaimonSinkITCase {
                 .isEqualTo(Collections.singletonList(Row.ofKind(RowKind.INSERT, "1", "1")));
     }
 
-    private static void commit(
-            PaimonWriter<Event> writer, Committer<MultiTableCommittable> committer)
+    @ParameterizedTest
+    @ValueSource(strings = {"filesystem"})
+    public void testDuplicateCommitAfterRestore(String metastore)
+            throws IOException, InterruptedException, Catalog.DatabaseNotEmptyException,
+                    Catalog.DatabaseNotExistException, SchemaEvolveException {
+        initialize(metastore);
+        PaimonSink<Event> paimonSink =
+                new PaimonSink<>(
+                        catalogOptions,
+                        new PaimonRecordEventSerializer(ZoneId.systemDefault()),
+                        null);
+        PaimonWriter<Event> writer = paimonSink.createWriter(new MockInitContext());
+        Committer<MultiTableCommittable> committer = paimonSink.createCommitter();
+
+        // insert
+        for (Event event : createTestEvents()) {
+            writer.write(event, null);
+        }
+        writer.flush(false);
+        Collection<Committer.CommitRequest<MultiTableCommittable>> commitRequests =
+                writer.prepareCommit().stream()
+                        .map(this::correctCheckpointId)
+                        .map(MockCommitRequestImpl::new)
+                        .collect(Collectors.toList());
+        committer.commit(commitRequests);
+
+        // We add a loop for restore 7 times
+        for (int i = 2; i < 9; i++) {
+            // We've two steps in checkpoint: 1. snapshotState(ckp); 2.
+            // notifyCheckpointComplete(ckp).
+            // It's possible that flink job will restore from a checkpoint with only step#1 finished
+            // and
+            // step#2 not.
+            // CommitterOperator will try to re-commit recovered transactions.
+            committer.commit(commitRequests);
+            List<DataChangeEvent> events =
+                    Collections.singletonList(
+                            generateInsert(
+                                    table1,
+                                    Tuple2.of(STRING(), Integer.toString(i)),
+                                    Tuple2.of(STRING(), Integer.toString(i))));
+
+            Assertions.assertThatCode(
+                            () -> {
+                                for (Event event : events) {
+                                    writer.write(event, null);
+                                }
+                            })
+                    .doesNotThrowAnyException();
+
+            writer.flush(false);
+            // Checkpoint id start from 1
+            committer.commit(
+                    writer.prepareCommit().stream()
+                            .map(this::correctCheckpointId)
+                            .map(MockCommitRequestImpl::new)
+                            .collect(Collectors.toList()));
+        }
+
+        List<Row> result = new ArrayList<>();
+        tEnv.sqlQuery("select * from paimon_catalog.test.`table1$snapshots`")
+                .execute()
+                .collect()
+                .forEachRemaining(result::add);
+        // 8 APPEND and 1 COMPACT
+        Assertions.assertThat(result.size()).isEqualTo(9);
+        result.clear();
+
+        tEnv.sqlQuery("select * from paimon_catalog.test.`table1`")
+                .execute()
+                .collect()
+                .forEachRemaining(result::add);
+        Assertions.assertThat(result)
+                .isEqualTo(
+                        Arrays.asList(
+                                Row.ofKind(RowKind.INSERT, "1", "1"),
+                                Row.ofKind(RowKind.INSERT, "2", "2"),
+                                Row.ofKind(RowKind.INSERT, "3", "3"),
+                                Row.ofKind(RowKind.INSERT, "4", "4"),
+                                Row.ofKind(RowKind.INSERT, "5", "5"),
+                                Row.ofKind(RowKind.INSERT, "6", "6"),
+                                Row.ofKind(RowKind.INSERT, "7", "7"),
+                                Row.ofKind(RowKind.INSERT, "8", "8")));
+    }
+
+    private MultiTableCommittable correctCheckpointId(MultiTableCommittable committable) {
+        // update the right checkpointId for MultiTableCommittable
+        return new MultiTableCommittable(
+                committable.getDatabase(),
+                committable.getTable(),
+                checkpointId++,
+                committable.kind(),
+                committable.wrappedCommittable());
+    }
+
+    private void commit(PaimonWriter<Event> writer, Committer<MultiTableCommittable> committer)
             throws IOException, InterruptedException {
         Collection<Committer.CommitRequest<MultiTableCommittable>> commitRequests =
                 writer.prepareCommit().stream()
+                        .map(this::correctCheckpointId)
                         .map(MockCommitRequestImpl::new)
                         .collect(Collectors.toList());
         committer.commit(commitRequests);
     }
 
-    private static void writeAndCommit(
+    private void writeAndCommit(
             PaimonWriter<Event> writer, Committer<MultiTableCommittable> committer, Event... events)
             throws IOException, InterruptedException {
         for (Event event : events) {
