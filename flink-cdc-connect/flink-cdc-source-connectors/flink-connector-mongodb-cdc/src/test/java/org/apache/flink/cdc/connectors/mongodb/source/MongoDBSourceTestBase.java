@@ -31,8 +31,10 @@ import org.junit.ClassRule;
 import org.junit.Rule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.stream.Stream;
 
@@ -70,9 +72,23 @@ public class MongoDBSourceTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBSourceTestBase.class);
 
+    private static boolean isAmd64() {
+        return DockerClientFactory.instance()
+                .client()
+                .versionCmd()
+                .exec()
+                .getArch()
+                .equals("amd64");
+    }
+
     @ClassRule
     public static final MongoDBContainer CONTAINER =
-            new MongoDBContainer("mongo:7.0.12")
+            // Alibaba OPSX does not provide arm64 images for now.
+            new MongoDBContainer(
+                            DockerImageName.parse(
+                                            (isAmd64() ? "yum.tbsite.net/mirrors/mongo" : "mongo")
+                                                    + ":7.0.12")
+                                    .asCompatibleSubstituteFor("mongo"))
                     .withSharding()
                     .withLogConsumer(new Slf4jLogConsumer(LOG));
 }

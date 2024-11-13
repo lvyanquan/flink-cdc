@@ -120,7 +120,8 @@ public abstract class FlinkContainerTestEnvironment extends TestLogger {
 
     @Parameterized.Parameters(name = "flinkVersion: {0}")
     public static List<String> getFlinkVersion() {
-        return Arrays.asList("1.16.3", "1.17.2", "1.18.1", "1.19.1", "1.20.0");
+        return Arrays.asList(
+                "reg.docker.alibaba-inc.com/ververica/vvr:1.17-vvr-8.0-SNAPSHOT-vvp-hadoop3-20240531015410_3503");
     }
 
     @Before
