@@ -22,6 +22,8 @@ import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDisp
 import org.apache.flink.cdc.connectors.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSnapshotSplit;
@@ -34,8 +36,10 @@ import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import io.debezium.config.Configuration;
 import io.debezium.connector.base.ChangeEventQueue;
+import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlOffsetContext;
 import io.debezium.connector.mysql.MySqlStreamingChangeEventSourceMetrics;
@@ -67,6 +71,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils.createBinaryClient;
+import static org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils.createMySqlConnection;
 import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.createRdsSwitchingContext;
 import static org.apache.flink.cdc.connectors.mysql.rds.AliyunRdsUtils.needToReadRdsArchives;
 
@@ -96,6 +102,30 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
             new StoppableChangeEventSourceContext();
 
     private static final long READER_CLOSE_TIMEOUT = 30L;
+
+    public SnapshotSplitReader(
+            MySqlSourceConfig sourceConfig,
+            MySqlSourceReaderMetrics sourceReaderMetrics,
+            int subtaskId,
+            SnapshotPhaseHooks hooks) {
+        final MySqlConnection jdbcConnection = createMySqlConnection(sourceConfig);
+        final BinaryLogClient binaryLogClient =
+                createBinaryClient(sourceConfig.getDbzConfiguration());
+        this.statefulTaskContext =
+                new StatefulTaskContext(
+                        sourceConfig, binaryLogClient, jdbcConnection, sourceReaderMetrics);
+        ThreadFactory threadFactory =
+                new ThreadFactoryBuilder()
+                        .setNameFormat("debezium-reader-" + subtaskId)
+                        .setUncaughtExceptionHandler(
+                                (thread, throwable) -> setReadException(throwable))
+                        .build();
+        this.executorService = Executors.newSingleThreadExecutor(threadFactory);
+        this.hooks = hooks;
+        this.currentTaskRunning = false;
+        this.hasNextElement = new AtomicBoolean(false);
+        this.reachEnd = new AtomicBoolean(false);
+    }
 
     public SnapshotSplitReader(
             StatefulTaskContext statefulTaskContext, int subtaskId, SnapshotPhaseHooks hooks) {
@@ -426,15 +456,7 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
     public void close() {
         try {
             stopCurrentTask();
-            if (statefulTaskContext.getConnection() != null) {
-                statefulTaskContext.getConnection().close();
-            }
-            if (statefulTaskContext.getBinaryLogClient() != null) {
-                statefulTaskContext.getBinaryLogClient().disconnect();
-            }
-            if (statefulTaskContext.getDatabaseSchema() != null) {
-                statefulTaskContext.getDatabaseSchema().close();
-            }
+            statefulTaskContext.close();
             if (executorService != null) {
                 executorService.shutdown();
                 if (!executorService.awaitTermination(READER_CLOSE_TIMEOUT, TimeUnit.SECONDS)) {

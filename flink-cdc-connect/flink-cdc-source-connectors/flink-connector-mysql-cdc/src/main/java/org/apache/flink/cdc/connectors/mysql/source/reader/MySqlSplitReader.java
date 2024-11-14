@@ -17,11 +17,9 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.reader;
 
-import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.BinlogSplitReader;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.DebeziumReader;
 import org.apache.flink.cdc.connectors.mysql.debezium.reader.SnapshotSplitReader;
-import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
@@ -36,8 +34,6 @@ import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 
-import com.github.shyiko.mysql.binlog.BinaryLogClient;
-import io.debezium.connector.mysql.MySqlConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -239,29 +235,17 @@ public class MySqlSplitReader implements SplitReader<SourceRecords, MySqlSplit> 
 
     private SnapshotSplitReader getSnapshotSplitReader() {
         if (reusedSnapshotReader == null) {
-            final MySqlConnection jdbcConnection =
-                    DebeziumUtils.createMySqlConnection(sourceConfig);
-            final BinaryLogClient binaryLogClient =
-                    DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
-            final StatefulTaskContext statefulTaskContext =
-                    new StatefulTaskContext(
-                            sourceConfig, binaryLogClient, jdbcConnection, sourceReaderMetrics);
             reusedSnapshotReader =
-                    new SnapshotSplitReader(statefulTaskContext, subtaskId, snapshotHooks);
+                    new SnapshotSplitReader(
+                            sourceConfig, sourceReaderMetrics, subtaskId, snapshotHooks);
         }
         return reusedSnapshotReader;
     }
 
     private BinlogSplitReader getBinlogSplitReader() {
         if (reusedBinlogReader == null) {
-            final MySqlConnection jdbcConnection =
-                    DebeziumUtils.createMySqlConnection(sourceConfig);
-            final BinaryLogClient binaryLogClient =
-                    DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
-            final StatefulTaskContext statefulTaskContext =
-                    new StatefulTaskContext(
-                            sourceConfig, binaryLogClient, jdbcConnection, sourceReaderMetrics);
-            reusedBinlogReader = new BinlogSplitReader(statefulTaskContext, subtaskId);
+            reusedBinlogReader =
+                    new BinlogSplitReader(sourceConfig, sourceReaderMetrics, subtaskId);
         }
         return reusedBinlogReader;
     }
