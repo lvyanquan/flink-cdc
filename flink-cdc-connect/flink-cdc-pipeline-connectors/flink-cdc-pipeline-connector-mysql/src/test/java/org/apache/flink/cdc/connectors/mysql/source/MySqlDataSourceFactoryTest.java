@@ -45,8 +45,10 @@ import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORIES_PARENT_PATH;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_DIRECTORY_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_BINLOG_ENDPOINT;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DB_INSTANCE_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_DOWNLOAD_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.factory.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
@@ -349,7 +351,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
     }
 
     @Test
-    public void testCreateSourceWithRdsConfig() {
+    public void testCreateSourceWithAllRdsConfig() {
         inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
         options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
@@ -357,6 +359,7 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
         options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".prod\\.*");
+
         options.put(RDS_REGION_ID.key(), "1");
         options.put(RDS_ACCESS_KEY_ID.key(), "2");
         options.put(RDS_ACCESS_KEY_SECRET.key(), "3");
@@ -365,6 +368,9 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         options.put(RDS_BINLOG_DIRECTORIES_PARENT_PATH.key(), "fake-path");
         options.put(RDS_BINLOG_DIRECTORY_PREFIX.key(), "rds-p");
         options.put(RDS_USE_INTRANET_LINK.key(), "false");
+        options.put(RDS_MAIN_DB_ID.key(), "test");
+        options.put(RDS_BINLOG_ENDPOINT.key(), "test-endpoint");
+
         Factory.Context context = new MockContext(Configuration.fromMap(options));
         MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
         MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
@@ -377,6 +383,39 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         assertThat(rdsConfig.getDbInstanceId()).isEqualTo("4");
         assertThat(rdsConfig.getDownloadTimeout()).isEqualTo(Duration.ofSeconds(100));
         assertThat(rdsConfig.isUseIntranetLink()).isEqualTo(false);
+        assertThat(rdsConfig.getEndpoint()).isEqualTo("test-endpoint");
+        assertThat(rdsConfig.getMainDbId()).isEqualTo("test");
+    }
+
+    @Test
+    public void testCreateSourceWithRequiredRdsConfig() {
+        inventoryDatabase.createAndInitialize();
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".prod\\.*");
+
+        options.put(RDS_REGION_ID.key(), "1");
+        options.put(RDS_ACCESS_KEY_ID.key(), "2");
+        options.put(RDS_ACCESS_KEY_SECRET.key(), "3");
+        options.put(RDS_DB_INSTANCE_ID.key(), "4");
+
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        assertThat(dataSource.getSourceConfig().getTableList())
+                .isEqualTo(Arrays.asList(inventoryDatabase.getDatabaseName() + ".products"));
+        AliyunRdsConfig rdsConfig = dataSource.getSourceConfig().getRdsConfig();
+        assertThat(rdsConfig.getRegionId()).isEqualTo("1");
+        assertThat(rdsConfig.getAccessKeyId()).isEqualTo("2");
+        assertThat(rdsConfig.getAccessKeySecret()).isEqualTo("3");
+        assertThat(rdsConfig.getDbInstanceId()).isEqualTo("4");
+        assertThat(rdsConfig.getDownloadTimeout()).isEqualTo(RDS_DOWNLOAD_TIMEOUT.defaultValue());
+        assertThat(rdsConfig.isUseIntranetLink()).isEqualTo(RDS_USE_INTRANET_LINK.defaultValue());
+        assertThat(rdsConfig.getEndpoint()).isNull();
+        assertThat(rdsConfig.getMainDbId()).isNull();
     }
 
     class MockContext implements Factory.Context {

@@ -109,31 +109,31 @@ public class AliyunRdsOptions {
     public static AliyunRdsConfig fromConfig(Configuration other) {
         sanityCheck(other);
 
-        Map<String, String> factoryOptions = other.toMap();
         Map<String, String> configuration = new HashMap<>();
-        configuration.put(RDS_REGION_ID.key(), factoryOptions.get(RDS_REGION_ID.key()));
-        configuration.put(RDS_ACCESS_KEY_ID.key(), factoryOptions.get(RDS_ACCESS_KEY_ID.key()));
-        configuration.put(
-                RDS_ACCESS_KEY_SECRET.key(), factoryOptions.get(RDS_ACCESS_KEY_SECRET.key()));
-        configuration.put(RDS_DB_INSTANCE_ID.key(), factoryOptions.get(RDS_DB_INSTANCE_ID.key()));
-        configuration.put(
-                RDS_DOWNLOAD_TIMEOUT.key(), factoryOptions.get(RDS_DOWNLOAD_TIMEOUT.key()));
-        if (factoryOptions.get(RDS_BINLOG_DIRECTORIES_PARENT_PATH.key()) != null) {
+        configuration.put(RDS_REGION_ID.key(), other.get(RDS_REGION_ID));
+        configuration.put(RDS_ACCESS_KEY_ID.key(), other.get(RDS_ACCESS_KEY_ID));
+        configuration.put(RDS_ACCESS_KEY_SECRET.key(), other.get(RDS_ACCESS_KEY_SECRET));
+        configuration.put(RDS_DB_INSTANCE_ID.key(), other.get(RDS_DB_INSTANCE_ID));
+
+        if (other.getOptional(RDS_DOWNLOAD_TIMEOUT).isPresent()) {
+            configuration.put(
+                    RDS_DOWNLOAD_TIMEOUT.key(), other.toMap().get(RDS_DOWNLOAD_TIMEOUT.key()));
+        } else {
+            configuration.put(RDS_DOWNLOAD_TIMEOUT.key(), "60s");
+        }
+        if (other.getOptional(RDS_BINLOG_DIRECTORIES_PARENT_PATH).isPresent()) {
             configuration.put(
                     RDS_BINLOG_DIRECTORIES_PARENT_PATH.key(),
-                    factoryOptions.get(RDS_BINLOG_DIRECTORIES_PARENT_PATH.key()));
+                    other.get(RDS_BINLOG_DIRECTORIES_PARENT_PATH));
         }
         configuration.put(
-                RDS_BINLOG_DIRECTORY_PREFIX.key(),
-                factoryOptions.get(RDS_BINLOG_DIRECTORY_PREFIX.key()));
-        configuration.put(
-                RDS_USE_INTRANET_LINK.key(), factoryOptions.get(RDS_USE_INTRANET_LINK.key()));
-        if (factoryOptions.get(RDS_MAIN_DB_ID.key()) != null) {
-            configuration.put(RDS_MAIN_DB_ID.key(), factoryOptions.get(RDS_MAIN_DB_ID.key()));
+                RDS_BINLOG_DIRECTORY_PREFIX.key(), other.get(RDS_BINLOG_DIRECTORY_PREFIX));
+        configuration.put(RDS_USE_INTRANET_LINK.key(), other.get(RDS_USE_INTRANET_LINK).toString());
+        if (other.getOptional(RDS_MAIN_DB_ID).isPresent()) {
+            configuration.put(RDS_MAIN_DB_ID.key(), other.get(RDS_MAIN_DB_ID));
         }
-        if (factoryOptions.get(RDS_BINLOG_ENDPOINT.key()) != null) {
-            configuration.put(
-                    RDS_BINLOG_ENDPOINT.key(), factoryOptions.get(RDS_BINLOG_ENDPOINT.key()));
+        if (other.getOptional(RDS_BINLOG_ENDPOINT).isPresent()) {
+            configuration.put(RDS_BINLOG_ENDPOINT.key(), other.get(RDS_BINLOG_ENDPOINT));
         }
         return new AliyunRdsConfig(
                 org.apache.flink.configuration.Configuration.fromMap(configuration));
