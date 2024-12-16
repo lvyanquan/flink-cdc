@@ -162,6 +162,100 @@ public class FactoryHelper {
         return org.apache.flink.configuration.Configuration.fromMap(formatConfigMap);
     }
 
+    /**
+     * Normalize letter case (upper/lower case) of options in factory configuration according to
+     * options defined in {@link Factory}.
+     *
+     * <p>For example:
+     *
+     * <ul>
+     *   <li>Option defined in factory: AbCdEfGh
+     *   <li>Option in factory configuration: 'abcdefgh' = 'foo'
+     * </ul>
+     *
+     * <p>Then this option will be converted to 'AbCdEfGh' = 'foo' in factory configuration.
+     *
+     * <p>For options that not defined in factory, this method will just keep its original
+     * expression.
+     *
+     * @param factory {@link Factory} with defined required and optional options.
+     * @param context Context of the factory with options defined in yaml script.
+     * @return normalized context
+     */
+    public static Factory.Context normalizeContext(Factory factory, Factory.Context context) {
+        // Options with normalized letter case
+        Map<String, String> originalOptions = context.getFactoryConfiguration().toMap();
+        Map<String, String> convertedOptions =
+                normalizeOptionCaseAsFactory(factory, originalOptions);
+
+        return new FactoryHelper.DefaultContext(
+                Configuration.fromMap(convertedOptions),
+                context.getPipelineConfiguration(),
+                context.getClassLoader());
+    }
+
+    /**
+     * Normalize letter case (upper/lower case) of map-style options according to options defined in
+     * factory.
+     *
+     * <p>For example:
+     *
+     * <ul>
+     *   <li>Option defined in factory: AbCdEfGh
+     *   <li>Option passed in: 'abcdefgh' = 'foo'
+     * </ul>
+     *
+     * <p>Then this option will be converted to 'AbCdEfGh' = 'foo' finally.
+     *
+     * <p>For options that not defined in factory, this method will just keep its original
+     * expression.
+     */
+    private static Map<String, String> normalizeOptionCaseAsFactory(
+            Factory factory, Map<String, String> options) {
+        // Options with normalized letter case
+        Map<String, String> normalizedOptions = new HashMap<>();
+        // Required options defined in factory
+        // Key: Lower-case option keys. e.g. startupmode
+        // Value: Original option keys. e.g. startupMode
+        Map<String, String> requiredOptionKeysLowerCaseToOriginal =
+                factory.requiredOptions().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        option -> option.key().toLowerCase(), ConfigOption::key));
+
+        // Optional options defined in factory
+        // Key: Lower-case option keys. e.g. startupmode
+        // Value: Original option keys. e.g. startupMode
+        Map<String, String> optionalOptionKeysLowerCaseToOriginal =
+                factory.optionalOptions().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        option -> option.key().toLowerCase(), ConfigOption::key));
+
+        // Normalize passed-in options according to option keys defined in the factory
+        for (Map.Entry<String, String> entry : options.entrySet()) {
+            final String optionKey = entry.getKey();
+            final String optionValue = entry.getValue();
+            normalizedOptions.put(
+                    // Convert passed-in option key to lower case and search it in factory-defined
+                    // required and optional options
+                    requiredOptionKeysLowerCaseToOriginal.containsKey(optionKey.toLowerCase())
+                            ?
+                            // If we can find it in factory-defined required option keys, replace it
+                            // with the factory version
+                            requiredOptionKeysLowerCaseToOriginal.get(optionKey.toLowerCase())
+                            :
+                            // If we cannot find it in required, try to search it from
+                            // factory-defined optional options and replace it
+                            // If it is not in optional options either, just use its original
+                            // expression
+                            optionalOptionKeysLowerCaseToOriginal.getOrDefault(
+                                    optionKey.toLowerCase(), optionKey),
+                    optionValue);
+        }
+        return normalizedOptions;
+    }
+
     /** Default implementation of {@link Factory.Context}. */
     public static class DefaultContext implements Factory.Context {
 

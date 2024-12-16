@@ -170,4 +170,29 @@ public class HologresDataSinkFactoryTest {
                                 conf, conf, Thread.currentThread().getContextClassLoader()));
         Assertions.assertInstanceOf(HologresDataSink.class, dataSink);
     }
+
+    @Test
+    public void testCreateDataSinkWithNormalizeOption() {
+        DataSinkFactory sinkFactory =
+                FactoryDiscoveryUtils.getFactoryByIdentifier("hologres", DataSinkFactory.class);
+        Assertions.assertInstanceOf(HologresDataSinkFactory.class, sinkFactory);
+
+        Configuration conf =
+                Configuration.fromMap(
+                        ImmutableMap.<String, String>builder()
+                                .put(HologresCommonOption.ENDPOINT.key(), "localhost:8080")
+                                .put(HologresCommonOption.DATABASE.key(), "database")
+                                .put(HologresCommonOption.USERNAME.key(), "root")
+                                .put(HologresCommonOption.PASSWORD.key(), "password")
+                                .put("jdbcEnableDefaultForNotNullColumn", "false")
+                                .build());
+        DataSink dataSink =
+                sinkFactory.createDataSink(
+                        new FactoryHelper.DefaultContext(
+                                conf, conf, Thread.currentThread().getContextClassLoader()));
+        Assertions.assertInstanceOf(HologresDataSink.class, dataSink);
+
+        MetadataApplier metadataApplier = dataSink.getMetadataApplier();
+        Assertions.assertInstanceOf(HologresMetadataApplier.class, metadataApplier);
+    }
 }

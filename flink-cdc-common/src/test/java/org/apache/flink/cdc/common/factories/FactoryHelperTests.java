@@ -56,6 +56,7 @@ public class FactoryHelperTests {
                 return Sets.newHashSet(
                         ConfigOptions.key("hobby").stringType().noDefaultValue(),
                         ConfigOptions.key("location").stringType().defaultValue("Everywhere"),
+                        ConfigOptions.key("WEIGHT").intType().defaultValue(160),
                         ConfigOptions.key("misc")
                                 .mapType()
                                 .defaultValue(Collections.singletonMap("A", "Z")));
@@ -170,5 +171,24 @@ public class FactoryHelperTests {
                 .hasMessageContaining("Unsupported options found for 'dummy'.");
 
         factoryHelper.validateExcept("debezium.", "canal.");
+    }
+
+    @Test
+    void testNormalizeConfigValidation() {
+        // This is a valid configuration.
+        Map<String, String> configurations = new HashMap<>();
+        configurations.put("ID", "1");
+        configurations.put("name", "Alice");
+        configurations.put("Age", "17");
+        configurations.put("loCation", "Here");
+        configurations.put("weight", "140");
+        Factory dummyFactory = getDummyFactory();
+        FactoryHelper.DefaultContext defaultContext =
+                new FactoryHelper.DefaultContext(Configuration.fromMap(configurations), null, null);
+        FactoryHelper factoryHelper =
+                FactoryHelper.createFactoryHelper(
+                        dummyFactory, FactoryHelper.normalizeContext(dummyFactory, defaultContext));
+
+        factoryHelper.validate();
     }
 }

@@ -74,10 +74,11 @@ public class HologresDataSinkFactory implements DataSinkFactory {
 
     @Override
     public DataSink createDataSink(Context context) {
-        FactoryHelper.createFactoryHelper(this, context)
+        Context normalizeContext = FactoryHelper.normalizeContext(this, context);
+        FactoryHelper.createFactoryHelper(this, normalizeContext)
                 .validateExcept(HologresDataSinkOption.TABLE_PROPERTY_PREFIX);
 
-        Configuration configuration = context.getFactoryConfiguration();
+        Configuration configuration = normalizeContext.getFactoryConfiguration();
         Map<String, String> allOptions = configuration.toMap();
         Map<String, String> tableOptions = new HashMap<>();
         allOptions.forEach(
@@ -125,11 +126,14 @@ public class HologresDataSinkFactory implements DataSinkFactory {
         // get ZoneId from pipeline config
         ZoneId zoneId = ZoneId.systemDefault();
         if (!Objects.equals(
-                context.getPipelineConfiguration().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),
+                normalizeContext
+                        .getPipelineConfiguration()
+                        .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),
                 PipelineOptions.PIPELINE_LOCAL_TIME_ZONE.defaultValue())) {
             zoneId =
                     ZoneId.of(
-                            context.getPipelineConfiguration()
+                            normalizeContext
+                                    .getPipelineConfiguration()
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
 
