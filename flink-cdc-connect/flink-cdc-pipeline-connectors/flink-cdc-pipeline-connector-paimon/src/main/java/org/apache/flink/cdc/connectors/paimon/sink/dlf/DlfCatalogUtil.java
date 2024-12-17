@@ -21,8 +21,8 @@ import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.dlf.api.DlfDataToken;
 import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
 
-import org.apache.flink.shaded.com.aliyun.datalake.external.com.fasterxml.jackson.databind.JsonNode;
-import org.apache.flink.shaded.com.aliyun.datalake.external.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.paimon.dlf.DlfUtils;
 import org.apache.paimon.options.Options;
