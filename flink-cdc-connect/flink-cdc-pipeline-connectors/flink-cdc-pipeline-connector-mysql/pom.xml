@@ -149,7 +149,6 @@ limitations under the License.
                             <shadeTestJar>false</shadeTestJar>
                             <artifactSet>
                                 <includes>
-                                    <include>com.lmax:disruptor</include>
                                     <include>io.debezium:debezium-api</include>
                                     <include>io.debezium:debezium-embedded</include>
                                     <include>io.debezium:debezium-core</include>
@@ -168,6 +167,12 @@ limitations under the License.
                                     <include>org.apache.flink:flink-shaded-guava</include>
                                     <!--  Include mysql jdbc driver for vvr cdc -->
                                     <include>mysql:mysql-connector-java</include>
+                                    <!--  Include to parse binlog parallel -->
+                                    <include>com.lmax:disruptor</include>
+                                    <!--  Include to read binlog from oss  -->
+                                    <include>com.google.code.gson:gson</include>
+                                    <include>org.bouncycastle:bcprov-jdk15on</include>
+                                    <include>com.aliyun:*</include>
                                 </includes>
                             </artifactSet>
                             <filters>
