@@ -18,33 +18,30 @@
 package org.apache.flink.cdc.connectors.kafka.sink;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.configuration.ConfigOption;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
+import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
-import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
-import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.connectors.kafka.json.JsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.KeyJsonSerializationSchema;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.cdc.connectors.kafka.json.UpsertKafkaJsonSerializationSchema;
 import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptions;
-import org.apache.flink.formats.json.JsonFormatOptionsUtil;
 
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.flink.cdc.common.configuration.ConfigOptions.key;
 import static org.apache.flink.cdc.connectors.kafka.aliyun.AliyunKafkaClientParams.createAliyunKafkaClientParams;
 import static org.apache.flink.cdc.connectors.kafka.sink.KafkaDataSinkOptions.PROPERTIES_PREFIX;
-import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
-import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
-import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
 /** A dummy {@link DataSinkFactory} to create {@link UpsertKafkaDataSink}. */
 public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
@@ -53,8 +50,11 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
 
     @Override
     public DataSink createDataSink(Context context) {
-        Configuration configuration =
-                Configuration.fromMap(context.getFactoryConfiguration().toMap());
+        FactoryHelper helper = FactoryHelper.createFactoryHelper(this, context);
+        // upsert kafka only supports json format now
+        helper.validateExcept(PROPERTIES_PREFIX, "json");
+        Configuration formatConfig = helper.getFormatConfig("json");
+
         DeliveryGuarantee deliveryGuarantee =
                 context.getFactoryConfiguration().get(KafkaDataSinkOptions.DELIVERY_GUARANTEE);
         ZoneId zoneId = ZoneId.systemDefault();
@@ -66,9 +66,7 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
                             context.getPipelineConfiguration()
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
-        SerializationSchema<Event> valueSerialization =
-                ChangeLogJsonFormatFactory.createSerializationSchema(
-                        configuration, JsonSerializationType.UPSERT_KAFKA_JSON, zoneId);
+
         final Properties kafkaProperties = new Properties();
         Map<String, String> allOptions = context.getFactoryConfiguration().toMap();
         allOptions.keySet().stream()
@@ -88,8 +86,8 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
         return new UpsertKafkaDataSink(
                 deliveryGuarantee,
                 kafkaProperties,
-                createKeySerialization(configuration, zoneId),
-                valueSerialization,
+                createKeySerialization(formatConfig, zoneId),
+                createValueSerialization(formatConfig, zoneId),
                 topic,
                 addTableToHeaderEnabled,
                 customHeaders,
@@ -103,7 +101,7 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
-        return null;
+        return Collections.emptySet();
     }
 
     @Override
@@ -121,18 +119,38 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
         return options;
     }
 
-    private SerializationSchema<Event> createKeySerialization(
+    private static SerializationSchema<Event> createKeySerialization(
             Configuration formatOptions, ZoneId zoneId) {
-        TimestampFormat timestampFormat = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
+        TimestampFormat timestampFormat = formatOptions.get(JsonFormatOptions.TIMESTAMP_FORMAT);
         JsonFormatOptions.MapNullKeyMode mapNullKeyMode =
-                JsonFormatOptionsUtil.getMapNullKeyMode(formatOptions);
-        String mapNullKeyLiteral = formatOptions.get(JSON_MAP_NULL_KEY_LITERAL);
+                formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_MODE);
+        String mapNullKeyLiteral = formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_LITERAL);
 
         final boolean encodeDecimalAsPlainNumber =
-                formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+                formatOptions.get(JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
 
-        final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
+        final boolean writeNullProperties =
+                formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
         return new KeyJsonSerializationSchema(
+                timestampFormat,
+                mapNullKeyMode,
+                mapNullKeyLiteral,
+                encodeDecimalAsPlainNumber,
+                writeNullProperties,
+                zoneId);
+    }
+
+    @VisibleForTesting
+    public static SerializationSchema<Event> createValueSerialization(
+            Configuration formatOptions, ZoneId zoneId) {
+        TimestampFormat timestampFormat = formatOptions.get(JsonFormatOptions.TIMESTAMP_FORMAT);
+        JsonFormatOptions.MapNullKeyMode mapNullKeyMode =
+                formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_MODE);
+        String mapNullKeyLiteral = formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_LITERAL);
+        boolean encodeDecimalAsPlainNumber =
+                formatOptions.get(JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+        boolean writeNullProperties = formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
+        return new UpsertKafkaJsonSerializationSchema(
                 timestampFormat,
                 mapNullKeyMode,
                 mapNullKeyLiteral,

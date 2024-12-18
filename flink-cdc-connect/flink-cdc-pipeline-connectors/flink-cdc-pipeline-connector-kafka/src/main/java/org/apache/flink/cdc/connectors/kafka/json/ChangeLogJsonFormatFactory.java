@@ -19,25 +19,18 @@ package org.apache.flink.cdc.connectors.kafka.json;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonSerializationSchema;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonSerializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
-import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptions;
-import org.apache.flink.formats.json.JsonFormatOptionsUtil;
-import org.apache.flink.formats.json.canal.CanalJsonFormatOptions;
-import org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions;
 
 import java.time.ZoneId;
-
-import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
-import static org.apache.flink.formats.json.JsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING;
-import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
-import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
 /**
  * Format factory for providing configured instances of {@link SerializationSchema} to convert
@@ -55,20 +48,25 @@ public class ChangeLogJsonFormatFactory {
      * @return The configured instance of {@link SerializationSchema}.
      */
     public static SerializationSchema<Event> createSerializationSchema(
-            ReadableConfig formatOptions, JsonSerializationType type, ZoneId zoneId) {
-        TimestampFormat timestampFormat = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
-        JsonFormatOptions.MapNullKeyMode mapNullKeyMode =
-                JsonFormatOptionsUtil.getMapNullKeyMode(formatOptions);
-        String mapNullKeyLiteral = formatOptions.get(JSON_MAP_NULL_KEY_LITERAL);
-
-        final boolean encodeDecimalAsPlainNumber =
-                formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
-
-        final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
+            Configuration formatOptions, JsonSerializationType type, ZoneId zoneId) {
+        TimestampFormat timestampFormat;
+        JsonFormatOptions.MapNullKeyMode mapNullKeyMode;
+        String mapNullKeyLiteral;
+        boolean encodeDecimalAsPlainNumber;
+        boolean writeNullProperties;
 
         switch (type) {
             case DEBEZIUM_JSON:
                 {
+                    timestampFormat = formatOptions.get(DebeziumJsonFormatOptions.TIMESTAMP_FORMAT);
+                    mapNullKeyMode = formatOptions.get(DebeziumJsonFormatOptions.MAP_NULL_KEY_MODE);
+                    mapNullKeyLiteral =
+                            formatOptions.get(DebeziumJsonFormatOptions.MAP_NULL_KEY_LITERAL);
+                    encodeDecimalAsPlainNumber =
+                            formatOptions.get(
+                                    DebeziumJsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+                    writeNullProperties =
+                            formatOptions.get(DebeziumJsonFormatOptions.WRITE_NULL_PROPERTIES);
                     return new DebeziumJsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
@@ -79,17 +77,16 @@ public class ChangeLogJsonFormatFactory {
                 }
             case CANAL_JSON:
                 {
+                    timestampFormat = formatOptions.get(CanalJsonFormatOptions.TIMESTAMP_FORMAT);
+                    mapNullKeyMode = formatOptions.get(CanalJsonFormatOptions.MAP_NULL_KEY_MODE);
+                    mapNullKeyLiteral =
+                            formatOptions.get(CanalJsonFormatOptions.MAP_NULL_KEY_LITERAL);
+                    encodeDecimalAsPlainNumber =
+                            formatOptions.get(
+                                    CanalJsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+                    writeNullProperties =
+                            formatOptions.get(CanalJsonFormatOptions.WRITE_NULL_PROPERTIES);
                     return new CanalJsonSerializationSchema(
-                            timestampFormat,
-                            mapNullKeyMode,
-                            mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber,
-                            writeNullProperties,
-                            zoneId);
-                }
-            case UPSERT_KAFKA_JSON:
-                {
-                    return new UpsertKafkaJsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
@@ -114,16 +111,20 @@ public class ChangeLogJsonFormatFactory {
      * @return The configured instance of {@link SchemaAwareDeserializationSchema}.
      */
     public static SchemaAwareDeserializationSchema<Event> createDeserializationSchema(
-            ReadableConfig formatOptions, JsonSerializationType type, ZoneId zoneId) {
-        TimestampFormat timestampFormat = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
-        final boolean primitiveAsString = formatOptions.get(INFER_SCHEMA_PRIMITIVE_AS_STRING);
+            Configuration formatOptions, JsonSerializationType type, ZoneId zoneId) {
+        TimestampFormat timestampFormat;
+        boolean primitiveAsString;
         boolean ignoreParseErrors;
 
         switch (type) {
             case DEBEZIUM_JSON:
-                boolean schemaInclude = formatOptions.get(DebeziumJsonFormatOptions.SCHEMA_INCLUDE);
+                timestampFormat = formatOptions.get(DebeziumJsonFormatOptions.TIMESTAMP_FORMAT);
+                primitiveAsString =
+                        formatOptions.get(
+                                DebeziumJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
                 ignoreParseErrors =
                         formatOptions.get(DebeziumJsonFormatOptions.IGNORE_PARSE_ERRORS);
+                boolean schemaInclude = formatOptions.get(DebeziumJsonFormatOptions.SCHEMA_INCLUDE);
                 return new DebeziumJsonDeserializationSchema(
                         schemaInclude,
                         ignoreParseErrors,
@@ -133,6 +134,9 @@ public class ChangeLogJsonFormatFactory {
             case CANAL_JSON:
                 String database = formatOptions.get(CanalJsonFormatOptions.DATABASE_INCLUDE);
                 String table = formatOptions.get(CanalJsonFormatOptions.TABLE_INCLUDE);
+                timestampFormat = formatOptions.get(CanalJsonFormatOptions.TIMESTAMP_FORMAT);
+                primitiveAsString =
+                        formatOptions.get(CanalJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
                 ignoreParseErrors = formatOptions.get(CanalJsonFormatOptions.IGNORE_PARSE_ERRORS);
                 return new CanalJsonDeserializationSchema(
                         database,

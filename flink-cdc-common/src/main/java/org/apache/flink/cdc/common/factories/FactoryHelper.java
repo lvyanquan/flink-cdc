@@ -148,7 +148,7 @@ public class FactoryHelper {
         validateUnconsumedKeys(factory.identifier(), filteredOptionKeys, allOptionKeys);
     }
 
-    public ReadableConfig getFormatConfig(String formatPrefix) {
+    public Configuration getFormatConfig(String formatPrefix) {
         final String prefix = formatPrefix + ".";
         Map<String, String> formatConfigMap = new HashMap<>();
         context.getFactoryConfiguration()
@@ -159,7 +159,7 @@ public class FactoryHelper {
                                 formatConfigMap.put(k.substring(prefix.length()), v);
                             }
                         });
-        return org.apache.flink.configuration.Configuration.fromMap(formatConfigMap);
+        return Configuration.fromMap(formatConfigMap);
     }
 
     /**

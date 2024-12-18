@@ -26,9 +26,9 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
+import org.apache.flink.cdc.connectors.kafka.json.JsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.TableSchemaInfo;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptions;
 import org.apache.flink.formats.json.JsonRowDataSerializationSchema;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -123,7 +123,8 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
                     new JsonRowDataSerializationSchema(
                             createJsonRowType(fromLogicalToDataType(rowType)),
                             timestampFormat,
-                            mapNullKeyMode,
+                            org.apache.flink.formats.json.JsonFormatOptions.MapNullKeyMode.valueOf(
+                                    mapNullKeyMode.name()),
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
                             writeNullProperties);

@@ -18,19 +18,14 @@
 package org.apache.flink.cdc.connectors.kafka.sink;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.connectors.kafka.json.JsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.serialization.CsvSerializationSchema;
 import org.apache.flink.cdc.connectors.kafka.serialization.JsonSerializationSchema;
-import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptions;
-import org.apache.flink.formats.json.JsonFormatOptionsUtil;
 
 import java.time.ZoneId;
-
-import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
-import static org.apache.flink.formats.json.JsonFormatOptions.WRITE_NULL_PROPERTIES;
-import static org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions.JSON_MAP_NULL_KEY_LITERAL;
 
 /**
  * Format factory for providing configured instances of {@link SerializationSchema} to convert
@@ -43,19 +38,21 @@ public class KeySerializationFactory {
      * byte.
      */
     public static SerializationSchema<Event> createSerializationSchema(
-            ReadableConfig formatOptions, KeyFormat keyFormat, ZoneId zoneId) {
+            Configuration formatOptions, KeyFormat keyFormat, ZoneId zoneId) {
         switch (keyFormat) {
             case JSON:
                 {
                     TimestampFormat timestampFormat =
-                            JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
+                            formatOptions.get(JsonFormatOptions.TIMESTAMP_FORMAT);
                     JsonFormatOptions.MapNullKeyMode mapNullKeyMode =
-                            JsonFormatOptionsUtil.getMapNullKeyMode(formatOptions);
-                    String mapNullKeyLiteral = formatOptions.get(JSON_MAP_NULL_KEY_LITERAL);
+                            formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_MODE);
+                    String mapNullKeyLiteral =
+                            formatOptions.get(JsonFormatOptions.MAP_NULL_KEY_LITERAL);
 
                     final boolean encodeDecimalAsPlainNumber =
-                            formatOptions.get(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
-                    final boolean writeNullProperties = formatOptions.get(WRITE_NULL_PROPERTIES);
+                            formatOptions.get(JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+                    final boolean writeNullProperties =
+                            formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
                     return new JsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,

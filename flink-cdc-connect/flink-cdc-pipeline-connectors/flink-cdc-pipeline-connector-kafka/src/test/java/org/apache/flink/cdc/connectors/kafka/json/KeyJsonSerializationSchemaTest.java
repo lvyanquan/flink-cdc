@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
 import java.time.ZoneId;
 import java.util.Collections;
 
-import static org.apache.flink.formats.json.JsonFormatOptions.MapNullKeyMode.LITERAL;
+import static org.apache.flink.cdc.connectors.kafka.json.JsonFormatOptions.MapNullKeyMode.LITERAL;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link KeyJsonSerializationSchema}. */

@@ -17,15 +17,13 @@
 
 package org.apache.flink.cdc.connectors.kafka.source.schema;
 
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
-import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptionsUtil;
-import org.apache.flink.formats.json.debezium.DebeziumJsonFormatOptions;
 
 import java.time.ZoneId;
-
-import static org.apache.flink.formats.json.JsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING;
 
 /**
  * Factory for providing instances of {@link RecordSchemaParser} to parse schema from kafka record.
@@ -33,17 +31,23 @@ import static org.apache.flink.formats.json.JsonFormatOptions.INFER_SCHEMA_PRIMI
 public class RecordSchemaParserFactory {
 
     public static RecordSchemaParser createRecordSchemaParser(
-            ReadableConfig formatOptions, JsonSerializationType type, ZoneId zoneId) {
-        TimestampFormat timestampFormat = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
-        final boolean primitiveAsString = formatOptions.get(INFER_SCHEMA_PRIMITIVE_AS_STRING);
-        boolean ignoreParseErrors;
+            Configuration formatOptions, JsonSerializationType type, ZoneId zoneId) {
+        TimestampFormat timestampFormat;
+        boolean primitiveAsString;
 
         switch (type) {
             case DEBEZIUM_JSON:
+                timestampFormat = formatOptions.get(DebeziumJsonFormatOptions.TIMESTAMP_FORMAT);
+                primitiveAsString =
+                        formatOptions.get(
+                                DebeziumJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
                 boolean schemaInclude = formatOptions.get(DebeziumJsonFormatOptions.SCHEMA_INCLUDE);
                 return new DebeziumJsonSchemaParser(
                         schemaInclude, primitiveAsString, timestampFormat, zoneId);
             case CANAL_JSON:
+                timestampFormat = formatOptions.get(CanalJsonFormatOptions.TIMESTAMP_FORMAT);
+                primitiveAsString =
+                        formatOptions.get(CanalJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
                 return new CanalJsonSchemaParser(primitiveAsString, timestampFormat, zoneId);
             default:
                 throw new IllegalArgumentException("UnSupport JsonDeserializationType of " + type);

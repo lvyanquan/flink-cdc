@@ -29,7 +29,6 @@ import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAw
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParserFactory;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.kafka.source.KafkaSourceOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.BoundedOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.StartupOptions;
@@ -90,7 +89,8 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
 
-        ReadableConfig formatConfig = helper.getFormatConfig(jsonSerializationType.toString());
+        org.apache.flink.cdc.common.configuration.Configuration formatConfig =
+                helper.getFormatConfig(jsonSerializationType.toString());
         SchemaAwareDeserializationSchema<Event> valueDeserialization =
                 ChangeLogJsonFormatFactory.createDeserializationSchema(
                         formatConfig, jsonSerializationType, zoneId);

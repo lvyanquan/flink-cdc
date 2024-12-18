@@ -27,7 +27,6 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonFormatOptions;
 import org.apache.flink.formats.json.JsonRowDataSerializationSchema;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.types.RowKind;
@@ -109,7 +108,8 @@ public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<E
                     new JsonRowDataSerializationSchema(
                             (org.apache.flink.table.types.logical.RowType) rowType,
                             timestampFormat,
-                            mapNullKeyMode,
+                            org.apache.flink.formats.json.JsonFormatOptions.MapNullKeyMode.valueOf(
+                                    mapNullKeyMode.name()),
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
                             writeNullProperties);
