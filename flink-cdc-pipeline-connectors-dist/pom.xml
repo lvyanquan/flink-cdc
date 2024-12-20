@@ -75,6 +75,22 @@ limitations under the License.
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <filesets>
+                        <fileset>
+                            <directory>${project.basedir}/../</directory>
+                            <includes>
+                                <include>tar-building-target</include>
+                            </includes>
+                            <followSymlinks>false</followSymlinks>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <executions>
                     <execution>
@@ -99,20 +115,6 @@ limitations under the License.
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.5.0</version>
                 <executions>
-                    <execution>
-                        <id>remove-build-target-link</id>
-                        <phase>clean</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>rm</executable>
-                            <arguments>
-                                <argument>-rf</argument>
-                                <argument>${project.basedir}/../tar-building-target</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
                     <execution>
                         <id>create-build-target-link</id>
                         <phase>package</phase>
