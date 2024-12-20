@@ -175,13 +175,7 @@ public class OnlyBigintOrTextTypeNormalizer extends StandardTypeNormalizer {
                                 fieldType));
         }
 
-        return (record) -> {
-            if (record == null) {
-                return null;
-            } else {
-                return fieldGetter.getFieldOrNull(record);
-            }
-        };
+        return fieldGetter;
     }
 
     static Object getElementsFromArrayData(DataType elementType, ArrayData arrayData) {

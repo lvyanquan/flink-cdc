@@ -66,12 +66,26 @@ public class StandardTypeNormalizer implements HologresTypeNormalizer {
         RecordData.FieldGetter[] fieldGetters = new RecordData.FieldGetter[schema.getColumnCount()];
         for (int i = 0; i < schema.getColumnCount(); i++) {
             org.apache.flink.cdc.common.schema.Column column = schema.getColumns().get(i);
-            fieldGetters[i] =
+            RecordData.FieldGetter fieldGetter =
                     createDataTypeToRecordFieldGetter(
                             column.getType(),
                             i,
                             schema.primaryKeys().contains(column.getName()),
                             zoneId);
+
+            if (column.getType().isNullable()) {
+                int finalIndex = i;
+                fieldGetters[i] =
+                        (record) -> {
+                            if (record == null || record.isNullAt(finalIndex)) {
+                                return null;
+                            } else {
+                                return fieldGetter.getFieldOrNull(record);
+                            }
+                        };
+            } else {
+                fieldGetters[i] = fieldGetter;
+            }
         }
 
         return fieldGetters;
@@ -197,14 +211,7 @@ public class StandardTypeNormalizer implements HologresTypeNormalizer {
                                 "Hologres doesn't support to create tables with type: %s.",
                                 fieldType));
         }
-
-        return (record) -> {
-            if (record == null || record.isNullAt(fieldPos)) {
-                return null;
-            } else {
-                return fieldGetter.getFieldOrNull(record);
-            }
-        };
+        return fieldGetter;
     }
 
     static Object getElementsFromArrayData(DataType elementType, ArrayData arrayData) {

@@ -597,10 +597,16 @@ public class HologresSinkITCase extends HologresTestBase {
                         BinaryStringData.fromString("test text"),
                         20.125F,
                         8.58965,
+                    },
+                    new Object[] {
+                        Byte.valueOf("2"), null, null, null, null, null, null, null, null,
                     }
                 };
         String[] expected =
-                new String[] {"1,32767,32768,652482,a,test character,test text,20.125,8.58965"};
+                new String[] {
+                    "1,32767,32768,652482,a,test character,test text,20.125,8.58965",
+                    "2,null,null,null,null,null,null,null,null"
+                };
         TableId tableId = TableId.tableId("default_namespace", "test", typeNormalizationTable);
 
         try {
@@ -831,12 +837,17 @@ public class HologresSinkITCase extends HologresTestBase {
                                 LocalDateTime.of(2023, 11, 11, 11, 11, 11, 11)
                                         .atZone(ZoneId.of("+05:00"))
                                         .toInstant())
+                    },
+                    {
+                        null, null, null, null, null, null, null, 1, null, null, null, null, null,
+                        null, null, null
                     }
                 };
         // default timezone is asian/shanghai and pipeline time-zone is GMT+06:00
         String[] expected =
                 new String[] {
-                    "a,test character,test text,false,8119.21,1,32767,32768,652482,20.2007,8.58965,2023-11-12,08:30:15,2023-11-11 11:11:11.000000011,2023-11-11 11:11:11.000000011+05:00,2023-11-11 06:11:11.000000011"
+                    "a,test character,test text,false,8119.21,1,32767,32768,652482,20.2007,8.58965,2023-11-12,08:30:15,2023-11-11 11:11:11.000000011,2023-11-11 11:11:11.000000011+05:00,2023-11-11 06:11:11.000000011",
+                    "null,null,null,null,null,null,null,1,null,null,null,null,null,null,null,null"
                 };
         TableId tableId = TableId.tableId("default_namespace", "test", typeNormalizationTable);
 
