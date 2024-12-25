@@ -37,9 +37,6 @@ import org.apache.flink.runtime.dlf.api.DlfDataToken;
 import org.apache.flink.runtime.dlf.api.DlfResource;
 import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
 import org.apache.flink.runtime.dlf.api.VvrDataLakeConfig;
-import org.apache.flink.runtime.dlf.client.DefaultDlfTokenClientFactory;
-import org.apache.flink.runtime.dlf.client.DlfTokenClient;
-import org.apache.flink.runtime.dlf.client.DlfTokenClientFactory;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.paimon.catalog.Catalog;
@@ -81,9 +78,6 @@ public class PaimonMetadataApplier implements MetadataApplier {
 
     private final ReadableConfig flinkConf;
 
-    private static final DlfTokenClientFactory dlfTokenClientFactory =
-            new DefaultDlfTokenClientFactory();
-
     public PaimonMetadataApplier(Options catalogOptions) {
         this.catalogOptions = catalogOptions;
         this.tableOptions = new HashMap<>();
@@ -104,11 +98,15 @@ public class PaimonMetadataApplier implements MetadataApplier {
 
     @Override
     public synchronized String getToken(TableId tableId) {
-        if (!catalogOptions.containsKey("metastore")
-                || !"dlf-paimon".equals(catalogOptions.get("metastore"))) {
+        if (!isDlfCatalog()) {
             return null;
         }
         LOGGER.debug("Try to get token for " + tableId);
+        try {
+            tryGetDlfTablePermission(tableId.getSchemaName(), tableId.getTableName());
+        } catch (Exception e) {
+            LOGGER.error("Failed to get dlf table permission", e);
+        }
         try {
             String endpoint =
                     Preconditions.checkNotNull(
@@ -121,10 +119,8 @@ public class PaimonMetadataApplier implements MetadataApplier {
             // Get the data token and store it to the data token dir locally. This is required
             // during
             // sql planning.
-            DlfTokenClient tokenClient =
-                    dlfTokenClientFactory.getDlfTokenClient(flinkConf, endpoint, region);
             DlfDataToken token =
-                    DlfResourceInfosCollector.getDataTokenLocally(
+                    DlfResourceInfosCollector.getDataTokenRemotely(
                             flinkConf,
                             endpoint,
                             region,
@@ -324,8 +320,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
     }
 
     private void tryGetDlfDatabasePermission(String database) throws Exception {
-        if (catalogOptions.containsKey("metastore")
-                && catalogOptions.get("metastore").equals("dlf-paimon")) {
+        if (isDlfCatalog()) {
             DlfResourceInfosCollector.collect(
                     flinkConf,
                     catalogOptions.toMap(),
@@ -339,8 +334,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
     }
 
     private void tryGetDlfTablePermission(String database, String tableName) throws Exception {
-        if (catalogOptions.containsKey("metastore")
-                && catalogOptions.get("metastore").equals("dlf-paimon")) {
+        if (isDlfCatalog()) {
             DlfResourceInfosCollector.collect(
                     flinkConf,
                     catalogOptions.toMap(),
@@ -352,6 +346,11 @@ public class PaimonMetadataApplier implements MetadataApplier {
                             .build());
             LOGGER.debug("Succeed to get table permission for " + database + "." + tableName);
         }
+    }
+
+    private boolean isDlfCatalog() {
+        return catalogOptions.containsKey("metastore")
+                && catalogOptions.get("metastore").equals("dlf-paimon");
     }
 
     private static Identifier tableIdToIdentifier(SchemaChangeEvent event) {

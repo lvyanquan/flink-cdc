@@ -24,12 +24,14 @@ import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.common.source.EventSourceProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.source.MetadataAccessor;
+import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.source.reader.MySqlPipelineRecordEmitter;
 import org.apache.flink.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import org.apache.flink.cdc.debezium.table.DebeziumChangelogMode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** A {@link DataSource} for mysql cdc connector. */
@@ -42,8 +44,7 @@ public class MySqlDataSource implements DataSource {
     private List<MySqlReadableMetadata> readableMetadataList;
 
     public MySqlDataSource(MySqlSourceConfigFactory configFactory) {
-        this.configFactory = configFactory;
-        this.sourceConfig = configFactory.createConfig(0);
+        this(configFactory, new ArrayList<>());
     }
 
     public MySqlDataSource(
@@ -81,5 +82,17 @@ public class MySqlDataSource implements DataSource {
     @VisibleForTesting
     public MySqlSourceConfig getSourceConfig() {
         return sourceConfig;
+    }
+
+    @Override
+    public SupportedMetadataColumn[] supportedMetadataColumns() {
+        return new SupportedMetadataColumn[] {new OpTsMetadataColumn()};
+    }
+
+    @Override
+    public boolean isParallelMetadataSource() {
+        // During incremental stage, MySQL never emits schema change events on different partitions
+        // (since it has one Binlog stream only.)
+        return false;
     }
 }

@@ -61,7 +61,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -131,7 +131,7 @@ public class PaimonSinkITCase {
         catalog.dropDatabase(TEST_DATABASE, true, true);
     }
 
-    private List<Event> createTestEvents() throws SchemaEvolveException {
+    private List<Event> createTestEvents(boolean enableDeleteVectors) throws SchemaEvolveException {
         List<Event> testEvents = new ArrayList<>();
         // create table
         Schema schema =
@@ -140,6 +140,7 @@ public class PaimonSinkITCase {
                         .physicalColumn("col2", STRING())
                         .primaryKey("col1")
                         .option("bucket", "1")
+                        .option("deletion-vectors.enabled", String.valueOf(enableDeleteVectors))
                         .build();
         CreateTableEvent createTableEvent = new CreateTableEvent(table1, schema);
         testEvents.add(createTableEvent);
@@ -153,8 +154,8 @@ public class PaimonSinkITCase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
-    public void testSinkWithDataChange(String metastore)
+    @CsvSource({"filesystem, false", "hive, false"})
+    public void testSinkWithDataChange(String metastore, boolean enableDeleteVector)
             throws IOException, InterruptedException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
         Assumptions.assumeFalse(
@@ -170,7 +171,8 @@ public class PaimonSinkITCase {
         Committer<MultiTableCommittable> committer = paimonSink.createCommitter();
 
         // insert
-        writeAndCommit(writer, committer, createTestEvents().toArray(new Event[0]));
+        writeAndCommit(
+                writer, committer, createTestEvents(enableDeleteVector).toArray(new Event[0]));
         Assertions.assertThat(fetchResults(table1))
                 .isEqualTo(
                         Arrays.asList(
@@ -202,18 +204,20 @@ public class PaimonSinkITCase {
                 .execute()
                 .collect()
                 .forEachRemaining(result::add);
-        // Each commit will generate one sequence number(equal to checkpointId).
-        org.junit.jupiter.api.Assertions.assertEquals(
-                Arrays.asList(
-                        Row.ofKind(RowKind.INSERT, 1L),
-                        Row.ofKind(RowKind.INSERT, 2L),
-                        Row.ofKind(RowKind.INSERT, 3L)),
-                result);
+        List<Row> expected =
+                enableDeleteVector
+                        ? Collections.singletonList(Row.ofKind(RowKind.INSERT, Row.of(1L, 3L)))
+                        // Each commit will generate one sequence number(equal to checkpointId).
+                        : Arrays.asList(
+                                Row.ofKind(RowKind.INSERT, 1L),
+                                Row.ofKind(RowKind.INSERT, 2L),
+                                Row.ofKind(RowKind.INSERT, 3L));
+        org.junit.jupiter.api.Assertions.assertEquals(expected, result);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem", "hive"})
-    public void testSinkWithSchemaChange(String metastore)
+    @CsvSource({"filesystem, false", "hive, false"})
+    public void testSinkWithSchemaChange(String metastore, boolean enableDeleteVector)
             throws IOException, InterruptedException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
         Assumptions.assumeFalse(
@@ -229,7 +233,8 @@ public class PaimonSinkITCase {
         Committer<MultiTableCommittable> committer = paimonSink.createCommitter();
 
         // 1. receive only DataChangeEvents during one checkpoint
-        writeAndCommit(writer, committer, createTestEvents().toArray(new Event[0]));
+        writeAndCommit(
+                writer, committer, createTestEvents(enableDeleteVector).toArray(new Event[0]));
         Assertions.assertThat(fetchResults(table1))
                 .isEqualTo(
                         Arrays.asList(
@@ -248,8 +253,8 @@ public class PaimonSinkITCase {
         AddColumnEvent addColumnEvent =
                 new AddColumnEvent(table1, Collections.singletonList(columnWithPosition));
         PaimonMetadataApplier metadataApplier = new PaimonMetadataApplier(catalogOptions);
-        writer.write(addColumnEvent, null);
         metadataApplier.applySchemaChange(addColumnEvent);
+        writer.write(addColumnEvent, null);
 
         writeAndCommit(
                 writer,
@@ -318,8 +323,8 @@ public class PaimonSinkITCase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem"})
-    public void testSinkWithMultiTables(String metastore)
+    @CsvSource({"filesystem, true", "filesystem, false"})
+    public void testSinkWithMultiTables(String metastore, boolean enableDeleteVector)
             throws IOException, InterruptedException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
         initialize(metastore);
@@ -330,7 +335,7 @@ public class PaimonSinkITCase {
                         null);
         PaimonWriter<Event> writer = paimonSink.createWriter(new MockInitContext());
         Committer<MultiTableCommittable> committer = paimonSink.createCommitter();
-        List<Event> testEvents = createTestEvents();
+        List<Event> testEvents = createTestEvents(enableDeleteVector);
 
         // create table
         Schema schema =
@@ -360,8 +365,8 @@ public class PaimonSinkITCase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"filesystem"})
-    public void testDuplicateCommitAfterRestore(String metastore)
+    @CsvSource({"filesystem, true", "filesystem, false"})
+    public void testDuplicateCommitAfterRestore(String metastore, boolean enableDeleteVector)
             throws IOException, InterruptedException, Catalog.DatabaseNotEmptyException,
                     Catalog.DatabaseNotExistException, SchemaEvolveException {
         initialize(metastore);
@@ -374,7 +379,7 @@ public class PaimonSinkITCase {
         Committer<MultiTableCommittable> committer = paimonSink.createCommitter();
 
         // insert
-        for (Event event : createTestEvents()) {
+        for (Event event : createTestEvents(enableDeleteVector)) {
             writer.write(event, null);
         }
         writer.flush(false);
@@ -423,8 +428,13 @@ public class PaimonSinkITCase {
                 .execute()
                 .collect()
                 .forEachRemaining(result::add);
-        // 8 APPEND and 1 COMPACT
-        Assertions.assertThat(result.size()).isEqualTo(9);
+        if (enableDeleteVector) {
+            // Each APPEND will trigger COMPACT once enable deletion-vectors.
+            Assertions.assertThat(result.size()).isEqualTo(16);
+        } else {
+            // 8 APPEND and 1 COMPACT
+            Assertions.assertThat(result.size()).isEqualTo(9);
+        }
         result.clear();
 
         tEnv.sqlQuery("select * from paimon_catalog.test.`table1`")

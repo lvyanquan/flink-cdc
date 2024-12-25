@@ -66,6 +66,7 @@ public class DataSourceTranslator {
 
     public DataStreamSource<Event> translate(
             SourceDef sourceDef,
+            DataSource dataSource,
             StreamExecutionEnvironment env,
             Configuration pipelineConfig,
             int sourceParallelism) {
@@ -74,9 +75,6 @@ public class DataSourceTranslator {
         if (startTimeMs != null) {
             sourceDef = appendStartTimeMs(sourceDef, startTimeMs);
         }
-
-        // Create data source
-        DataSource dataSource = createDataSource(sourceDef, env, pipelineConfig);
 
         // Get source provider
         EventSourceProvider eventSourceProvider = dataSource.getEventSourceProvider();
@@ -109,7 +107,7 @@ public class DataSourceTranslator {
         }
     }
 
-    private DataSource createDataSource(
+    public DataSource createDataSource(
             SourceDef sourceDef, StreamExecutionEnvironment env, Configuration pipelineConfig) {
         // Search the data source factory
         DataSourceFactory sourceFactory = findSourceFactory(sourceDef.getType(), env);

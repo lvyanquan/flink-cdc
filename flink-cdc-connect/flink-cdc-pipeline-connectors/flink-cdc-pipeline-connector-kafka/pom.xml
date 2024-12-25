@@ -55,6 +55,13 @@ limitations under the License.
 
         <dependency>
             <groupId>org.apache.flink</groupId>
+            <artifactId>flink-sql-gateway-client-api</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
             <artifactId>flink-csv</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>

@@ -13,6 +13,10 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+-- Create a table with complicated metadata to make sure the following
+-- optional metadata parsing will not succeed unless the previous column
+-- metadata has been correctly parsed.
+
 CREATE TABLE `json_array_as_key` (
                                   `id` bigint(20) unsigned NOT NULL,
                                   `c2` bigint(20) NOT NULL DEFAULT '0',

@@ -80,6 +80,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HEARTBEAT_INTERVAL;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_COLUMN_INCLUDE_LIST;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_LIST;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED;
@@ -275,9 +276,11 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
             LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);
             configFactory.chunkKeyColumn(chunkKeyColumnMap);
         }
-        String metadataList = config.get(METADATA_COLUMN_INCLUDE_LIST);
+        String metadataList = config.get(METADATA_LIST);
+        if (metadataList == null || metadataList.isEmpty()) {
+            metadataList = config.get(METADATA_COLUMN_INCLUDE_LIST);
+        }
         List<MySqlReadableMetadata> readableMetadataList = listReadableMetadata(metadataList);
-
         return new MySqlDataSource(configFactory, readableMetadataList);
     }
 
@@ -285,15 +288,24 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         if (StringUtils.isNullOrWhitespaceOnly(metadataList)) {
             return new ArrayList<>();
         }
-        List<String> readableMetadataList =
-                Arrays.stream(metadataList.split(DELIMITER_SEMICOLON))
+        Set<String> readableMetadataList =
+                Arrays.stream(metadataList.split(","))
                         .map(String::trim)
-                        .collect(Collectors.toList());
-        return Arrays.stream(MySqlReadableMetadata.values())
-                .filter(
-                        (mySqlReadableMetadata ->
-                                readableMetadataList.contains(mySqlReadableMetadata.getKey())))
-                .collect(Collectors.toList());
+                        .collect(Collectors.toSet());
+        List<MySqlReadableMetadata> foundMetadata = new ArrayList<>();
+        for (MySqlReadableMetadata metadata : MySqlReadableMetadata.values()) {
+            if (readableMetadataList.contains(metadata.getKey())) {
+                foundMetadata.add(metadata);
+                readableMetadataList.remove(metadata.getKey());
+            }
+        }
+        if (readableMetadataList.isEmpty()) {
+            return foundMetadata;
+        }
+        throw new IllegalArgumentException(
+                String.format(
+                        "[%s] cannot be found in mysql metadata.",
+                        String.join(", ", readableMetadataList)));
     }
 
     @Override
@@ -334,12 +346,9 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         options.add(VVR_START_TIME_MS);
-        options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
-        options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
-        options.add(METADATA_COLUMN_INCLUDE_LIST);
         options.add(SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED);
 
         // rds config
@@ -353,6 +362,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(RDS_USE_INTRANET_LINK);
         options.add(RDS_MAIN_DB_ID);
         options.add(RDS_BINLOG_ENDPOINT);
+        options.add(METADATA_LIST);
+        options.add(METADATA_COLUMN_INCLUDE_LIST);
         return options;
     }
 

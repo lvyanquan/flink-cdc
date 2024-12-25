@@ -41,6 +41,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -69,8 +70,7 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
 
     public MySqlEventDeserializer(
             DebeziumChangelogMode changelogMode, boolean includeSchemaChanges) {
-        super(new MySqlSchemaDataTypeInference(), changelogMode);
-        this.includeSchemaChanges = includeSchemaChanges;
+        this(changelogMode, includeSchemaChanges, new ArrayList<>());
     }
 
     public MySqlEventDeserializer(
@@ -131,9 +131,6 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        if (readableMetadataList == null) {
-            return Collections.emptyMap();
-        }
         Map<String, String> metadataMap = new HashMap<>();
         readableMetadataList.forEach(
                 (mySqlReadableMetadata -> {

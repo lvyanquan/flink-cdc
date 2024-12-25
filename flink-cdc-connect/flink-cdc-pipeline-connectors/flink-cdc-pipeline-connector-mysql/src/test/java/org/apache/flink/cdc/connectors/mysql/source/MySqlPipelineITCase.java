@@ -277,7 +277,7 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
         sourceConfiguration.set(
                 MySqlDataSourceOptions.SERVER_ID, getServerId(env.getParallelism()));
         sourceConfiguration.set(MySqlDataSourceOptions.SERVER_TIME_ZONE, "UTC");
-        sourceConfiguration.set(MySqlDataSourceOptions.METADATA_COLUMN_INCLUDE_LIST, "op_ts");
+        sourceConfiguration.set(MySqlDataSourceOptions.METADATA_LIST, "op_ts");
         Factory.Context context =
                 new FactoryHelper.DefaultContext(
                         sourceConfiguration, new Configuration(), this.getClass().getClassLoader());
@@ -294,10 +294,8 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                                 new EventTypeInfo())
                         .executeAndCollect();
         Thread.sleep(10_000);
-
         TableId tableId = TableId.tableId(inventoryDatabase.getDatabaseName(), "products");
         CreateTableEvent createTableEvent = getProductsCreateTableEvent(tableId);
-
         // generate snapshot data
         Map<String, String> meta = new HashMap<>();
         meta.put("op_ts", "0");
@@ -312,14 +310,12 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                                             meta);
                                 })
                         .collect(Collectors.toList());
-
         String startTime = String.valueOf(System.currentTimeMillis());
         Thread.sleep(1000);
         List<Event> expectedBinlog = new ArrayList<>();
         try (Connection connection = inventoryDatabase.getJdbcConnection();
                 Statement statement = connection.createStatement()) {
             expectedBinlog.addAll(executeAlterAndProvideExpected(tableId, statement));
-
             RowType rowType =
                     RowType.of(
                             new DataType[] {
@@ -401,17 +397,189 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                                         BinaryStringData.fromString("c-21")
                                     })));
         }
+
+        int snapshotRecordsCount = expectedSnapshot.size();
+        int binlogRecordsCount = expectedBinlog.size();
+
+        // Ditto, CreateTableEvent might be emitted in multiple partitions.
         List<Event> actual =
                 fetchResultsExcept(
-                        events, expectedSnapshot.size() + expectedBinlog.size(), createTableEvent);
-        assertThat(actual.subList(0, 9))
-                .containsExactlyInAnyOrder(expectedSnapshot.toArray(new Event[0]));
-        for (int i = 0; i < expectedBinlog.size(); i++) {
+                        events, snapshotRecordsCount + binlogRecordsCount, createTableEvent);
+
+        List<Event> actualSnapshotEvents = actual.subList(0, snapshotRecordsCount);
+        List<Event> actualBinlogEvents = actual.subList(snapshotRecordsCount, actual.size());
+
+        assertThat(actualSnapshotEvents).containsExactlyInAnyOrderElementsOf(expectedSnapshot);
+        assertThat(actualBinlogEvents).hasSize(binlogRecordsCount);
+
+        for (int i = 0; i < binlogRecordsCount; i++) {
             if (expectedBinlog.get(i) instanceof SchemaChangeEvent) {
-                assertThat(expectedBinlog.get(i)).isEqualTo(actual.get(9 + i));
+                assertThat(actualBinlogEvents.get(i)).isEqualTo(expectedBinlog.get(i));
             } else {
                 DataChangeEvent expectedEvent = (DataChangeEvent) expectedBinlog.get(i);
-                DataChangeEvent actualEvent = (DataChangeEvent) actual.get(9 + i);
+                DataChangeEvent actualEvent = (DataChangeEvent) actualBinlogEvents.get(i);
+                assertThat(actualEvent.op()).isEqualTo(expectedEvent.op());
+                assertThat(actualEvent.before()).isEqualTo(expectedEvent.before());
+                assertThat(actualEvent.after()).isEqualTo(expectedEvent.after());
+                assertThat(actualEvent.meta().get("op_ts")).isGreaterThanOrEqualTo(startTime);
+            }
+        }
+    }
+
+    @Test
+    public void testInitialStartupModeWithOpTsWithFailBackKey() throws Exception {
+        inventoryDatabase.createAndInitialize();
+        Configuration sourceConfiguration = new Configuration();
+        sourceConfiguration.set(MySqlDataSourceOptions.HOSTNAME, MYSQL8_CONTAINER.getHost());
+        sourceConfiguration.set(MySqlDataSourceOptions.PORT, MYSQL8_CONTAINER.getDatabasePort());
+        sourceConfiguration.set(MySqlDataSourceOptions.USERNAME, TEST_USER);
+        sourceConfiguration.set(MySqlDataSourceOptions.PASSWORD, TEST_PASSWORD);
+        sourceConfiguration.set(
+                MySqlDataSourceOptions.TABLES, inventoryDatabase.getDatabaseName() + ".products");
+        sourceConfiguration.set(
+                MySqlDataSourceOptions.SERVER_ID, getServerId(env.getParallelism()));
+        sourceConfiguration.set(MySqlDataSourceOptions.SERVER_TIME_ZONE, "UTC");
+        sourceConfiguration.set(MySqlDataSourceOptions.METADATA_COLUMN_INCLUDE_LIST, "op_ts");
+        Factory.Context context =
+                new FactoryHelper.DefaultContext(
+                        sourceConfiguration, new Configuration(), this.getClass().getClassLoader());
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        new MySqlDataSourceFactory()
+                                .createDataSource(context)
+                                .getEventSourceProvider();
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                MySqlDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+        Thread.sleep(10_000);
+        TableId tableId = TableId.tableId(inventoryDatabase.getDatabaseName(), "products");
+        CreateTableEvent createTableEvent = getProductsCreateTableEvent(tableId);
+        // generate snapshot data
+        Map<String, String> meta = new HashMap<>();
+        meta.put("op_ts", "0");
+        List<Event> expectedSnapshot =
+                getSnapshotExpected(tableId).stream()
+                        .map(
+                                event -> {
+                                    DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
+                                    return DataChangeEvent.insertEvent(
+                                            dataChangeEvent.tableId(),
+                                            dataChangeEvent.after(),
+                                            meta);
+                                })
+                        .collect(Collectors.toList());
+        String startTime = String.valueOf(System.currentTimeMillis());
+        Thread.sleep(1000);
+        List<Event> expectedBinlog = new ArrayList<>();
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            expectedBinlog.addAll(executeAlterAndProvideExpected(tableId, statement));
+            RowType rowType =
+                    RowType.of(
+                            new DataType[] {
+                                DataTypes.INT().notNull(),
+                                DataTypes.VARCHAR(255).notNull(),
+                                DataTypes.FLOAT(),
+                                DataTypes.VARCHAR(45),
+                                DataTypes.VARCHAR(55)
+                            },
+                            new String[] {"id", "name", "weight", "col1", "col2"});
+            BinaryRecordDataGenerator generator = new BinaryRecordDataGenerator(rowType);
+            // insert more data
+            statement.execute(
+                    String.format(
+                            "INSERT INTO `%s`.`products` VALUES (default,'scooter',5.5,'c-10','c-20');",
+                            inventoryDatabase.getDatabaseName())); // 110
+            expectedBinlog.add(
+                    DataChangeEvent.insertEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        5.5f,
+                                        BinaryStringData.fromString("c-10"),
+                                        BinaryStringData.fromString("c-20")
+                                    })));
+            statement.execute(
+                    String.format(
+                            "INSERT INTO `%s`.`products` VALUES (default,'football',6.6,'c-11','c-21');",
+                            inventoryDatabase.getDatabaseName())); // 111
+            expectedBinlog.add(
+                    DataChangeEvent.insertEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        111,
+                                        BinaryStringData.fromString("football"),
+                                        6.6f,
+                                        BinaryStringData.fromString("c-11"),
+                                        BinaryStringData.fromString("c-21")
+                                    })));
+            statement.execute(
+                    String.format(
+                            "UPDATE `%s`.`products` SET `col1`='c-12', `col2`='c-22' WHERE id=110;",
+                            inventoryDatabase.getDatabaseName()));
+            expectedBinlog.add(
+                    DataChangeEvent.updateEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        5.5f,
+                                        BinaryStringData.fromString("c-10"),
+                                        BinaryStringData.fromString("c-20")
+                                    }),
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        5.5f,
+                                        BinaryStringData.fromString("c-12"),
+                                        BinaryStringData.fromString("c-22")
+                                    })));
+            statement.execute(
+                    String.format(
+                            "DELETE FROM `%s`.`products` WHERE `id` = 111;",
+                            inventoryDatabase.getDatabaseName()));
+            expectedBinlog.add(
+                    DataChangeEvent.deleteEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        111,
+                                        BinaryStringData.fromString("football"),
+                                        6.6f,
+                                        BinaryStringData.fromString("c-11"),
+                                        BinaryStringData.fromString("c-21")
+                                    })));
+        }
+
+        int snapshotRecordsCount = expectedSnapshot.size();
+        int binlogRecordsCount = expectedBinlog.size();
+
+        // Ditto, CreateTableEvent might be emitted in multiple partitions.
+        List<Event> actual =
+                fetchResultsExcept(
+                        events, snapshotRecordsCount + binlogRecordsCount, createTableEvent);
+
+        List<Event> actualSnapshotEvents = actual.subList(0, snapshotRecordsCount);
+        List<Event> actualBinlogEvents = actual.subList(snapshotRecordsCount, actual.size());
+
+        assertThat(actualSnapshotEvents).containsExactlyInAnyOrderElementsOf(expectedSnapshot);
+        assertThat(actualBinlogEvents).hasSize(binlogRecordsCount);
+
+        for (int i = 0; i < binlogRecordsCount; i++) {
+            if (expectedBinlog.get(i) instanceof SchemaChangeEvent) {
+                assertThat(actualBinlogEvents.get(i)).isEqualTo(expectedBinlog.get(i));
+            } else {
+                DataChangeEvent expectedEvent = (DataChangeEvent) expectedBinlog.get(i);
+                DataChangeEvent actualEvent = (DataChangeEvent) actualBinlogEvents.get(i);
                 assertThat(actualEvent.op()).isEqualTo(expectedEvent.op());
                 assertThat(actualEvent.before()).isEqualTo(expectedEvent.before());
                 assertThat(actualEvent.after()).isEqualTo(expectedEvent.after());

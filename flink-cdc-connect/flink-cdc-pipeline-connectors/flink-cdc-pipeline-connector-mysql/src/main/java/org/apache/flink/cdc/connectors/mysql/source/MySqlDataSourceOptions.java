@@ -290,6 +290,15 @@ public class MySqlDataSourceOptions {
                     .withDescription(
                             "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 
+    @Deprecated
+    public static final ConfigOption<String> METADATA_COLUMN_INCLUDE_LIST =
+            ConfigOptions.key("metadata-column.include-list")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "List of readable metadata from SourceRecord to be passed to downstream, split by `;`. "
+                                    + "Refer to MySqlReadableMetadata, available readable metadata are: table_name,database_name,op_ts,row_kind.");
+
     @Experimental
     public static final ConfigOption<Integer> SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE =
             ConfigOptions.key("scan.parallel-deserialize-changelog.handler.size")
@@ -298,11 +307,11 @@ public class MySqlDataSourceOptions {
                     .withDescription("The size of the event handler during parallel conversion.");
 
     @Experimental
-    public static final ConfigOption<String> METADATA_COLUMN_INCLUDE_LIST =
-            ConfigOptions.key("metadata-column.include-list")
+    public static final ConfigOption<String> METADATA_LIST =
+            ConfigOptions.key("metadata.list")
                     .stringType()
                     .noDefaultValue()
                     .withDescription(
-                            "List of readable metadata from SourceRecord to be passed to downstream, split by `;`. "
-                                    + "Refer to MySqlReadableMetadata, available readable metadata are: table_name,database_name,op_ts,row_kind.");
+                            "List of readable metadata from SourceRecord to be passed to downstream, split by `,`. "
+                                    + "Available readable metadata are: op_ts.");
 }

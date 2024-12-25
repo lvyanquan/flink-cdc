@@ -43,6 +43,7 @@ limitations under the License.
         <module>flink-cdc-pipeline-connectors-dist</module>
         <module>flink-cdc-cli-bundle</module>
         <module>flink-cdc-pipeline-udf-examples</module>
+        <module>flink-cdc-pipeline-model</module>
     </modules>
 
     <licenses>

@@ -200,7 +200,7 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
     private void handleFlushEvent(FlushEvent event) throws Exception {
         copySinkWriter.flush(false);
         schemaEvolutionClient.notifyFlushSuccess(
-                getRuntimeContext().getIndexOfThisSubtask(), event.getTableId());
+                getRuntimeContext().getIndexOfThisSubtask(), event.getSourceSubTaskId());
     }
 
     private void emitLatestSchema(TableId tableId) throws Exception {
