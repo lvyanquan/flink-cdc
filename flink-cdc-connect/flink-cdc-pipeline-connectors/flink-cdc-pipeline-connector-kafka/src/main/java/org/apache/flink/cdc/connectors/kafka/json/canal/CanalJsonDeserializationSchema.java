@@ -18,20 +18,9 @@
 package org.apache.flink.cdc.connectors.kafka.json.canal;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.cdc.common.annotation.VisibleForTesting;
-import org.apache.flink.cdc.common.data.RecordData;
-import org.apache.flink.cdc.common.event.CreateTableEvent;
-import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
-import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
-import org.apache.flink.cdc.common.schema.Schema;
-import org.apache.flink.cdc.common.utils.SchemaUtils;
-import org.apache.flink.cdc.connectors.kafka.json.TableSchemaAndConverter;
-import org.apache.flink.cdc.connectors.kafka.source.SourceRecordToRecordDataConverter;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
-import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaEvolveManager;
-import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaEvolveResult;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
@@ -64,49 +53,42 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Deserialization schema that deserializes a Canal JSON bytes into FlinkCDC pipeline internal data
- * structure {@link Event}. It also maintains table schemas by schema inference and schema
+ * structure {@link Event}. It also maintains table schemas for schema inference and schema
  * evolution.
  *
  * @see <a href="https://github.com/alibaba/canal">Alibaba Canal</a>
  */
-public class CanalJsonDeserializationSchema implements SchemaAwareDeserializationSchema<Event> {
-    private static final long serialVersionUID = 1L;
+public abstract class CanalJsonDeserializationSchema
+        implements SchemaAwareDeserializationSchema<Event> {
     private static final Logger LOG = LoggerFactory.getLogger(CanalJsonDeserializationSchema.class);
+    private static final ObjectPath OBJECT_PATH_PLACEHOLDER = new ObjectPath("db", "table");
 
     private static final String DATABASE_KEY = "database";
     private static final String TABLE_KEY = "table";
 
-    private static final String FIELD_OLD = "old";
+    protected static final String FIELD_OLD = "old";
     // For compatibility with DTS on Alibaba Cloud
-    private static final String OP_INIT = "INIT";
-    private static final String OP_INSERT = "INSERT";
-    private static final String OP_UPDATE = "UPDATE";
-    private static final String OP_DELETE = "DELETE";
-    private static final String OP_CREATE = "CREATE";
-    private static final String OP_ALTER = "ALTER";
-
-    private static final ObjectPath OBJECT_PATH_PLACEHOLDER = new ObjectPath("db", "table");
+    protected static final String OP_INIT = "INIT";
+    protected static final String OP_INSERT = "INSERT";
+    protected static final String OP_UPDATE = "UPDATE";
+    protected static final String OP_DELETE = "DELETE";
+    protected static final String OP_CREATE = "CREATE";
+    protected static final String OP_ALTER = "ALTER";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Pattern databasePattern;
     private final Pattern tablePattern;
     private final boolean ignoreParseErrors;
-    private final TimestampFormat timestampFormat;
-    private final JsonRowDataDeserializationSchema jsonDeserializer;
+    protected final TimestampFormat timestampFormat;
+    protected final JsonRowDataDeserializationSchema jsonDeserializer;
     private final JsonToSourceRecordConverter jsonToSourceRecordConverter;
-
-    private final Map<TableId, TableSchemaAndConverter> tableSchemaConverters;
-    private final Set<TableId> alreadySendCreateTableTables;
 
     public CanalJsonDeserializationSchema(
             @Nullable String database,
@@ -139,8 +121,6 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
                         false,
                         false,
                         primitiveAsString);
-        this.tableSchemaConverters = new HashMap<>();
-        this.alreadySendCreateTableTables = new HashSet<>();
     }
 
     @Override
@@ -159,12 +139,8 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
         if (message == null || message.length == 0) {
             return;
         }
-        TableId tableId;
-        TableSchemaAndConverter tableSchemaConverter;
-        boolean needUpdateTableSchema = false;
-        List<Event> eventsToCollect = new ArrayList<>();
-        // a big try catch to protect the processing.
-        // collect events and update schema state should after try catch.
+        List<Event> events;
+        // A big try catch to protect the processing.
         try {
             final JsonNode root = jsonDeserializer.deserializeToJsonNode(message);
             JsonNode databaseNode = root.get(DATABASE_KEY);
@@ -183,7 +159,7 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
             if (tablePattern != null && !tablePattern.matcher(table).matches()) {
                 return;
             }
-            tableId = TableId.tableId(database, table);
+            TableId tableId = TableId.tableId(database, table);
 
             final GenericRowData row = (GenericRowData) jsonDeserializer.deserialize(message);
             String type = row.getString(2).toString();
@@ -195,104 +171,9 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
 
             List<String> dataList = getStringArray(row, 0);
             List<String> oldList = getStringArray(row, 1);
-
-            // Value of some fields could be null before or after, so we should parse all rows'
-            // schema
-            // and merge them
-            List<SourceRecord> dataSourceRecords = new ArrayList<>();
-            List<SourceRecord> oldSourceRecords = new ArrayList<>();
-            List<SourceRecord> allSourceRecords = new ArrayList<>();
-            for (String json : dataList) {
-                SourceRecord sourceRecord = getSourceRecordByJson(json);
-                dataSourceRecords.add(sourceRecord);
-                allSourceRecords.add(sourceRecord);
-            }
-            for (String json : oldList) {
-                SourceRecord sourceRecord = getSourceRecordByJson(json);
-                oldSourceRecords.add(sourceRecord);
-                allSourceRecords.add(sourceRecord);
-            }
-            SchemaSpec schemaSpec =
-                    SchemaUtils.mergeSchemaSpec(
-                            allSourceRecords.stream()
-                                    .map(SourceRecord::getSchema)
-                                    .collect(Collectors.toList()));
-
             List<String> pkNames = getStringArray(row, 3);
-            Schema schema = SchemaUtils.convert(schemaSpec, pkNames);
-            List<SchemaChangeEvent> schemaChanges = Collections.emptyList();
-            boolean tableSchemaExists = tableSchemaConverters.containsKey(tableId);
-            if (tableSchemaExists) {
-                SchemaEvolveResult schemaEvolveResult =
-                        SchemaEvolveManager.evolveSchema(
-                                tableId, tableSchemaConverters.get(tableId).getSchema(), schema);
-                if (schemaEvolveResult.isIncompatible()) {
-                    throw new IllegalStateException(schemaEvolveResult.getIncompatibleReason());
-                }
-                if (schemaEvolveResult.isCompatibleAfterEvolution()) {
-                    schema = schemaEvolveResult.getSchemaAfterEvolve();
-                    schemaChanges = schemaEvolveResult.getSchemaChanges();
-                }
-            }
 
-            if (!alreadySendCreateTableTables.contains(tableId)) {
-                if (tableSchemaExists) {
-                    // After restoring with state, send create table event with schema in state
-                    // first.
-                    eventsToCollect.add(
-                            new CreateTableEvent(
-                                    tableId, tableSchemaConverters.get(tableId).getSchema()));
-                } else {
-                    eventsToCollect.add(new CreateTableEvent(tableId, schema));
-                }
-            }
-
-            if (!tableSchemaExists || !schemaChanges.isEmpty()) {
-                needUpdateTableSchema = true;
-                tableSchemaConverter = TableSchemaAndConverter.of(schema, timestampFormat);
-            } else {
-                tableSchemaConverter = tableSchemaConverters.get(tableId);
-            }
-            eventsToCollect.addAll(schemaChanges);
-
-            SourceRecordToRecordDataConverter converter = tableSchemaConverter.getConverter();
-            switch (type) {
-                case OP_INIT:
-                case OP_INSERT:
-                    for (SourceRecord sourceRecord : dataSourceRecords) {
-                        eventsToCollect.add(
-                                DataChangeEvent.insertEvent(
-                                        tableId, converter.convert(sourceRecord)));
-                    }
-                    break;
-                case OP_DELETE:
-                    for (SourceRecord sourceRecord : dataSourceRecords) {
-                        eventsToCollect.add(
-                                DataChangeEvent.deleteEvent(
-                                        tableId, converter.convert(sourceRecord)));
-                    }
-                    break;
-                case OP_UPDATE:
-                    for (int i = 0; i < dataSourceRecords.size(); i++) {
-                        SourceRecord oldSourceRecord = oldSourceRecords.get(i);
-                        SourceRecord dataSourceRecord = dataSourceRecords.get(i);
-                        // fields in "old" (before) means the fields are changed
-                        // fields not in "old" (before) means the fields are not changed
-                        // so we just copy the not changed fields into before
-                        oldSourceRecord =
-                                getCompleteBeforeSourceRecord(
-                                        schemaSpec,
-                                        oldSourceRecord,
-                                        dataSourceRecord,
-                                        root.get(FIELD_OLD));
-                        RecordData before = converter.convert(oldSourceRecord);
-                        RecordData after = converter.convert(dataSourceRecords.get(i));
-                        eventsToCollect.add(DataChangeEvent.updateEvent(tableId, before, after));
-                    }
-                    break;
-                default:
-                    throw new IOException(String.format("Unknown \"type\" value \"%s\".", type));
-            }
+            events = deserialize(tableId, type, dataList, oldList, pkNames, root.get(FIELD_OLD));
         } catch (Throwable t) {
             String errorMessage =
                     String.format("Corrupt Canal JSON message '%s'.", new String(message));
@@ -303,18 +184,23 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
                 throw new IOException(errorMessage, t);
             }
         }
-        // collect events and update states only after parsing successfully
-        eventsToCollect.forEach(
-                event -> {
-                    out.collect(event);
-                    if (event instanceof CreateTableEvent) {
-                        alreadySendCreateTableTables.add(tableId);
-                    }
-                });
-        if (needUpdateTableSchema) {
-            tableSchemaConverters.put(tableId, tableSchemaConverter);
-        }
+        // Send all events after try catch.
+        events.forEach(out::collect);
     }
+
+    /**
+     * Return events by Canal JSON data fields. Throw exception directly in this method if parse
+     * error. {@link CanalJsonDeserializationSchema#deserialize(byte[] message, Collector out)} will
+     * handle exception according to ignoreParseError config.
+     */
+    protected abstract List<Event> deserialize(
+            TableId tableId,
+            String type,
+            List<String> dataList,
+            List<String> oldList,
+            List<String> pkNames,
+            JsonNode oldFiledJsonNode)
+            throws Exception;
 
     @Override
     public boolean isEndOfStream(Event event) {
@@ -326,20 +212,7 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
         return new EventTypeInfo();
     }
 
-    @Override
-    public Schema getTableSchema(TableId tableId) {
-        if (!tableSchemaConverters.containsKey(tableId)) {
-            return null;
-        }
-        return tableSchemaConverters.get(tableId).getSchema();
-    }
-
-    @Override
-    public void setTableSchema(TableId tableId, Schema schema) {
-        tableSchemaConverters.put(tableId, TableSchemaAndConverter.of(schema, timestampFormat));
-    }
-
-    private SourceRecord getSourceRecordByJson(String json) throws IOException {
+    protected SourceRecord getSourceRecordByJson(String json) throws IOException {
         JsonParser root = objectMapper.getFactory().createParser(json);
         if (root.currentToken() == null) {
             root.nextToken();
@@ -347,7 +220,7 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
         return jsonToSourceRecordConverter.convert(root);
     }
 
-    private SourceRecord getCompleteBeforeSourceRecord(
+    protected SourceRecord getCompleteBeforeSourceRecord(
             SchemaSpec mergedSchema, SourceRecord old, SourceRecord data, JsonNode oldField) {
         Map<String, Object> oldValues = getFieldValues(old);
         Map<String, Object> newValues = getFieldValues(data);
@@ -403,15 +276,5 @@ public class CanalJsonDeserializationSchema implements SchemaAwareDeserializatio
                         DataTypes.FIELD("type", DataTypes.STRING()),
                         DataTypes.FIELD("pkNames", DataTypes.ARRAY(DataTypes.STRING())));
         return (RowType) root.getLogicalType();
-    }
-
-    @VisibleForTesting
-    Map<TableId, TableSchemaAndConverter> getTableSchemaConverters() {
-        return tableSchemaConverters;
-    }
-
-    @VisibleForTesting
-    Set<TableId> getAlreadySendCreateTableTables() {
-        return alreadySendCreateTableTables;
     }
 }

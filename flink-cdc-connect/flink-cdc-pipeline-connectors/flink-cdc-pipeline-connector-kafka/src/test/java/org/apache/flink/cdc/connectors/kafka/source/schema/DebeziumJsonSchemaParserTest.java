@@ -74,33 +74,21 @@ public class DebeziumJsonSchemaParserTest {
         List<String> lines = TestUtil.readLines("debezium-data-schema-exclude.txt");
         TableId tableId = TableId.tableId("inventory", "products");
 
-        Schema schema1 =
+        Schema schema =
                 Schema.newBuilder()
                         .physicalColumn("id", DataTypes.BIGINT())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
                         .physicalColumn("weight", DataTypes.DOUBLE())
                         .build();
-        Schema schema2 =
-                Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.BIGINT())
-                        .physicalColumn("name", DataTypes.STRING())
-                        .physicalColumn("description", DataTypes.STRING())
-                        .physicalColumn("weight", DataTypes.BIGINT())
-                        .build();
 
-        for (int i = 0; i < lines.size(); i++) {
-            String json = lines.get(i);
+        for (String json : lines) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
             Optional<Tuple2<TableId, Schema>> tableSchemaOp =
                     schemaParserExcludeSchema.parseRecordSchema(record);
             assertThat(tableSchemaOp).isPresent();
             assertThat(tableSchemaOp.get().f0).isEqualTo(tableId);
-            if (i != 5 && i != 9) {
-                assertThat(tableSchemaOp.get().f1).isEqualTo(schema1);
-            } else {
-                assertThat(tableSchemaOp.get().f1).isEqualTo(schema2);
-            }
+            assertThat(tableSchemaOp.get().f1).isEqualTo(schema);
         }
     }
 

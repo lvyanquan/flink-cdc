@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
@@ -25,11 +26,18 @@ import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
 /** The builder class for {@link PipelineKafkaSource}. */
 public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
 
+    private SchemaInferenceStrategy schemaInferenceStrategy;
     private RecordSchemaParser recordSchemaParser;
     private int maxFetchRecords;
 
     public PipelineKafkaSourceBuilder() {
         super();
+    }
+
+    public PipelineKafkaSourceBuilder setSchemaInferenceStrategy(
+            SchemaInferenceStrategy schemaInferenceStrategy) {
+        this.schemaInferenceStrategy = schemaInferenceStrategy;
+        return this;
     }
 
     public PipelineKafkaSourceBuilder setRecordSchemaParser(RecordSchemaParser recordSchemaParser) {
@@ -53,6 +61,7 @@ public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
                 boundedness,
                 deserializationSchema,
                 props,
+                schemaInferenceStrategy,
                 recordSchemaParser,
                 maxFetchRecords);
     }

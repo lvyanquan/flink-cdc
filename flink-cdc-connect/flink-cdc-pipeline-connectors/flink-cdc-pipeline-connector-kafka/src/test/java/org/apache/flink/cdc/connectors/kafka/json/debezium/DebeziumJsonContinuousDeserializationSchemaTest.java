@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -47,8 +48,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Tests for {@link DebeziumJsonDeserializationSchema}. */
-public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSchemaTestBase {
+/** Tests for {@link DebeziumJsonContinuousDeserializationSchemaTest}. */
+public class DebeziumJsonContinuousDeserializationSchemaTest
+        extends JsonDeserializationSchemaTestBase {
 
     public static final Schema ORIGINAL_SCHEMA =
             Schema.newBuilder()
@@ -60,8 +62,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
 
     @Test
     public void testTombstoneMessages() throws Exception {
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
         deserializationSchema.open(new MockInitializationContext());
 
@@ -74,8 +76,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
     @Test
     public void testDeserializeExcludeSchema() throws Exception {
         List<String> lines = TestUtil.readLines("debezium-data-schema-exclude.txt");
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
         runTest(lines, deserializationSchema);
     }
@@ -83,16 +85,16 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
     @Test
     public void testDeserializeIncludeSchema() throws Exception {
         List<String> lines = TestUtil.readLines("debezium-data-schema-include.txt");
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         true, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
         runTest(lines, deserializationSchema);
     }
 
     @Test
     public void testIgnoreParseError() throws Exception {
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, true, false, TimestampFormat.SQL, ZoneId.systemDefault());
         deserializationSchema.open(new MockInitializationContext());
         SimpleCollector collector = new SimpleCollector();
@@ -116,8 +118,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
 
     @Test
     public void testNotIgnoreParseError() throws Exception {
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
         deserializationSchema.open(new MockInitializationContext());
         SimpleCollector collector = new SimpleCollector();
@@ -145,7 +147,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
                 .rootCause()
                 .hasMessageContaining(
                         String.format(
-                                DebeziumJsonDeserializationSchema.REPLICA_IDENTITY_EXCEPTION,
+                                DebeziumJsonContinuousDeserializationSchema
+                                        .REPLICA_IDENTITY_EXCEPTION,
                                 "UPDATE"));
         assertThatThrownBy(
                         () ->
@@ -164,8 +167,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
     @Test
     public void testPrimitiveAsString() throws Exception {
         List<String> lines = TestUtil.readLines("debezium-data-schema-exclude.txt");
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, false, true, TimestampFormat.SQL, ZoneId.systemDefault());
         deserializationSchema.open(new MockInitializationContext());
         SimpleCollector collector = new SimpleCollector();
@@ -207,8 +210,8 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
                 "{\"before\":null,\"after\":{\"id\":102,\"name\":\"scooter\",\"description\":\"Small 2-wheel scooter\",\"weight\":3.140000104904175, \"price\": 100},\"source\":{\"version\":\"1.1.1.Final\",\"connector\":\"mysql\",\"name\":\"dbserver1\",\"ts_ms\":0,\"snapshot\":\"true\",\"db\":\"inventory\",\"table\":\"products\",\"server_id\":0,\"gtid\":null,\"file\":\"mysql-bin.000003\",\"pos\":154,\"row\":0,\"thread\":null,\"query\":null},\"op\":\"c\",\"ts_ms\":1589355606100,\"transaction\":null}";
         String debeziumJson3 =
                 "{\"before\":null,\"after\":{\"id\":103,\"name\":\"scooter\",\"description\":\"Small 2-wheel scooter\",\"weight\":\"30kg\"},\"source\":{\"version\":\"1.1.1.Final\",\"connector\":\"mysql\",\"name\":\"dbserver1\",\"ts_ms\":0,\"snapshot\":\"true\",\"db\":\"inventory\",\"table\":\"products\",\"server_id\":0,\"gtid\":null,\"file\":\"mysql-bin.000003\",\"pos\":154,\"row\":0,\"thread\":null,\"query\":null},\"op\":\"c\",\"ts_ms\":1589355606100,\"transaction\":null}";
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                new DebeziumJsonDeserializationSchema(
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                new DebeziumJsonContinuousDeserializationSchema(
                         false, false, false, TimestampFormat.SQL, ZoneId.systemDefault());
         deserializationSchema.open(new MockInitializationContext());
         TableId tableId = TableId.tableId("inventory", "products");
@@ -234,9 +237,9 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
                         new AddColumnEvent(
                                 tableId,
                                 Collections.singletonList(
-                                        AddColumnEvent.last(
-                                                Column.physicalColumn(
-                                                        "price", DataTypes.BIGINT())))));
+                                        AddColumnEvent.after(
+                                                Column.physicalColumn("price", DataTypes.BIGINT()),
+                                                "weight"))));
         assertThat(deserializationSchema.getTableSchema(tableId))
                 .isEqualTo(
                         SchemaUtils.applySchemaChangeEvent(
@@ -258,7 +261,7 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
     }
 
     private void runTest(
-            List<String> lines, DebeziumJsonDeserializationSchema deserializationSchema)
+            List<String> lines, DebeziumJsonContinuousDeserializationSchema deserializationSchema)
             throws Exception {
         deserializationSchema.open(new MockInitializationContext());
         SimpleCollector collector = new SimpleCollector();
@@ -271,32 +274,34 @@ public class DebeziumJsonDeserializationSchemaTest extends JsonDeserializationSc
         assertThat(deserializationSchema.getTableSchema(tableId)).isEqualTo(ORIGINAL_SCHEMA);
 
         List<Event> events = collector.getList();
-        assertThat(events).hasSize(17);
         assertThat(events.get(0)).isInstanceOf(CreateTableEvent.class);
         CreateTableEvent createTableEvent = (CreateTableEvent) events.get(0);
         assertThat(createTableEvent.getSchema()).isEqualTo(ORIGINAL_SCHEMA);
 
-        assertThat(events.get(1)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent1 = (DataChangeEvent) events.get(1);
-        assertThat(dataChangeEvent1.op()).isEqualTo(OperationType.INSERT);
-        RecordData data = dataChangeEvent1.after();
-        assertThat(data.getLong(0)).isEqualTo(101L);
-        assertThat(data.getString(1).toString()).isEqualTo("scooter");
-        assertThat(data.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-        assertThat(data.getDouble(3)).isEqualTo(3.140000104904175);
+        List<String> actualEvents = new ArrayList<>();
+        for (Event event : events) {
+            actualEvents.add(TestUtil.convertEventToStr(event, ORIGINAL_SCHEMA));
+        }
+        List<String> expectedEvents =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`description` STRING,`weight` DOUBLE}, primaryKeys=, options=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[101, scooter, Small 2-wheel scooter, 3.140000104904175], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[102, car battery, 12V car battery, 8.100000381469727], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.800000011920929], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[104, hammer, 12oz carpenter's hammer, 0.75], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[105, hammer, 14oz carpenter's hammer, 0.875], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[106, hammer, 16oz carpenter's hammer, 1.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[107, rocks, box of assorted rocks, 5.300000190734863], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[108, jacket, water resistent black wind breaker, 0.10000000149011612], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[109, spare tire, 24 inch spare tire, 22.200000762939453], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[106, hammer, 16oz carpenter's hammer, 1.0], after=[106, hammer, 18oz carpenter hammer, 1.0], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[107, rocks, box of assorted rocks, 5.300000190734863], after=[107, rocks, box of assorted rocks, 5.099999904632568], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[110, jacket, water resistent white wind breaker, 0.20000000298023224], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[111, scooter, Big 2-wheel scooter , 5.179999828338623], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[110, jacket, water resistent white wind breaker, 0.20000000298023224], after=[110, jacket, new water resistent white wind breaker, 0.5], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[111, scooter, Big 2-wheel scooter , 5.179999828338623], after=[111, scooter, Big 2-wheel scooter , 5.170000076293945], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[111, scooter, Big 2-wheel scooter , 5.170000076293945], after=[], op=DELETE, meta=()}");
 
-        assertThat(events.get(10)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent2 = (DataChangeEvent) events.get(10);
-        assertThat(dataChangeEvent2.op()).isEqualTo(OperationType.UPDATE);
-        RecordData before = dataChangeEvent2.before();
-        RecordData after = dataChangeEvent2.after();
-        assertThat(before.getLong(0)).isEqualTo(106L);
-        assertThat(before.getString(1).toString()).isEqualTo("hammer");
-        assertThat(before.getString(2).toString()).isEqualTo("16oz carpenter's hammer");
-        assertThat(before.getDouble(3)).isEqualTo(1d);
-        assertThat(after.getLong(0)).isEqualTo(106L);
-        assertThat(after.getString(1).toString()).isEqualTo("hammer");
-        assertThat(after.getString(2).toString()).isEqualTo("18oz carpenter hammer");
-        assertThat(after.getDouble(3)).isEqualTo(1d);
+        assertThat(actualEvents).isEqualTo(expectedEvents);
     }
 }

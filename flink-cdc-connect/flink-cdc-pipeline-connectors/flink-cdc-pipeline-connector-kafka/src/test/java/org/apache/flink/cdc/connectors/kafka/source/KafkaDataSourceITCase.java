@@ -20,15 +20,15 @@ package org.apache.flink.cdc.connectors.kafka.source;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.cdc.common.configuration.Configuration;
-import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
-import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
-import org.apache.flink.cdc.common.event.OperationType;
+import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
+import org.apache.flink.cdc.common.inference.SchemaInferenceSourceOptions;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.types.DataTypes;
+import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.connectors.kafka.KafkaUtil;
 import org.apache.flink.cdc.connectors.kafka.TestUtil;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
@@ -71,8 +71,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -170,8 +168,6 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 new EventTypeInfo())
                         .executeAndCollect();
 
-        Thread.sleep(10_000);
-
         int expectedSize = 17;
         Schema expectedSchema =
                 Schema.newBuilder()
@@ -187,28 +183,33 @@ public class KafkaDataSourceITCase extends TestLogger {
         CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
         assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
 
-        assertThat(actual.get(1)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent1 = (DataChangeEvent) actual.get(1);
-        assertThat(dataChangeEvent1.op()).isEqualTo(OperationType.INSERT);
-        RecordData data = dataChangeEvent1.after();
-        assertThat(data.getLong(0)).isEqualTo(101L);
-        assertThat(data.getString(1).toString()).isEqualTo("scooter");
-        assertThat(data.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-        assertThat(data.getDouble(3)).isEqualTo(3.140000104904175);
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
 
-        assertThat(actual.get(10)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent2 = (DataChangeEvent) actual.get(10);
-        assertThat(dataChangeEvent2.op()).isEqualTo(OperationType.UPDATE);
-        RecordData before = dataChangeEvent2.before();
-        RecordData after = dataChangeEvent2.after();
-        assertThat(before.getLong(0)).isEqualTo(106L);
-        assertThat(before.getString(1).toString()).isEqualTo("hammer");
-        assertThat(before.getString(2).toString()).isEqualTo("16oz carpenter's hammer");
-        assertThat(before.getDouble(3)).isEqualTo(1d);
-        assertThat(after.getLong(0)).isEqualTo(106L);
-        assertThat(after.getString(1).toString()).isEqualTo("hammer");
-        assertThat(after.getString(2).toString()).isEqualTo("18oz carpenter hammer");
-        assertThat(after.getDouble(3)).isEqualTo(1d);
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`description` STRING,`weight` DOUBLE}, primaryKeys=, options=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[101, scooter, Small 2-wheel scooter, 3.140000104904175], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[102, car battery, 12V car battery, 8.100000381469727], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.800000011920929], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[104, hammer, 12oz carpenter's hammer, 0.75], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[105, hammer, 14oz carpenter's hammer, 0.875], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[106, hammer, 16oz carpenter's hammer, 1.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[107, rocks, box of assorted rocks, 5.300000190734863], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[108, jacket, water resistent black wind breaker, 0.10000000149011612], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[109, spare tire, 24 inch spare tire, 22.200000762939453], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[106, hammer, 16oz carpenter's hammer, 1.0], after=[106, hammer, 18oz carpenter hammer, 1.0], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[107, rocks, box of assorted rocks, 5.300000190734863], after=[107, rocks, box of assorted rocks, 5.099999904632568], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[110, jacket, water resistent white wind breaker, 0.20000000298023224], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[111, scooter, Big 2-wheel scooter , 5.179999828338623], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[110, jacket, water resistent white wind breaker, 0.20000000298023224], after=[110, jacket, new water resistent white wind breaker, 0.5], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[111, scooter, Big 2-wheel scooter , 5.179999828338623], after=[111, scooter, Big 2-wheel scooter , 5.170000076293945], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[111, scooter, Big 2-wheel scooter , 5.170000076293945], after=[], op=DELETE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
     }
 
     @Test
@@ -247,17 +248,14 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 new EventTypeInfo())
                         .executeAndCollect();
 
-        Thread.sleep(10_000);
         int expectedSize = 6;
         Schema expectedSchema =
                 Schema.newBuilder()
                         .physicalColumn("id", DataTypes.BIGINT())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
-                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .physicalColumn("weight", DataTypes.STRING())
                         .build();
-        List<RecordData.FieldGetter> fieldGetters =
-                TestUtil.getFieldGettersBySchema(expectedSchema);
 
         List<Event> actual = fetchResults(events, expectedSize);
 
@@ -265,18 +263,171 @@ public class KafkaDataSourceITCase extends TestLogger {
         CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
         assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
 
-        List<String> expectedDataChangeEvents =
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
+        List<String> expected =
                 Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`description` STRING,`weight` STRING}, primaryKeys=, options=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
-        for (int i = 1; i < expectedSize; i++) {
-            assertThat(actual.get(i)).isInstanceOf(DataChangeEvent.class);
-            assertThat(TestUtil.convertEventToStr(actual.get(i), fieldGetters))
-                    .isEqualTo(expectedDataChangeEvents.get(i - 1));
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDebeziumJsonStaticInferenceStrategy() throws Exception {
+        // prepare data for initializing schema
+        prepareData(
+                Arrays.asList(
+                        "{\"before\":null,\"after\":{\"id\":999},\"source\":{\"db\":\"inventory\",\"table\":\"products\"},\"op\":\"c\"}",
+                        "{\"before\":null,\"after\":{\"id\":1000,\"name\":\"test1000\",\"weight\":1.0},\"source\":{\"db\":\"inventory\",\"table\":\"products\"},\"op\":\"c\"}"));
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "debezium-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "latest-offset");
+        config.put(SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY.key(), "static");
+        // use the latest one record for parsing initial schema
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "1");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        prepareData(readLines("debezium-data-schema-change.txt"));
+
+        int expectedSize = 6;
+        Schema expectedSchema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.BIGINT())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .build();
+
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        assertThat(actual.get(0)).isInstanceOf(CreateTableEvent.class);
+        CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
+        assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
+
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
+
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`weight` DOUBLE}, primaryKeys=, options=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, 3.0], after=[3, test3, 3.14], op=UPDATE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDebeziumJsonContinuousInferenceStrategy() throws Exception {
+        // prepare data for initializing schema
+        prepareData(
+                Collections.singletonList(
+                        "{\"before\":null,\"after\":{\"id\":999},\"source\":{\"db\":\"inventory\",\"table\":\"products\"},\"op\":\"c\"}"));
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "debezium-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "latest-offset");
+        config.put(SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY.key(), "continuous");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "1");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        prepareData(readLines("debezium-data-schema-change.txt"));
+
+        int expectedSize = 10;
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        Schema expectedSchema = Schema.newBuilder().build();
+        List<String> actualReadableEvents = new ArrayList<>();
+        for (Event event : actual) {
+            if (event instanceof SchemaChangeEvent) {
+                expectedSchema =
+                        SchemaUtils.applySchemaChangeEvent(
+                                expectedSchema, (SchemaChangeEvent) event);
+            }
+            actualReadableEvents.add(TestUtil.convertEventToStr(event, expectedSchema));
         }
+
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT}, primaryKeys=, options=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`name` STRING, position=AFTER, existedColumnName=id}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1], op=INSERT, meta=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`description` STRING, position=AFTER, existedColumnName=name}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2], op=INSERT, meta=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`weight` BIGINT, position=AFTER, existedColumnName=description}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
+                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=STRING}, oldTypeMapping={weight=BIGINT}}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
     }
 
     @Test
@@ -315,11 +466,10 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 new EventTypeInfo())
                         .executeAndCollect();
 
-        Thread.sleep(10_000);
         int expectedSize = 21;
         Schema expectedSchema =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
                         .physicalColumn("weight", DataTypes.STRING())
@@ -327,36 +477,40 @@ public class KafkaDataSourceITCase extends TestLogger {
                         .primaryKey("id")
                         .build();
         List<Event> actual = fetchResults(events, expectedSize);
-
         assertThat(actual.get(0)).isInstanceOf(CreateTableEvent.class);
         CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
         assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
 
-        assertThat(actual.get(1)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent1 = (DataChangeEvent) actual.get(1);
-        assertThat(dataChangeEvent1.op()).isEqualTo(OperationType.INSERT);
-        RecordData data = dataChangeEvent1.after();
-        assertThat(data.getString(0).toString()).isEqualTo("101");
-        assertThat(data.getString(1).toString()).isEqualTo("scooter");
-        assertThat(data.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-        assertThat(data.getString(3).toString()).isEqualTo("3.14");
-        assertThat(data.getString(4).toString()).isEqualTo("val1");
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products2, schema=columns={`id` STRING NOT NULL,`name` STRING,`description` STRING,`weight` STRING,`other` STRING}, primaryKeys=id, options=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[101, scooter, Small 2-wheel scooter, 3.14, val1], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[102, car battery, 12V car battery, 8.1, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.8, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[104, hammer, 12oz carpenter's hammer, 0.75, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[105, hammer, 14oz carpenter's hammer, 0.875, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[106, hammer, null, 1.0, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[107, rocks, box of assorted rocks, 5.3, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[108, jacket, water resistent black wind breaker, 0.1, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[109, spare tire, 24 inch spare tire, 22.2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[106, hammer, null, 1.0, val2], after=[106, hammer, 18oz carpenter hammer, 1.0, val0], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[107, rocks, box of assorted rocks, 5.3, null], after=[107, rocks, box of assorted rocks, 5.1, null], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[110, jacket, water resistent white wind breaker, 0.2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[], after=[111, scooter, Big 2-wheel scooter , 5.18, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[110, jacket, water resistent white wind breaker, 0.2, null], after=[110, jacket, new water resistent white wind breaker, 0.5, null], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[111, scooter, Big 2-wheel scooter , 5.18, null], after=[111, scooter, Big 2-wheel scooter , 5.17, null], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[111, scooter, Big 2-wheel scooter , 5.17, null], after=[], op=DELETE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[101, scooter, Small 2-wheel scooter, 3.14, null], after=[101, scooter, Small 2-wheel scooter, 5.17, null], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[102, car battery, 12V car battery, 8.1, null], after=[102, car battery, 12V car battery, 5.17, null], op=UPDATE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[102, car battery, 12V car battery, 5.17, null], after=[], op=DELETE, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products2, before=[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.8, null], after=[], op=DELETE, meta=()}");
 
-        assertThat(actual.get(10)).isInstanceOf(DataChangeEvent.class);
-        DataChangeEvent dataChangeEvent2 = (DataChangeEvent) actual.get(10);
-        assertThat(dataChangeEvent2.op()).isEqualTo(OperationType.UPDATE);
-        RecordData before = dataChangeEvent2.before();
-        RecordData after = dataChangeEvent2.after();
-        assertThat(before.getString(0).toString()).isEqualTo("106");
-        assertThat(before.getString(1).toString()).isEqualTo("hammer");
-        assertThat(before.getString(2).toString()).isEmpty();
-        assertThat(before.getString(3).toString()).isEqualTo("1.0");
-        assertThat(before.getString(4).toString()).isEqualTo("val2");
-        assertThat(after.getString(0).toString()).isEqualTo("106");
-        assertThat(after.getString(1).toString()).isEqualTo("hammer");
-        assertThat(after.getString(2).toString()).isEqualTo("18oz carpenter hammer");
-        assertThat(after.getString(3).toString()).isEqualTo("1.0");
-        assertThat(after.getString(4).toString()).isEqualTo("val0");
+        assertThat(actualReadableEvents).isEqualTo(expected);
     }
 
     @Test
@@ -395,14 +549,13 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 new EventTypeInfo())
                         .executeAndCollect();
 
-        Thread.sleep(10_000);
         int expectedSize = 6;
         Schema expectedSchema =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
-                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .physicalColumn("weight", DataTypes.STRING())
                         .primaryKey("id")
                         .build();
         List<Event> actual = fetchResults(events, expectedSize);
@@ -411,27 +564,171 @@ public class KafkaDataSourceITCase extends TestLogger {
         CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
         assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
 
-        List<String> expectedDataChangeEvents =
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
+        List<String> expected =
                 Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` STRING NOT NULL,`name` STRING,`description` STRING,`weight` STRING}, primaryKeys=id, options=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+        assertThat(actualReadableEvents).isEqualTo(expected);
+    }
 
-        List<RecordData.FieldGetter> fieldGetters =
-                IntStream.range(0, expectedSchema.getColumnCount())
-                        .mapToObj(
-                                i ->
-                                        RecordData.createFieldGetter(
-                                                expectedSchema.getColumnDataTypes().get(i), i))
-                        .collect(Collectors.toList());
+    @Test
+    @Timeout(120)
+    public void testCanalJsonStaticInferenceStrategy() throws Exception {
+        // prepare data for initializing schema
+        prepareData(
+                Arrays.asList(
+                        "{\"data\":[{\"id\":\"999\"}],\"database\":\"inventory\",\"table\":\"products\",\"old\":null,\"pkNames\":[\"id\"],\"type\":\"INSERT\"}",
+                        "{\"data\":[{\"id\":\"1000\",\"name\":\"test\",\"weight\":1.0}],\"database\":\"inventory\",\"table\":\"products\",\"old\":null,\"pkNames\":[\"id\"],\"type\":\"INSERT\"}"));
 
-        for (int i = 1; i < expectedSize; i++) {
-            assertThat(actual.get(i)).isInstanceOf(DataChangeEvent.class);
-            assertThat(TestUtil.convertEventToStr(actual.get(i), fieldGetters))
-                    .isEqualTo(expectedDataChangeEvents.get(i - 1));
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "canal-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "latest-offset");
+        config.put(SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY.key(), "static");
+        // use the latest one record for parsing initial schema
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "1");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        prepareData(readLines("canal-data-schema-change.txt"));
+
+        int expectedSize = 6;
+        Schema expectedSchema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.STRING().notNull())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
+                        .primaryKey("id")
+                        .build();
+
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        assertThat(actual.get(0)).isInstanceOf(CreateTableEvent.class);
+        CreateTableEvent createTableEvent = (CreateTableEvent) actual.get(0);
+        assertThat(createTableEvent.getSchema()).isEqualTo(expectedSchema);
+
+        List<String> actualReadableEvents = new ArrayList<>();
+        actual.forEach(
+                event ->
+                        actualReadableEvents.add(
+                                TestUtil.convertEventToStr(event, expectedSchema)));
+
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` STRING NOT NULL,`name` STRING,`weight` DOUBLE}, primaryKeys=id, options=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, null], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, 3.0], after=[3, test3, 3.14], op=UPDATE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
+    }
+
+    @Test
+    @Timeout(120)
+    public void testCanalJsonContinuousInferenceStrategy() throws Exception {
+        // prepare data for initializing schema
+        prepareData(
+                Collections.singletonList(
+                        "{\"data\":[{\"id\":\"999\"}],\"database\":\"inventory\",\"table\":\"products\",\"old\":null,\"pkNames\":[\"id\"],\"type\":\"INSERT\"}"));
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "canal-json");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "latest-offset");
+        config.put(SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY.key(), "continuous");
+        config.put(KafkaDataSourceOptions.SCAN_MAX_PRE_FETCH_RECORDS.key(), "1");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        Thread.sleep(10_000);
+        prepareData(readLines("canal-data-schema-change.txt"));
+
+        int expectedSize = 10;
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        Schema expectedSchema = Schema.newBuilder().build();
+        List<String> actualReadableEvents = new ArrayList<>();
+        for (Event event : actual) {
+            if (event instanceof SchemaChangeEvent) {
+                expectedSchema =
+                        SchemaUtils.applySchemaChangeEvent(
+                                expectedSchema, (SchemaChangeEvent) event);
+            }
+            actualReadableEvents.add(TestUtil.convertEventToStr(event, expectedSchema));
         }
+
+        List<String> expected =
+                Arrays.asList(
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` STRING NOT NULL}, primaryKeys=id, options=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`name` STRING, position=AFTER, existedColumnName=id}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1], op=INSERT, meta=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`description` STRING, position=AFTER, existedColumnName=name}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2], op=INSERT, meta=()}",
+                        "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`weight` BIGINT, position=AFTER, existedColumnName=description}]}",
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
+                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=STRING}, oldTypeMapping={weight=BIGINT}}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+
+        assertThat(actualReadableEvents).isEqualTo(expected);
     }
 
     private void prepareData(List<String> values) {

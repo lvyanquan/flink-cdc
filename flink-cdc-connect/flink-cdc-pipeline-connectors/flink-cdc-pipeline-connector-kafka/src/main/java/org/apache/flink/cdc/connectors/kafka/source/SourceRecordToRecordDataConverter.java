@@ -56,12 +56,12 @@ import static org.apache.flink.formats.common.TimeFormats.SQL_TIME_FORMAT;
 public class SourceRecordToRecordDataConverter implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private final Schema schema;
     private final TimestampFormat timestampFormat;
+    private final RowDataToRecordDataConverter converter;
 
     public SourceRecordToRecordDataConverter(Schema schema, TimestampFormat timestampFormat) {
-        this.schema = schema;
         this.timestampFormat = timestampFormat;
+        this.converter = createConverter(schema.toRowDataType());
     }
 
     /** Convert RowData internal data to RecordData internal data. */
@@ -71,12 +71,11 @@ public class SourceRecordToRecordDataConverter implements Serializable {
 
     public RecordData convert(SourceRecord sourceRecord) throws Exception {
         return (RecordData)
-                createConverter(schema.toRowDataType())
-                        .convert(sourceRecord, sourceRecord.getSchema().toRowDataType());
+                converter.convert(sourceRecord, sourceRecord.getSchema().toRowDataType());
     }
 
     private RowDataToRecordDataConverter createConverter(DataType type) {
-        return wrapIntoNullableConverter(createNotNullConverter(type));
+        return wrapIntoNullableConverter(type, createNotNullConverter(type));
     }
 
     /** Creates a runtime converter which assuming input object is not null. */
@@ -131,7 +130,7 @@ public class SourceRecordToRecordDataConverter implements Serializable {
                     public Object convert(
                             Object obj, org.apache.flink.table.types.DataType dataType)
                             throws Exception {
-                        return convertToRecord((RowType) type, obj, dataType);
+                        return convertToRecord((RowType) type, obj);
                     }
                 };
             case ARRAY:
@@ -158,11 +157,20 @@ public class SourceRecordToRecordDataConverter implements Serializable {
     }
 
     protected Short convertToShort(Object obj, org.apache.flink.table.types.DataType dataType) {
+        if (obj instanceof Byte) {
+            return ((Byte) obj).shortValue();
+        } else if (obj instanceof Short) {
+            return (Short) obj;
+        }
         return Short.parseShort(obj.toString());
     }
 
     protected Integer convertToInt(Object obj, org.apache.flink.table.types.DataType dataType) {
-        if (obj instanceof Integer) {
+        if (obj instanceof Byte) {
+            return ((Byte) obj).intValue();
+        } else if (obj instanceof Short) {
+            return ((Short) obj).intValue();
+        } else if (obj instanceof Integer) {
             return (Integer) obj;
         } else if (obj instanceof Long) {
             return ((Long) obj).intValue();
@@ -174,6 +182,8 @@ public class SourceRecordToRecordDataConverter implements Serializable {
     protected Long convertToLong(Object obj, org.apache.flink.table.types.DataType dataType) {
         if (obj instanceof Byte) {
             return ((Byte) obj).longValue();
+        } else if (obj instanceof Short) {
+            return ((Short) obj).longValue();
         } else if (obj instanceof Integer) {
             return ((Integer) obj).longValue();
         } else if (obj instanceof Long) {
@@ -184,7 +194,15 @@ public class SourceRecordToRecordDataConverter implements Serializable {
     }
 
     protected Double convertToDouble(Object obj, org.apache.flink.table.types.DataType dataType) {
-        if (obj instanceof org.apache.flink.table.data.DecimalData) {
+        if (obj instanceof Byte) {
+            return ((Byte) obj).doubleValue();
+        } else if (obj instanceof Short) {
+            return ((Short) obj).doubleValue();
+        } else if (obj instanceof Integer) {
+            return ((Integer) obj).doubleValue();
+        } else if (obj instanceof Long) {
+            return ((Long) obj).doubleValue();
+        } else if (obj instanceof org.apache.flink.table.data.DecimalData) {
             org.apache.flink.table.data.DecimalData decimalData =
                     (org.apache.flink.table.data.DecimalData) obj;
             return decimalData.toBigDecimal().doubleValue();
@@ -198,7 +216,19 @@ public class SourceRecordToRecordDataConverter implements Serializable {
     }
 
     protected Float convertToFloat(Object obj, org.apache.flink.table.types.DataType dataType) {
-        if (obj instanceof Float) {
+        if (obj instanceof Byte) {
+            return ((Byte) obj).floatValue();
+        } else if (obj instanceof Short) {
+            return ((Short) obj).floatValue();
+        } else if (obj instanceof Integer) {
+            return ((Integer) obj).floatValue();
+        } else if (obj instanceof Long) {
+            return ((Long) obj).floatValue();
+        } else if (obj instanceof org.apache.flink.table.data.DecimalData) {
+            org.apache.flink.table.data.DecimalData decimalData =
+                    (org.apache.flink.table.data.DecimalData) obj;
+            return decimalData.toBigDecimal().floatValue();
+        } else if (obj instanceof Float) {
             return (Float) obj;
         } else if (obj instanceof Double) {
             return ((Double) obj).floatValue();
@@ -360,9 +390,7 @@ public class SourceRecordToRecordDataConverter implements Serializable {
         }
     }
 
-    protected RecordData convertToRecord(
-            RowType rowType, Object obj, org.apache.flink.table.types.DataType dataType)
-            throws Exception {
+    protected RecordData convertToRecord(RowType rowType, Object obj) throws Exception {
         RowDataToRecordDataConverter[] fieldConverters =
                 rowType.getFields().stream()
                         .map(DataField::getType)
@@ -395,27 +423,15 @@ public class SourceRecordToRecordDataConverter implements Serializable {
             } else {
                 Object fieldValue = fieldGetters[index].getFieldOrNull(sourceRecord.getRow());
                 Object convertedFiled =
-                        convertField(fieldConverters[i], fieldValue, givenDataTypes.get(index));
+                        fieldConverters[i].convert(fieldValue, givenDataTypes.get(index));
                 fields[i] = convertedFiled;
             }
         }
         return generator.generate(fields);
     }
 
-    private static Object convertField(
-            RowDataToRecordDataConverter fieldConverter,
-            Object fieldValue,
-            org.apache.flink.table.types.DataType dataType)
-            throws Exception {
-        if (fieldValue == null) {
-            return null;
-        } else {
-            return fieldConverter.convert(fieldValue, dataType);
-        }
-    }
-
     private static RowDataToRecordDataConverter wrapIntoNullableConverter(
-            RowDataToRecordDataConverter converter) {
+            DataType cdcDataType, RowDataToRecordDataConverter converter) {
         return new RowDataToRecordDataConverter() {
 
             private static final long serialVersionUID = 1L;
@@ -424,6 +440,12 @@ public class SourceRecordToRecordDataConverter implements Serializable {
             public Object convert(Object obj, org.apache.flink.table.types.DataType dataType)
                     throws Exception {
                 if (obj == null) {
+                    if (!cdcDataType.isNullable()) {
+                        throw new IllegalArgumentException(
+                                String.format(
+                                        "Null value cannot be assigned to notnull data type %s.",
+                                        cdcDataType));
+                    }
                     return null;
                 }
                 return converter.convert(obj, dataType);

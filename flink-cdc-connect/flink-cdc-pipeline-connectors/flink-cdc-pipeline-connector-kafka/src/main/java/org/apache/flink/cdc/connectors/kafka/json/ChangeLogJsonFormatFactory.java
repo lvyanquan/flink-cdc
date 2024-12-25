@@ -21,16 +21,22 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.event.Event;
-import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonDeserializationSchema;
+import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
+import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonContinuousDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonSerializationSchema;
-import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonStaticDeserializationSchema;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonContinuousDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonSerializationSchema;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonStaticDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.formats.common.TimestampFormat;
 
 import java.time.ZoneId;
+
+import static org.apache.flink.cdc.common.inference.SchemaInferenceStrategy.CONTINUOUS;
+import static org.apache.flink.cdc.common.inference.SchemaInferenceStrategy.STATIC;
 
 /**
  * Format factory for providing configured instances of {@link SerializationSchema} to convert
@@ -111,7 +117,10 @@ public class ChangeLogJsonFormatFactory {
      * @return The configured instance of {@link SchemaAwareDeserializationSchema}.
      */
     public static SchemaAwareDeserializationSchema<Event> createDeserializationSchema(
-            Configuration formatOptions, JsonSerializationType type, ZoneId zoneId) {
+            SchemaInferenceStrategy schemaInferenceStrategy,
+            Configuration formatOptions,
+            JsonSerializationType type,
+            ZoneId zoneId) {
         TimestampFormat timestampFormat;
         boolean primitiveAsString;
         boolean ignoreParseErrors;
@@ -125,26 +134,51 @@ public class ChangeLogJsonFormatFactory {
                 ignoreParseErrors =
                         formatOptions.get(DebeziumJsonFormatOptions.IGNORE_PARSE_ERRORS);
                 boolean schemaInclude = formatOptions.get(DebeziumJsonFormatOptions.SCHEMA_INCLUDE);
-                return new DebeziumJsonDeserializationSchema(
-                        schemaInclude,
-                        ignoreParseErrors,
-                        primitiveAsString,
-                        timestampFormat,
-                        zoneId);
+                if (schemaInferenceStrategy == CONTINUOUS) {
+                    return new DebeziumJsonContinuousDeserializationSchema(
+                            schemaInclude,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else if (schemaInferenceStrategy == STATIC) {
+                    return new DebeziumJsonStaticDeserializationSchema(
+                            schemaInclude,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else {
+                    throw new IllegalArgumentException(
+                            "Unsupported schema inference strategy " + schemaInferenceStrategy);
+                }
             case CANAL_JSON:
-                String database = formatOptions.get(CanalJsonFormatOptions.DATABASE_INCLUDE);
-                String table = formatOptions.get(CanalJsonFormatOptions.TABLE_INCLUDE);
                 timestampFormat = formatOptions.get(CanalJsonFormatOptions.TIMESTAMP_FORMAT);
                 primitiveAsString =
                         formatOptions.get(CanalJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
                 ignoreParseErrors = formatOptions.get(CanalJsonFormatOptions.IGNORE_PARSE_ERRORS);
-                return new CanalJsonDeserializationSchema(
-                        database,
-                        table,
-                        ignoreParseErrors,
-                        primitiveAsString,
-                        timestampFormat,
-                        zoneId);
+                String database = formatOptions.get(CanalJsonFormatOptions.DATABASE_INCLUDE);
+                String table = formatOptions.get(CanalJsonFormatOptions.TABLE_INCLUDE);
+                if (schemaInferenceStrategy == CONTINUOUS) {
+                    return new CanalJsonContinuousDeserializationSchema(
+                            database,
+                            table,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else if (schemaInferenceStrategy == STATIC) {
+                    return new CanalJsonStaticDeserializationSchema(
+                            database,
+                            table,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else {
+                    throw new IllegalArgumentException(
+                            "Unsupported schema inference strategy " + schemaInferenceStrategy);
+                }
             default:
                 throw new IllegalArgumentException("UnSupport JsonDeserializationType of " + type);
         }

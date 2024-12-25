@@ -23,6 +23,7 @@ import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.composer.utils.FactoryDiscoveryUtils;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonContinuousDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.streaming.connectors.kafka.config.StartupMode;
@@ -51,6 +52,7 @@ public class KafkaDataSourceFactoryTest {
                         ImmutableMap.<String, String>builder()
                                 .put("properties.bootstrap.servers", "test")
                                 .put("scan.startup.mode", "latest-offset")
+                                .put("schema.inference.strategy", "continuous")
                                 .put("debezium-json.schema-include", "true")
                                 .put("topic", "test-topic")
                                 .build());
@@ -185,8 +187,8 @@ public class KafkaDataSourceFactoryTest {
                 kafkaDataSource.getValueDeserialization();
         Assertions.assertThat(valueDeserialization)
                 .isInstanceOf(DebeziumJsonDeserializationSchema.class);
-        DebeziumJsonDeserializationSchema deserializationSchema =
-                (DebeziumJsonDeserializationSchema) valueDeserialization;
+        DebeziumJsonContinuousDeserializationSchema deserializationSchema =
+                (DebeziumJsonContinuousDeserializationSchema) valueDeserialization;
         Assertions.assertThat(deserializationSchema.isSchemaInclude()).isTrue();
         Assertions.assertThat(deserializationSchema.isIgnoreParseErrors()).isTrue();
 

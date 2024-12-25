@@ -29,7 +29,6 @@ import org.apache.flink.formats.common.TimestampFormat;
 public class TableSchemaAndConverter {
 
     private final Schema schema;
-
     private final SourceRecordToRecordDataConverter converter;
 
     public TableSchemaAndConverter(Schema schema, SourceRecordToRecordDataConverter converter) {

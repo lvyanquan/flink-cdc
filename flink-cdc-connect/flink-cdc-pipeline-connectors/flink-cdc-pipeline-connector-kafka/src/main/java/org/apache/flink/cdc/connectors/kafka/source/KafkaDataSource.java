@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.common.source.EventSourceProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
@@ -49,9 +50,11 @@ import java.util.stream.Collectors;
 /** A {@link DataSource} for "Kafka" connector. */
 public class KafkaDataSource implements DataSource {
 
+    private final SchemaInferenceStrategy schemaInferenceStrategy;
     private final SchemaAwareDeserializationSchema<Event> valueDeserialization;
     private final RecordSchemaParser recordSchemaParser;
     private final int maxFetchRecord;
+    private final boolean isParallelMetadataSource;
     private final List<String> topics;
     private final Pattern topicPattern;
     private final Properties kafkaProperties;
@@ -63,9 +66,11 @@ public class KafkaDataSource implements DataSource {
     private final long boundedTimestampMillis;
 
     public KafkaDataSource(
+            SchemaInferenceStrategy schemaInferenceStrategy,
             SchemaAwareDeserializationSchema<Event> valueDeserialization,
             RecordSchemaParser recordSchemaParser,
             int maxFetchRecord,
+            boolean isParallelMetadataSource,
             List<String> topics,
             Pattern topicPattern,
             Properties kafkaProperties,
@@ -75,9 +80,11 @@ public class KafkaDataSource implements DataSource {
             BoundedMode boundedMode,
             Map<KafkaTopicPartition, Long> specificBoundedOffsets,
             long boundedTimestampMillis) {
+        this.schemaInferenceStrategy = schemaInferenceStrategy;
         this.valueDeserialization = valueDeserialization;
         this.recordSchemaParser = recordSchemaParser;
         this.maxFetchRecord = maxFetchRecord;
+        this.isParallelMetadataSource = isParallelMetadataSource;
         this.topics = topics;
         this.topicPattern = topicPattern;
         this.kafkaProperties =
@@ -159,6 +166,7 @@ public class KafkaDataSource implements DataSource {
         }
 
         kafkaSourceBuilder
+                .setSchemaInferenceStrategy(schemaInferenceStrategy)
                 .setRecordSchemaParser(recordSchemaParser)
                 .setMaxFetchRecords(maxFetchRecord)
                 .setProperties(kafkaProperties)
@@ -174,6 +182,11 @@ public class KafkaDataSource implements DataSource {
         // this method is never used now
         throw new UnsupportedOperationException(
                 "Kafka data source does not support getMetadataAccessor now.");
+    }
+
+    @Override
+    public boolean isParallelMetadataSource() {
+        return isParallelMetadataSource;
     }
 
     private OffsetResetStrategy getResetStrategy(String offsetResetConfig) {

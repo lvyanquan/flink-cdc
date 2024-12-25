@@ -50,12 +50,15 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /** Parse one kafka record with canal json format to get {@link TableId} and {@link Schema}. */
 public class CanalJsonSchemaParser implements RecordSchemaParser {
@@ -68,11 +71,20 @@ public class CanalJsonSchemaParser implements RecordSchemaParser {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private final Pattern databasePattern;
+    private final Pattern tablePattern;
     private final JsonRowDataDeserializationSchema jsonDeserializer;
     private final JsonToSourceRecordConverter jsonToSourceRecordConverter;
 
     public CanalJsonSchemaParser(
-            boolean primitiveAsString, TimestampFormat timestampFormat, ZoneId zoneId) {
+            @Nullable String database,
+            @Nullable String table,
+            boolean primitiveAsString,
+            TimestampFormat timestampFormat,
+            ZoneId zoneId) {
+        this.databasePattern = database == null ? null : Pattern.compile(database);
+        this.tablePattern = table == null ? null : Pattern.compile(table);
+
         objectMapper.configure(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.mappedFeature(), true);
 
         final RowType jsonRowType = createJsonRowType();
@@ -128,6 +140,12 @@ public class CanalJsonSchemaParser implements RecordSchemaParser {
             }
             String database = databaseNode.asText();
             String table = tableNode.asText();
+            if (databasePattern != null && !databasePattern.matcher(database).matches()) {
+                return Optional.empty();
+            }
+            if (tablePattern != null && !tablePattern.matcher(table).matches()) {
+                return Optional.empty();
+            }
             TableId tableId = TableId.tableId(database, table);
 
             final GenericRowData row = (GenericRowData) jsonDeserializer.deserialize(message);

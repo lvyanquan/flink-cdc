@@ -39,7 +39,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Tests for {@link CanalJsonSchemaParser}. */
 public class CanalJsonSchemaParserTest {
     public CanalJsonSchemaParser schemaParser =
-            new CanalJsonSchemaParser(false, TimestampFormat.SQL, ZoneId.systemDefault());
+            new CanalJsonSchemaParser(
+                    null, null, false, TimestampFormat.SQL, ZoneId.systemDefault());
 
     @BeforeEach
     public void before() throws Exception {
@@ -70,7 +71,7 @@ public class CanalJsonSchemaParserTest {
 
         Schema schema1 =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
                         .physicalColumn("weight", DataTypes.STRING())
@@ -79,7 +80,7 @@ public class CanalJsonSchemaParserTest {
                         .build();
         Schema schema2 =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
                         .physicalColumn("weight", DataTypes.STRING())
@@ -109,7 +110,8 @@ public class CanalJsonSchemaParserTest {
     @Test
     public void testPrimitiveAsString() throws Exception {
         CanalJsonSchemaParser schemaParserPrimitiveAsString =
-                new CanalJsonSchemaParser(true, TimestampFormat.SQL, ZoneId.systemDefault());
+                new CanalJsonSchemaParser(
+                        null, null, true, TimestampFormat.SQL, ZoneId.systemDefault());
         schemaParserPrimitiveAsString.open();
 
         String json =
@@ -132,7 +134,7 @@ public class CanalJsonSchemaParserTest {
                         + "}";
         Schema schema =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.BIGINT())
+                        .physicalColumn("id", DataTypes.BIGINT().notNull())
                         .physicalColumn("weight", DataTypes.DOUBLE())
                         .physicalColumn("date", DataTypes.DATE())
                         .physicalColumn("description", DataTypes.STRING())
@@ -140,7 +142,7 @@ public class CanalJsonSchemaParserTest {
                         .build();
         Schema schemaAllString =
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.STRING())
+                        .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("weight", DataTypes.STRING())
                         .physicalColumn("date", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())

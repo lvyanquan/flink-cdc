@@ -608,10 +608,25 @@ public class SchemaUtils {
         schemaSpec
                 .getColumns()
                 .forEach(
+                        col -> {
+                            DataType dataType = DataTypeUtils.fromFlinkDataType(col.getDataType());
+                            if (pkNames.contains(col.getName())) {
+                                builder.physicalColumn(col.getName(), dataType.notNull());
+                            } else {
+                                builder.physicalColumn(col.getName(), dataType);
+                            }
+                        });
+        return builder.build();
+    }
+
+    public static SchemaSpec convert(Schema schema) {
+        SchemaSpec.Builder builder = SchemaSpec.newBuilder();
+        schema.getColumns()
+                .forEach(
                         col ->
-                                builder.physicalColumn(
+                                builder.column(
                                         col.getName(),
-                                        DataTypeUtils.fromFlinkDataType(col.getDataType())));
+                                        DataTypeUtils.toFlinkDataType(col.getType())));
         return builder.build();
     }
 

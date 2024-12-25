@@ -60,5 +60,12 @@ public class DebeziumJsonFormatOptions {
                                     + "This option indicates the Debezium JSON data include the schema in the message or not. "
                                     + "Default is false.");
 
+    public static final ConfigOption<Boolean> DISTRIBUTED_TABLES =
+            key("distributed-tables")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether rows from a single table are stored across different partitions. If true, data from a single table can be emitted from multiple source subtasks.");
+
     private DebeziumJsonFormatOptions() {}
 }

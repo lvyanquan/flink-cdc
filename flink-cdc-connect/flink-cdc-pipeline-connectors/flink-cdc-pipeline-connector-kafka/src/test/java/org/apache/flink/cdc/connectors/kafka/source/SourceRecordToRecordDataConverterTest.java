@@ -54,6 +54,7 @@ import java.util.Collections;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link SourceRecordToRecordDataConverter}. */
 public class SourceRecordToRecordDataConverterTest {
@@ -71,7 +72,7 @@ public class SourceRecordToRecordDataConverterTest {
                     false);
 
     @ParameterizedTest
-    @MethodSource("parameterProvider")
+    @MethodSource("parameterProviderForTestConvert")
     public void testConvert(
             org.apache.flink.table.types.DataType flinkDataType,
             Object flinkValue,
@@ -97,7 +98,7 @@ public class SourceRecordToRecordDataConverterTest {
                 .isEqualTo(expectedValue);
     }
 
-    private static Stream<Arguments> parameterProvider() {
+    private static Stream<Arguments> parameterProviderForTestConvert() {
         LocalDate date = LocalDate.of(2024, 10, 14);
         LocalDateTime dateTime = LocalDateTime.of(2024, 10, 14, 10, 30, 59);
 
@@ -312,6 +313,80 @@ public class SourceRecordToRecordDataConverterTest {
                         DataTypes.STRING(), BinaryStringData.fromString("2024-10-14 10:30:59Z")));
     }
 
+    @ParameterizedTest
+    @MethodSource("parameterProviderForTestIllegalConvert")
+    public void testIllegalConvert(
+            org.apache.flink.table.types.DataType flinkDataType,
+            Object flinkValue,
+            DataType cdcDataType) {
+        String fieldName = "f";
+        Schema schema = Schema.newBuilder().physicalColumn(fieldName, cdcDataType).build();
+        SourceRecordToRecordDataConverter converter =
+                new SourceRecordToRecordDataConverter(schema, timestampFormat);
+
+        GenericRowData rowData = GenericRowData.of(flinkValue);
+        RowType rowType =
+                (RowType)
+                        org.apache.flink.table.api.DataTypes.ROW(
+                                        org.apache.flink.table.api.DataTypes.FIELD(
+                                                fieldName, flinkDataType))
+                                .getLogicalType();
+        SchemaSpec schemaSpec = SchemaSpec.fromRowType(rowType);
+        SourceRecord sourceRecord = new SourceRecord(tablePath, schemaSpec, rowData);
+
+        assertThatThrownBy(() -> converter.convert(sourceRecord));
+    }
+
+    private static Stream<Arguments> parameterProviderForTestIllegalConvert() {
+        return Stream.of(
+                // convert value with wider type to narrow type
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.TINYINT()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.SMALLINT()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.INT()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.BIGINT()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.DECIMAL(8, 2)),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.FLOAT()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        StringData.fromString("str"),
+                        DataTypes.DOUBLE()),
+                // convert null value for notnull data type
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.INT(),
+                        null,
+                        DataTypes.INT().notNull()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        null,
+                        DataTypes.STRING().notNull()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.STRING(),
+                        null,
+                        DataTypes.INT().notNull()),
+                Arguments.of(
+                        org.apache.flink.table.api.DataTypes.INT(),
+                        null,
+                        DataTypes.STRING().notNull()));
+    }
+
     @Test
     public void testConvertFromJsonToString() throws Exception {
         Schema schema =
@@ -353,6 +428,50 @@ public class SourceRecordToRecordDataConverterTest {
         assertThat(recordData.getString(6).toString()).isEqualTo("2024-10-12 22:00:30Z");
         assertThat(recordData.getString(7).toString()).isEqualTo("[1,2,3]");
         assertThat(recordData.getString(8).toString()).isEqualTo("{\"nested\":\"value\"}");
+    }
+
+    @Test
+    public void testConvertFromJson() throws Exception {
+        Schema schema =
+                Schema.newBuilder()
+                        .physicalColumn("bool", DataTypes.BOOLEAN())
+                        .physicalColumn("bigint", DataTypes.BIGINT())
+                        .physicalColumn("double", DataTypes.DOUBLE())
+                        .physicalColumn("string", DataTypes.STRING())
+                        .physicalColumn("date", DataTypes.DATE())
+                        .physicalColumn("time", DataTypes.TIME())
+                        .physicalColumn("timestamp", DataTypes.TIMESTAMP(3))
+                        .physicalColumn("timestamp_ltz", DataTypes.TIMESTAMP_LTZ(3))
+                        .build();
+        SourceRecordToRecordDataConverter converter =
+                new SourceRecordToRecordDataConverter(schema, timestampFormat);
+
+        String json =
+                "{"
+                        + "    \"bool\": true,"
+                        + "    \"bigint\": 23,"
+                        + "    \"double\": 34.23,"
+                        + "    \"string\": \"string value\","
+                        + "    \"date\": \"1970-01-02\","
+                        + "    \"time\": \"00:00:30\","
+                        + "    \"timestamp\": \"2024-10-12 22:00:30.111\","
+                        + "    \"timestamp_ltz\": \"1970-01-02 00:00:30.111Z\""
+                        + "}";
+        SourceRecord sourceRecord = getSourceRecordByJson(json);
+
+        RecordData recordData = converter.convert(sourceRecord);
+        assertThat(recordData.getBoolean(0)).isEqualTo(true);
+        assertThat(recordData.getLong(1)).isEqualTo(23L);
+        assertThat(recordData.getDouble(2)).isEqualTo(34.23);
+        assertThat(recordData.getString(3).toString()).isEqualTo("string value");
+        assertThat(recordData.getInt(4)).isEqualTo(1);
+        assertThat(recordData.getInt(5)).isEqualTo(30000);
+        assertThat(recordData.getTimestamp(6, 3))
+                .isEqualTo(
+                        TimestampData.fromLocalDateTime(
+                                LocalDateTime.of(2024, 10, 12, 22, 0, 30, 111000000)));
+        assertThat(recordData.getLocalZonedTimestampData(7, 3))
+                .isEqualTo(LocalZonedTimestampData.fromEpochMillis(86430111));
     }
 
     private SourceRecord getSourceRecordByJson(String json) throws IOException {

@@ -21,10 +21,13 @@ import org.apache.flink.cdc.common.configuration.ConfigOption;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
+import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
 import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
+import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParserFactory;
@@ -43,6 +46,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.flink.cdc.common.inference.SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY;
 import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPERTIES_PREFIX;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_BOOTSTRAP_SERVERS;
@@ -71,6 +75,16 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
 
     @Override
     public DataSource createDataSource(Context context) {
+        SchemaInferenceStrategy schemaInferenceStrategy =
+                context.getFactoryConfiguration().get(SCHEMA_INFERENCE_STRATEGY);
+        int maxFetchRecords = context.getFactoryConfiguration().get(SCAN_MAX_PRE_FETCH_RECORDS);
+        if (schemaInferenceStrategy == SchemaInferenceStrategy.STATIC && maxFetchRecords <= 0) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "%s must be greater than 0 if schema inference strategy is static.",
+                            SCAN_MAX_PRE_FETCH_RECORDS.key()));
+        }
+
         JsonSerializationType jsonSerializationType =
                 context.getFactoryConfiguration().get(VALUE_FORMAT);
 
@@ -93,12 +107,10 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                 helper.getFormatConfig(jsonSerializationType.toString());
         SchemaAwareDeserializationSchema<Event> valueDeserialization =
                 ChangeLogJsonFormatFactory.createDeserializationSchema(
-                        formatConfig, jsonSerializationType, zoneId);
+                        schemaInferenceStrategy, formatConfig, jsonSerializationType, zoneId);
         RecordSchemaParser recordSchemaParser =
                 RecordSchemaParserFactory.createRecordSchemaParser(
                         formatConfig, jsonSerializationType, zoneId);
-
-        int maxFetchRecords = context.getFactoryConfiguration().get(SCAN_MAX_PRE_FETCH_RECORDS);
 
         final Properties kafkaProperties = new Properties();
         Map<String, String> allOptions = context.getFactoryConfiguration().toMap();
@@ -130,9 +142,11 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         final BoundedOptions boundedOptions = getBoundedOptions(configuration);
 
         return new KafkaDataSource(
+                schemaInferenceStrategy,
                 valueDeserialization,
                 recordSchemaParser,
                 maxFetchRecords,
+                isParallelMetadataSource(formatConfig, jsonSerializationType),
                 getSourceTopics(configuration),
                 getSourceTopicPattern(configuration),
                 kafkaProperties,
@@ -159,6 +173,7 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
     @Override
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
+        options.add(SCHEMA_INFERENCE_STRATEGY);
         options.add(VALUE_FORMAT);
         options.add(TOPIC);
         options.add(TOPIC_PATTERN);
@@ -182,6 +197,20 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                     String.format(
                             "%s%s must be set for kafka.",
                             PROPERTIES_PREFIX, ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        }
+    }
+
+    private boolean isParallelMetadataSource(
+            org.apache.flink.cdc.common.configuration.Configuration formatOptions,
+            JsonSerializationType formatType) {
+        switch (formatType) {
+            case DEBEZIUM_JSON:
+                return formatOptions.get(DebeziumJsonFormatOptions.DISTRIBUTED_TABLES);
+            case CANAL_JSON:
+                return formatOptions.get(CanalJsonFormatOptions.DISTRIBUTED_TABLES);
+            default:
+                throw new IllegalArgumentException(
+                        "UnSupport JsonDeserializationType of " + formatType);
         }
     }
 }

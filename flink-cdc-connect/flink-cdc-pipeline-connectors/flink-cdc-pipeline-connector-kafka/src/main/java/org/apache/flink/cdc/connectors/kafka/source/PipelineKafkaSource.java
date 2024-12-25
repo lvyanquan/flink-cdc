@@ -24,6 +24,9 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
+import org.apache.flink.cdc.connectors.kafka.source.enumerator.PipelineKafkaSourceEnumState;
+import org.apache.flink.cdc.connectors.kafka.source.enumerator.PipelineKafkaSourceEnumStateSerializer;
 import org.apache.flink.cdc.connectors.kafka.source.enumerator.PipelineKafkaSourceEnumerator;
 import org.apache.flink.cdc.connectors.kafka.source.reader.PipelineKafkaRecordEmitter;
 import org.apache.flink.cdc.connectors.kafka.source.reader.PipelineKafkaSourceReader;
@@ -58,6 +61,7 @@ import java.util.function.Supplier;
  */
 public class PipelineKafkaSource extends KafkaSource<Event> {
 
+    private final SchemaInferenceStrategy schemaInferenceStrategy;
     private final RecordSchemaParser recordSchemaParser;
     private final int maxFetchRecords;
 
@@ -68,6 +72,7 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
             Boundedness boundedness,
             KafkaRecordDeserializationSchema<Event> deserializationSchema,
             Properties props,
+            SchemaInferenceStrategy schemaInferenceStrategy,
             RecordSchemaParser recordSchemaParser,
             int maxFetchRecords) {
         super(
@@ -77,6 +82,7 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 boundedness,
                 deserializationSchema,
                 props);
+        this.schemaInferenceStrategy = schemaInferenceStrategy;
         this.recordSchemaParser = recordSchemaParser;
         this.maxFetchRecords = maxFetchRecords;
     }
@@ -88,6 +94,11 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
     @Override
     public SimpleVersionedSerializer<KafkaPartitionSplit> getSplitSerializer() {
         return new PipelineKafkaPartitionSplitSerializer();
+    }
+
+    @Override
+    public SimpleVersionedSerializer<KafkaSourceEnumState> getEnumeratorCheckpointSerializer() {
+        return new PipelineKafkaSourceEnumStateSerializer();
     }
 
     @Override
@@ -107,7 +118,6 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                         return readerContext.getUserCodeClassLoader();
                     }
                 });
-        recordSchemaParser.open();
         final KafkaSourceReaderMetrics kafkaSourceReaderMetrics =
                 new KafkaSourceReaderMetrics(readerContext.metricGroup());
 
@@ -123,10 +133,7 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 recordEmitter,
                 toConfiguration(props),
                 readerContext,
-                kafkaSourceReaderMetrics,
-                recordSchemaParser,
-                maxFetchRecords,
-                props);
+                kafkaSourceReaderMetrics);
     }
 
     @Override
@@ -138,7 +145,9 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 stoppingOffsetsInitializer,
                 props,
                 enumContext,
-                boundedness);
+                boundedness,
+                maxFetchRecords,
+                recordSchemaParser);
     }
 
     @Override
@@ -153,6 +162,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 props,
                 enumContext,
                 boundedness,
-                checkpoint);
+                (PipelineKafkaSourceEnumState) checkpoint,
+                maxFetchRecords,
+                recordSchemaParser);
     }
 }

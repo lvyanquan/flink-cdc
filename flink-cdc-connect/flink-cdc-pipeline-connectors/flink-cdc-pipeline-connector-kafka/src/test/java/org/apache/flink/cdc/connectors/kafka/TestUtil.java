@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.schema.Schema;
+import org.apache.flink.cdc.common.utils.SchemaUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,8 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /** Test utility. */
 public class TestUtil {
@@ -43,16 +42,11 @@ public class TestUtil {
         return Files.readAllLines(path);
     }
 
-    public static List<RecordData.FieldGetter> getFieldGettersBySchema(Schema schema) {
-        return IntStream.range(0, schema.getColumnCount())
-                .mapToObj(i -> RecordData.createFieldGetter(schema.getColumnDataTypes().get(i), i))
-                .collect(Collectors.toList());
-    }
-
-    public static String convertEventToStr(Event event, List<RecordData.FieldGetter> fieldGetters) {
+    public static String convertEventToStr(Event event, Schema schema) {
         if (event instanceof SchemaChangeEvent) {
             return event.toString();
         } else if (event instanceof DataChangeEvent) {
+            List<RecordData.FieldGetter> fieldGetters = SchemaUtils.createFieldGetters(schema);
             DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
             return "DataChangeEvent{"
                     + "tableId="

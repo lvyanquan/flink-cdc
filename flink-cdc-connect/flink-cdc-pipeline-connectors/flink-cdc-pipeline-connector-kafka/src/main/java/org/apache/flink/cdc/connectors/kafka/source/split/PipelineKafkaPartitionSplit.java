@@ -23,19 +23,12 @@ import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplit;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /** A SourceSplit for a Kafka partition with table schemas. */
 public class PipelineKafkaPartitionSplit extends KafkaPartitionSplit {
 
     private final Map<TableId, Schema> tableSchemas;
-
-    public PipelineKafkaPartitionSplit(
-            TopicPartition tp, long startingOffset, long stoppingOffset) {
-        super(tp, startingOffset, stoppingOffset);
-        this.tableSchemas = new HashMap<>();
-    }
 
     public PipelineKafkaPartitionSplit(
             TopicPartition tp,

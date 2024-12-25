@@ -48,7 +48,10 @@ public class RecordSchemaParserFactory {
                 timestampFormat = formatOptions.get(CanalJsonFormatOptions.TIMESTAMP_FORMAT);
                 primitiveAsString =
                         formatOptions.get(CanalJsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
-                return new CanalJsonSchemaParser(primitiveAsString, timestampFormat, zoneId);
+                String database = formatOptions.get(CanalJsonFormatOptions.DATABASE_INCLUDE);
+                String table = formatOptions.get(CanalJsonFormatOptions.TABLE_INCLUDE);
+                return new CanalJsonSchemaParser(
+                        database, table, primitiveAsString, timestampFormat, zoneId);
             default:
                 throw new IllegalArgumentException("UnSupport JsonDeserializationType of " + type);
         }
