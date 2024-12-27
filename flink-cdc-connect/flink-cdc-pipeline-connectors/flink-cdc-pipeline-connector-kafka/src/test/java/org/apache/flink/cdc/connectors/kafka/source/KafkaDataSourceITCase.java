@@ -254,7 +254,7 @@ public class KafkaDataSourceITCase extends TestLogger {
                         .physicalColumn("id", DataTypes.BIGINT())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
-                        .physicalColumn("weight", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
                         .build();
 
         List<Event> actual = fetchResults(events, expectedSize);
@@ -270,12 +270,12 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 TestUtil.convertEventToStr(event, expectedSchema)));
         List<String> expected =
                 Arrays.asList(
-                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`description` STRING,`weight` STRING}, primaryKeys=, options=()}",
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` BIGINT,`name` STRING,`description` STRING,`weight` DOUBLE}, primaryKeys=, options=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
 
         assertThat(actualReadableEvents).isEqualTo(expected);
     }
@@ -424,8 +424,8 @@ public class KafkaDataSourceITCase extends TestLogger {
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2], op=INSERT, meta=()}",
                         "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`weight` BIGINT, position=AFTER, existedColumnName=description}]}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
-                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=STRING}, oldTypeMapping={weight=BIGINT}}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=DOUBLE}, oldTypeMapping={weight=BIGINT}}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
 
         assertThat(actualReadableEvents).isEqualTo(expected);
     }
@@ -555,7 +555,7 @@ public class KafkaDataSourceITCase extends TestLogger {
                         .physicalColumn("id", DataTypes.STRING().notNull())
                         .physicalColumn("name", DataTypes.STRING())
                         .physicalColumn("description", DataTypes.STRING())
-                        .physicalColumn("weight", DataTypes.STRING())
+                        .physicalColumn("weight", DataTypes.DOUBLE())
                         .primaryKey("id")
                         .build();
         List<Event> actual = fetchResults(events, expectedSize);
@@ -571,12 +571,12 @@ public class KafkaDataSourceITCase extends TestLogger {
                                 TestUtil.convertEventToStr(event, expectedSchema)));
         List<String> expected =
                 Arrays.asList(
-                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` STRING NOT NULL,`name` STRING,`description` STRING,`weight` STRING}, primaryKeys=id, options=()}",
+                        "CreateTableEvent{tableId=inventory.products, schema=columns={`id` STRING NOT NULL,`name` STRING,`description` STRING,`weight` DOUBLE}, primaryKeys=id, options=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[0, test0, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[1, test1, null, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2, null], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+                        "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3.0], op=INSERT, meta=()}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
         assertThat(actualReadableEvents).isEqualTo(expected);
     }
 
@@ -725,8 +725,8 @@ public class KafkaDataSourceITCase extends TestLogger {
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[2, test2, description for test2], op=INSERT, meta=()}",
                         "AddColumnEvent{tableId=inventory.products, addedColumns=[ColumnWithPosition{column=`weight` BIGINT, position=AFTER, existedColumnName=description}]}",
                         "DataChangeEvent{tableId=inventory.products, before=[], after=[3, test3, description for test3, 3], op=INSERT, meta=()}",
-                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=STRING}, oldTypeMapping={weight=BIGINT}}",
-                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
+                        "AlterColumnTypeEvent{tableId=inventory.products, typeMapping={weight=DOUBLE}, oldTypeMapping={weight=BIGINT}}",
+                        "DataChangeEvent{tableId=inventory.products, before=[3, test3, description for test3, 3.0], after=[3, test3, description for test3 update, 3.14], op=UPDATE, meta=()}");
 
         assertThat(actualReadableEvents).isEqualTo(expected);
     }
