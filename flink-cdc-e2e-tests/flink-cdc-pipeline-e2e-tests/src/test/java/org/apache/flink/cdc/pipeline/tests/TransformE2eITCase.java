@@ -1165,7 +1165,7 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
         long endTimeout = System.currentTimeMillis() + timeout;
         while (System.currentTimeMillis() < endTimeout) {
             String stdout = taskManagerConsumer.toUtf8String();
-            if (stdout.contains(event + "\n")) {
+            if (stdout.contains(event)) {
                 result = true;
                 break;
             }
@@ -1182,12 +1182,39 @@ public class TransformE2eITCase extends PipelineTestEnvironment {
 
     private int validateTemporaryRecords() {
         int validRecordCount = 0;
-        for (String line : taskManagerConsumer.toUtf8String().split("\n")) {
+        for (String line :
+                splitNewLinesAgainstVvrQuirk(taskManagerConsumer.toUtf8String()).split("\n")) {
             if (extractDataLines(line)) {
                 validRecordCount++;
             }
         }
         return validRecordCount;
+    }
+
+    /**
+     * When running testcases with VVR Flink, printing the new line character is not atomic and
+     * might mix together. Flink OSS does not have this quirk. <br>
+     * For example, printing {@code "Foo\n"}, {@code "Bar\n"}, and {@code "Baz\n"} in multiple
+     * parallelism might cause the following output: {@code "FooBarBaz\n\n\n}, instead of
+     * strictly-atomic {@code "Foo\nBar\nBaz\n"}. <br>
+     * Since we're trying to extract DataChangeEvents from output lines, lines that were pasted
+     * together is not acceptable. This method will try to recover them by inserting newlines
+     * between records.
+     */
+    private String splitNewLinesAgainstVvrQuirk(String rawOutput) {
+        if (parallelism == 1) {
+            // Things will not go wrong in single-parallelism mode.
+            return rawOutput;
+        }
+        for (int i = 0; i < parallelism; i++) {
+            // There must be a newline before {SubTaskId}> DataChangeEvent prefix.
+            // Insert one if it's not.
+            rawOutput =
+                    rawOutput.replace(
+                            String.format("}%d> DataChangeEvent{", i),
+                            String.format("}\n%d> DataChangeEvent{", i));
+        }
+        return rawOutput;
     }
 
     private void waitForTemporaryRecords(int expectedRecords, long timeout) throws Exception {

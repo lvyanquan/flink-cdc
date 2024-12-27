@@ -33,6 +33,8 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container.ExecResult;
@@ -58,11 +60,17 @@ import java.util.stream.Stream;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Test environment running pipeline job on Flink containers. */
+@RunWith(Parameterized.class)
 public abstract class PipelineTestEnvironment extends TestLogger {
 
     private static final Logger LOG = LoggerFactory.getLogger(PipelineTestEnvironment.class);
 
-    public Integer parallelism = 1;
+    @Parameterized.Parameter public Integer parallelism;
+
+    @Parameterized.Parameters(name = "parallelism: {0}")
+    public static List<Integer> getParallelism() {
+        return Arrays.asList(1, 4);
+    }
 
     // ------------------------------------------------------------------------------------------
     // Flink Variables
