@@ -463,6 +463,8 @@ limitations under the License.
                         <exclude>
                             flink-cdc-connect/flink-cdc-source-connectors/flink-connector-db2-cdc/src/test/resources/db2_server/Dockerfile
                         </exclude>
+                        <!-- Aone release -->
+                        <exclude>antx.properties</exclude>
                     </excludes>
                 </configuration>
             </plugin>
