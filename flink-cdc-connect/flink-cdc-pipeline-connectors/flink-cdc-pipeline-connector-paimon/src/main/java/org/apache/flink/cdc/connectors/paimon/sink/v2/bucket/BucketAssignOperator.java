@@ -137,10 +137,14 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
         }
         Event event = streamRecord.getValue();
         if (event instanceof FlushEvent) {
-            output.collect(
-                    new StreamRecord<>(
-                            new BucketWrapperFlushEvent(
-                                    currentTaskNumber, ((FlushEvent) event).getSourceSubTaskId())));
+            for (int i = 0; i < totalTasksNumber; i++) {
+                output.collect(
+                        new StreamRecord<>(
+                                new BucketWrapperFlushEvent(
+                                        i,
+                                        ((FlushEvent) event).getSourceSubTaskId(),
+                                        currentTaskNumber)));
+            }
             return;
         }
 
@@ -206,9 +210,10 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
             schemaMaps.put(
                     createTableEvent.tableId(),
                     new TableSchemaInfo(createTableEvent.getSchema(), zoneId));
-            output.collect(
-                    new StreamRecord<>(
-                            new BucketWrapperChangeEvent(currentTaskNumber, (ChangeEvent) event)));
+            for (int i = 0; i < totalTasksNumber; i++) {
+                output.collect(
+                        new StreamRecord<>(new BucketWrapperChangeEvent(i, (ChangeEvent) event)));
+            }
         } else if (event instanceof SchemaChangeEvent) {
             String token =
                     schemaEvolutionClient.getLatestToken(((SchemaChangeEvent) event).tableId());
@@ -219,9 +224,11 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                             schemaMaps.get(schemaChangeEvent.tableId()).getSchema(),
                             schemaChangeEvent);
             schemaMaps.put(schemaChangeEvent.tableId(), new TableSchemaInfo(schema, zoneId));
-            output.collect(
-                    new StreamRecord<>(
-                            new BucketWrapperChangeEvent(currentTaskNumber, (ChangeEvent) event)));
+            // Broadcast SchemaChangeEvent.
+            for (int i = 0; i < totalTasksNumber; i++) {
+                output.collect(
+                        new StreamRecord<>(new BucketWrapperChangeEvent(i, (ChangeEvent) event)));
+            }
         }
     }
 

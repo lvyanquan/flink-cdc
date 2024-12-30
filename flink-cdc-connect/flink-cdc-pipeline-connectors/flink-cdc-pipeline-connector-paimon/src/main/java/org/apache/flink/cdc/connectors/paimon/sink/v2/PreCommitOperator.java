@@ -21,6 +21,7 @@ import org.apache.flink.api.common.state.OperatorStateStore;
 import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
@@ -39,7 +40,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /** An Operator to add checkpointId to MultiTableCommittable and generate CommittableSummary. */
@@ -140,19 +141,20 @@ public class PreCommitOperator
     }
 
     @Override
-    public void notifyCheckpointComplete(long checkpointId) throws Exception {
+    public void snapshotState(StateSnapshotContext context) throws Exception {
+        super.snapshotState(context);
+        long checkpointId = context.getCheckpointId();
         if (!multiTableCommittables.isEmpty()) {
             multiTableCommittables.forEach(
-                    (multiTableCommittable) -> {
-                        LOGGER.debug(
-                                "Try to commit: "
-                                        + multiTableCommittable
-                                        + " in checkpoint "
-                                        + checkpointId);
-                    });
+                    (multiTableCommittable) ->
+                            LOGGER.debug(
+                                    "Try to commit: "
+                                            + multiTableCommittable
+                                            + " in checkpoint "
+                                            + checkpointId));
             WrappedManifestCommittable wrappedManifestCommittable =
                     storeMultiCommitter.combine(checkpointId, checkpointId, multiTableCommittables);
-            storeMultiCommitter.commit(Arrays.asList(wrappedManifestCommittable));
+            storeMultiCommitter.commit(Collections.singletonList(wrappedManifestCommittable));
             LOGGER.debug("Succeeded checkpoint " + checkpointId);
             multiTableCommittables.clear();
         }

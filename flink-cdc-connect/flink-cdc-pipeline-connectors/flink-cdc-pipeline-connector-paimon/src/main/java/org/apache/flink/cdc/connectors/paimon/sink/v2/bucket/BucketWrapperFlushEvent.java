@@ -25,10 +25,16 @@ import java.util.Objects;
 public class BucketWrapperFlushEvent extends FlushEvent implements BucketWrapper {
 
     private final int bucket;
+    private final int bucketAssignTaskId;
 
-    public BucketWrapperFlushEvent(int bucket, int subTaskId) {
-        super(subTaskId);
+    public BucketWrapperFlushEvent(int bucket, int sourceSubTaskId, int bucketAssignTaskId) {
+        super(sourceSubTaskId);
         this.bucket = bucket;
+        this.bucketAssignTaskId = bucketAssignTaskId;
+    }
+
+    public int getBucketAssignTaskId() {
+        return bucketAssignTaskId;
     }
 
     @Override
@@ -48,18 +54,22 @@ public class BucketWrapperFlushEvent extends FlushEvent implements BucketWrapper
             return false;
         }
         BucketWrapperFlushEvent that = (BucketWrapperFlushEvent) o;
-        return bucket == that.bucket;
+        return bucket == that.bucket
+                && bucketAssignTaskId == that.bucketAssignTaskId
+                && getSourceSubTaskId() == that.getSourceSubTaskId();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), bucket);
+        return Objects.hash(super.hashCode(), bucket, bucketAssignTaskId);
     }
 
     @Override
     public String toString() {
         return "BucketWrapperFlushEvent{subTaskId="
                 + getSourceSubTaskId()
+                + ", bucketAssignTaskId="
+                + bucketAssignTaskId
                 + ", bucket="
                 + bucket
                 + '}';
