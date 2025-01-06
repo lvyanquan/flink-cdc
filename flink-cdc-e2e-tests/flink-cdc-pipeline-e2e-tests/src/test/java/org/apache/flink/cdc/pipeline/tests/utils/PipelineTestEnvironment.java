@@ -28,6 +28,9 @@ import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.util.TestLogger;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import com.github.dockerjava.api.model.Volume;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -37,16 +40,22 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.output.FrameConsumerResultCallback;
+import org.testcontainers.containers.output.OutputFrame;
 import org.testcontainers.containers.output.ToStringConsumer;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.MountableFile;
 
 import javax.annotation.Nullable;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -103,6 +112,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
 
     protected GenericContainer<?> jobManager;
     protected GenericContainer<?> taskManager;
+    protected Volume sharedVolume = new Volume("/tmp/shared");
 
     protected ToStringConsumer jobManagerConsumer;
     protected ToStringConsumer taskManagerConsumer;
@@ -127,7 +137,12 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                         .withNetworkAliases(INTER_CONTAINER_JM_ALIAS)
                         .withExposedPorts(JOB_MANAGER_REST_PORT)
                         .withEnv("FLINK_PROPERTIES", FLINK_PROPERTIES)
+                        .withCreateContainerCmdModifier(cmd -> cmd.withVolumes(sharedVolume))
                         .withLogConsumer(jobManagerConsumer);
+        Startables.deepStart(Stream.of(jobManager)).join();
+        runInContainerAsRoot(jobManager, "chmod", "0777", "-R", sharedVolume.toString());
+        LOG.info("JobManager is started.");
+
         taskManagerConsumer = new ToStringConsumer();
         taskManager =
                 new GenericContainer<>(getFlinkDockerImageTag())
@@ -137,11 +152,11 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                         .withNetworkAliases(INTER_CONTAINER_TM_ALIAS)
                         .withEnv("FLINK_PROPERTIES", FLINK_PROPERTIES)
                         .dependsOn(jobManager)
+                        .withVolumesFrom(jobManager, BindMode.READ_WRITE)
                         .withLogConsumer(taskManagerConsumer);
-
-        Startables.deepStart(Stream.of(jobManager)).join();
         Startables.deepStart(Stream.of(taskManager)).join();
-        LOG.info("Containers are started.");
+        runInContainerAsRoot(taskManager, "chmod", "0777", "-R", sharedVolume.toString());
+        LOG.info("TaskManager is started.");
     }
 
     @After
@@ -255,5 +270,29 @@ public abstract class PipelineTestEnvironment extends TestLogger {
 
     protected String getFlinkDockerImageTag() {
         return "reg.docker.alibaba-inc.com/ververica/vvr:1.17-vvr-8.0-SNAPSHOT-vvp-hadoop3-20240531015410_3503";
+    }
+
+    private void runInContainerAsRoot(GenericContainer<?> container, String... command)
+            throws InterruptedException {
+        ToStringConsumer stdoutConsumer = new ToStringConsumer();
+        ToStringConsumer stderrConsumer = new ToStringConsumer();
+        DockerClient dockerClient = DockerClientFactory.instance().client();
+        ExecCreateCmdResponse execCreateCmdResponse =
+                dockerClient
+                        .execCreateCmd(container.getContainerId())
+                        .withUser("root")
+                        .withCmd(command)
+                        .exec();
+        FrameConsumerResultCallback callback = new FrameConsumerResultCallback();
+        callback.addConsumer(OutputFrame.OutputType.STDOUT, stdoutConsumer);
+        callback.addConsumer(OutputFrame.OutputType.STDERR, stderrConsumer);
+        dockerClient.execStartCmd(execCreateCmdResponse.getId()).exec(callback).awaitCompletion();
+    }
+
+    protected List<String> readLines(String resource) throws IOException {
+        final URL url = PipelineTestEnvironment.class.getClassLoader().getResource(resource);
+        assert url != null;
+        Path path = new File(url.getFile()).toPath();
+        return Files.readAllLines(path);
     }
 }
