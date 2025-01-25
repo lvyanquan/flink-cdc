@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.flink.cdc.connectors.iceberg.sink;
 
 import org.apache.flink.cdc.common.event.AddColumnEvent;
@@ -12,11 +29,14 @@ import org.apache.flink.cdc.common.event.visitor.SchemaChangeEventVisitor;
 import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
 import org.apache.flink.cdc.common.exceptions.UnsupportedSchemaChangeEventException;
 import org.apache.flink.cdc.common.schema.Column;
+import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
+import org.apache.flink.cdc.connectors.iceberg.sink.utils.IcebergUtils;
 
-import org.apache.flink.shaded.guava32.com.google.common.collect.Sets;
+import org.apache.flink.shaded.guava31.com.google.common.collect.Sets;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -26,31 +46,34 @@ import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.flink.FlinkSchemaUtil;
 import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.apache.flink.cdc.common.utils.Preconditions.checkNotNull;
 
+/** A {@link MetadataApplier} for Apache Iceberg. */
 public class IcebergMetadataApplier implements MetadataApplier {
 
     private static final Logger LOG = LoggerFactory.getLogger(IcebergMetadataApplier.class);
 
-    // Catalog is unSerializable.
     private transient Catalog catalog;
 
     private final Map<String, String> catalogOptions;
 
+    // currently, we set table options for all tables using the same options.
+    private final Map<String, String> tableOptions;
+
     private final Map<TableId, List<String>> partitionMaps;
 
     private Set<SchemaChangeEventType> enabledSchemaEvolutionTypes;
-
-    // currently, we set table options for all tables using the same options.
-    private final Map<String, String> tableOptions;
 
     public IcebergMetadataApplier(Map<String, String> catalogOptions) {
         this.catalogOptions = catalogOptions;
@@ -73,7 +96,9 @@ public class IcebergMetadataApplier implements MetadataApplier {
     public void applySchemaChange(SchemaChangeEvent schemaChangeEvent)
             throws SchemaEvolveException {
         if (catalog == null) {
-            catalog = CatalogUtil.buildIcebergCatalog("cdc-iceberg-catalog", catalogOptions, null);
+            catalog =
+                    CatalogUtil.buildIcebergCatalog(
+                            "cdc-iceberg-catalog", catalogOptions, new Configuration());
         }
         SchemaChangeEventVisitor.visit(
                 schemaChangeEvent,
@@ -107,35 +132,37 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyCreateTable(CreateTableEvent event) {
         try {
-            Namespace namespace = Namespace.of(event.tableId().getNamespace());
             TableIdentifier tableIdentifier =
-                    TableIdentifier.of(namespace, event.tableId().getSchemaName());
+                    TableIdentifier.of(
+                            event.tableId().getSchemaName(), event.tableId().getTableName());
+
+            // Step1: Build Schema.
             org.apache.flink.cdc.common.schema.Schema cdcSchema = event.getSchema();
-            Table table = catalog.loadTable(tableIdentifier);
-            Schema icebergSchema = new Schema();
-            for (Column column : cdcSchema.getColumns()) {
-                table.updateSchema()
-                        .addColumn(
-                                column.getName(),
-                                FlinkSchemaUtil.convert(
-                                        DataTypeUtils.toFlinkDataType(column.getType())
-                                                .getLogicalType()),
-                                column.getComment());
+            List<Types.NestedField> columns = new ArrayList<>();
+            Set<Integer> identifierFieldIds = new HashSet<>();
+            for (int index = 0; index < event.getSchema().getColumnCount(); index++) {
+                columns.add(
+                        IcebergUtils.convertCDCColumnToIcebergField(
+                                index, (PhysicalColumn) cdcSchema.getColumns().get(index)));
+                if (cdcSchema.primaryKeys().contains(cdcSchema.getColumns().get(index).getName())) {
+                    identifierFieldIds.add(index);
+                }
             }
-            table.updateSchema().setIdentifierFields(cdcSchema.partitionKeys());
-            PartitionSpec spec = null;
+
+            // Step2: Build partition spec.
+            Schema icebergSchema = new Schema(columns, identifierFieldIds);
+            List<String> partitionColumns = cdcSchema.partitionKeys();
             if (partitionMaps.containsKey(event.tableId())) {
-                spec =
-                        PartitionSpec.builderFor(icebergSchema)
-                                .identity(String.join(",", partitionMaps.get(event.tableId())))
-                                .build();
-            } else if (cdcSchema.partitionKeys() != null && !cdcSchema.partitionKeys().isEmpty()) {
-                spec =
-                        PartitionSpec.builderFor(icebergSchema)
-                                .identity(String.join(",", cdcSchema.partitionKeys()))
-                                .build();
+                partitionColumns = partitionMaps.get(event.tableId());
             }
-            catalog.createTable(tableIdentifier, icebergSchema, spec, catalogOptions);
+            PartitionSpec.Builder builder = PartitionSpec.builderFor(icebergSchema);
+            for (String name : partitionColumns) {
+                // TODO Add more partition function.
+                builder.identity(name);
+            }
+            PartitionSpec partitionSpec = builder.build();
+
+            catalog.createTable(tableIdentifier, icebergSchema, partitionSpec, tableOptions);
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
