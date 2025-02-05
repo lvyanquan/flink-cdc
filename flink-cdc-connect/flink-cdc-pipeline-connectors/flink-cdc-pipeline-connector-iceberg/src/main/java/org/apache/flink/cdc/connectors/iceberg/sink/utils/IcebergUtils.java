@@ -63,21 +63,21 @@ public class IcebergUtils {
             case DECIMAL:
                 return Types.DecimalType.of(precision, scale);
             case TINYINT:
-                return Types.IntegerType.get();
+                return new Types.IntegerType();
             case SMALLINT:
-                return Types.IntegerType.get();
+                return new Types.IntegerType();
             case INTEGER:
-                return Types.IntegerType.get();
+                return new Types.IntegerType();
             case DATE:
                 return new Types.DateType();
             case TIME_WITHOUT_TIME_ZONE:
                 return Types.TimeType.get();
             case BIGINT:
-                return Types.LongType.get();
+                return new Types.LongType();
             case FLOAT:
-                return Types.FloatType.get();
+                return new Types.FloatType();
             case DOUBLE:
-                return Types.DoubleType.get();
+                return new Types.DoubleType();
             case TIMESTAMP_WITHOUT_TIME_ZONE:
                 return Types.TimestampType.withoutZone();
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:

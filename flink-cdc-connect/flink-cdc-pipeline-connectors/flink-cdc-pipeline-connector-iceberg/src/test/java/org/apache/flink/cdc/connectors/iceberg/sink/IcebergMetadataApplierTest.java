@@ -87,10 +87,10 @@ public class IcebergMetadataApplierTest {
         Table table = catalog.loadTable(TableIdentifier.of("test", "iceberg_table"));
         org.apache.iceberg.Schema schema =
                 new org.apache.iceberg.Schema(
-                        1,
+                        0,
                         Arrays.asList(
                                 Types.NestedField.of(
-                                        1, false, "id", Types.IntegerType.get(), "column for id"),
+                                        1, false, "id", Types.LongType.get(), "column for id"),
                                 Types.NestedField.of(
                                         2,
                                         false,
