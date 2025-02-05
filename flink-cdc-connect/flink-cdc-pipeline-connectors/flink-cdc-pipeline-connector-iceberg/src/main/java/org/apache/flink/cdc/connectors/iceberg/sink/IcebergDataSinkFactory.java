@@ -81,7 +81,7 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
-        options.add(IcebergDataSinkOptions.METASTORE);
+        options.add(IcebergDataSinkOptions.TYPE);
         return options;
     }
 
@@ -90,7 +90,6 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(IcebergDataSinkOptions.WAREHOUSE);
         options.add(IcebergDataSinkOptions.URI);
-        options.add(IcebergDataSinkOptions.COMMIT_USER);
         options.add(IcebergDataSinkOptions.PARTITION_KEY);
         return options;
     }
