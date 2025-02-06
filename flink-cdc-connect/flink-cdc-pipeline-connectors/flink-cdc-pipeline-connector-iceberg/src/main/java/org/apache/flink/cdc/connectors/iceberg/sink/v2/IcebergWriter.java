@@ -24,6 +24,7 @@ import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -58,11 +59,14 @@ public class IcebergWriter implements CommittingSinkWriter<Event, WriteResultWra
 
     private final Catalog catalog;
 
-    private int taskId;
+    private final int taskId;
 
-    private int attemptId;
+    private final int attemptId;
 
-    public IcebergWriter(Map<String, String> catalogOptions, int taskId, int attemptId) {
+    private final ZoneId zoneId;
+
+    public IcebergWriter(
+            Map<String, String> catalogOptions, int taskId, int attemptId, ZoneId zoneId) {
         catalog =
                 CatalogUtil.buildIcebergCatalog(
                         "cdc-iceberg-catalog", catalogOptions, new Configuration());
@@ -71,6 +75,7 @@ public class IcebergWriter implements CommittingSinkWriter<Event, WriteResultWra
         schemaMap = new HashMap<>();
         this.taskId = taskId;
         this.attemptId = attemptId;
+        this.zoneId = zoneId;
     }
 
     @Override
@@ -115,29 +120,41 @@ public class IcebergWriter implements CommittingSinkWriter<Event, WriteResultWra
             SchemaChangeEvent schemaChangeEvent = (SchemaChangeEvent) event;
             TableId tableId = schemaChangeEvent.tableId();
             TableSchemaWrapper tableSchemaWrapper = schemaMap.get(tableId);
-            if (tableSchemaWrapper == null) {
-                schemaMap.put(
-                        tableId,
-                        new TableSchemaWrapper(
-                                SchemaUtils.applySchemaChangeEvent(null, schemaChangeEvent),
-                                ZoneId.systemDefault()));
-            } else {
-                schemaMap.put(
-                        tableId,
-                        new TableSchemaWrapper(
-                                SchemaUtils.applySchemaChangeEvent(
-                                        tableSchemaWrapper.getSchema(), schemaChangeEvent),
-                                ZoneId.systemDefault()));
-            }
+
+            Schema newSchema =
+                    tableSchemaWrapper != null
+                            ? SchemaUtils.applySchemaChangeEvent(
+                                    tableSchemaWrapper.getSchema(), schemaChangeEvent)
+                            : SchemaUtils.applySchemaChangeEvent(null, schemaChangeEvent);
+
+            schemaMap.put(tableId, new TableSchemaWrapper(newSchema, zoneId));
+            writerFactoryMap.remove(tableId);
+            writerMap.remove(tableId);
         }
     }
 
     @Override
-    public void flush(boolean flush) throws IOException, InterruptedException {}
+    public void flush(boolean flush) {}
 
     @Override
-    public void writeWatermark(Watermark watermark) throws IOException, InterruptedException {}
+    public void writeWatermark(Watermark watermark) {}
 
     @Override
-    public void close() throws Exception {}
+    public void close() throws Exception {
+        if (schemaMap != null) {
+            schemaMap.clear();
+            schemaMap = null;
+        }
+        if (writerMap != null) {
+            for (TaskWriter<RowData> writer : writerMap.values()) {
+                writer.close();
+            }
+            writerMap.clear();
+            writerMap = null;
+        }
+        if (writerFactoryMap != null) {
+            writerFactoryMap.clear();
+            writerFactoryMap = null;
+        }
+    }
 }

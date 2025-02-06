@@ -17,8 +17,10 @@
 
 package org.apache.flink.cdc.connectors.iceberg.sink;
 
+import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
 
@@ -52,12 +54,15 @@ public class IcebergMetadataApplierTest {
                 new File(temporaryFolder.toFile(), UUID.randomUUID().toString()).toString();
         catalogOptions.put("type", "hadoop");
         catalogOptions.put("warehouse", warehouse);
+        catalogOptions.put("cache-enabled", "false");
+
         Catalog catalog =
                 CatalogUtil.buildIcebergCatalog(
                         "cdc-iceberg-catalog", catalogOptions, new Configuration());
 
         IcebergMetadataApplier icebergMetadataApplier = new IcebergMetadataApplier(catalogOptions);
-        TableId tableId = TableId.parse("test.iceberg_table");
+        String defaultTableId = "test.iceberg_table";
+        TableId tableId = TableId.parse(defaultTableId);
 
         // Create Table.
         CreateTableEvent createTableEvent =
@@ -84,7 +89,7 @@ public class IcebergMetadataApplierTest {
                                 .partitionKey("id", "name")
                                 .build());
         icebergMetadataApplier.applySchemaChange(createTableEvent);
-        Table table = catalog.loadTable(TableIdentifier.of("test", "iceberg_table"));
+        Table table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
         org.apache.iceberg.Schema schema =
                 new org.apache.iceberg.Schema(
                         0,
@@ -105,6 +110,48 @@ public class IcebergMetadataApplierTest {
                                         "description",
                                         Types.StringType.get(),
                                         "column for descriptions")),
+                        new HashSet<>(Arrays.asList(1)));
+        assertThat(table.schema().sameSchema(schema)).isTrue();
+
+        // Add column.
+        AddColumnEvent addColumnEvent =
+                new AddColumnEvent(
+                        tableId,
+                        Arrays.asList(
+                                AddColumnEvent.last(
+                                        new PhysicalColumn(
+                                                "newStringColumn",
+                                                DataTypes.STRING(),
+                                                "comment for newStringColumn",
+                                                "not important"))));
+        icebergMetadataApplier.applySchemaChange(addColumnEvent);
+        table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
+        schema =
+                new org.apache.iceberg.Schema(
+                        0,
+                        Arrays.asList(
+                                Types.NestedField.of(
+                                        1, false, "id", Types.LongType.get(), "column for id"),
+                                Types.NestedField.of(
+                                        2,
+                                        false,
+                                        "name",
+                                        Types.StringType.get(),
+                                        "column for name"),
+                                Types.NestedField.of(
+                                        3, true, "age", Types.IntegerType.get(), "column for age"),
+                                Types.NestedField.of(
+                                        4,
+                                        true,
+                                        "description",
+                                        Types.StringType.get(),
+                                        "column for descriptions"),
+                                Types.NestedField.of(
+                                        5,
+                                        true,
+                                        "newStringColumn",
+                                        Types.StringType.get(),
+                                        "comment for newStringColumn")),
                         new HashSet<>(Arrays.asList(1)));
         assertThat(table.schema().sameSchema(schema)).isTrue();
     }

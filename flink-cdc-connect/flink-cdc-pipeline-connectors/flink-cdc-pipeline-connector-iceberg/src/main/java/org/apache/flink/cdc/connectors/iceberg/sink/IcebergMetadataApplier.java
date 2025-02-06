@@ -32,7 +32,7 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
-import org.apache.flink.cdc.connectors.iceberg.sink.utils.IcebergUtils;
+import org.apache.flink.cdc.connectors.iceberg.sink.utils.IcebergTypeUtils;
 
 import org.apache.flink.shaded.guava31.com.google.common.collect.Sets;
 
@@ -41,8 +41,8 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.flink.FlinkSchemaUtil;
 import org.apache.iceberg.types.Type;
@@ -132,9 +132,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyCreateTable(CreateTableEvent event) {
         try {
-            TableIdentifier tableIdentifier =
-                    TableIdentifier.of(
-                            event.tableId().getSchemaName(), event.tableId().getTableName());
+            TableIdentifier tableIdentifier = TableIdentifier.parse(event.tableId().identifier());
 
             // Step1: Build Schema.
             org.apache.flink.cdc.common.schema.Schema cdcSchema = event.getSchema();
@@ -142,7 +140,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
             Set<Integer> identifierFieldIds = new HashSet<>();
             for (int index = 0; index < event.getSchema().getColumnCount(); index++) {
                 columns.add(
-                        IcebergUtils.convertCDCColumnToIcebergField(
+                        IcebergTypeUtils.convertCDCColumnToIcebergField(
                                 index, (PhysicalColumn) cdcSchema.getColumns().get(index)));
                 if (cdcSchema.primaryKeys().contains(cdcSchema.getColumns().get(index).getName())) {
                     identifierFieldIds.add(index);
@@ -169,13 +167,10 @@ public class IcebergMetadataApplier implements MetadataApplier {
     }
 
     private void applyAddColumn(AddColumnEvent event) {
+        TableIdentifier tableIdentifier = TableIdentifier.parse(event.tableId().identifier());
         try {
-            Namespace namespace = Namespace.of(event.tableId().getNamespace());
-            TableIdentifier tableIdentifier =
-                    TableIdentifier.of(namespace, event.tableId().getSchemaName());
             Table table = catalog.loadTable(tableIdentifier);
             applyAddColumnEventWithPosition(table, event);
-
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
@@ -183,57 +178,52 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyAddColumnEventWithPosition(Table table, AddColumnEvent event)
             throws SchemaEvolveException {
+
         try {
+            UpdateSchema updateSchema = table.updateSchema();
             for (AddColumnEvent.ColumnWithPosition columnWithPosition : event.getAddedColumns()) {
                 Column addColumn = columnWithPosition.getAddColumn();
                 switch (columnWithPosition.getPosition()) {
                     case FIRST:
-                        table.updateSchema()
-                                .addColumn(
-                                        addColumn.getName(),
-                                        FlinkSchemaUtil.convert(
-                                                DataTypeUtils.toFlinkDataType(addColumn.getType())
-                                                        .getLogicalType()),
-                                        addColumn.getComment());
+                        updateSchema.addColumn(
+                                addColumn.getName(),
+                                FlinkSchemaUtil.convert(
+                                        DataTypeUtils.toFlinkDataType(addColumn.getType())
+                                                .getLogicalType()),
+                                addColumn.getComment());
                         table.updateSchema().moveFirst(addColumn.getName());
                         break;
                     case LAST:
-                        table.updateSchema()
-                                .addColumn(
-                                        addColumn.getName(),
-                                        FlinkSchemaUtil.convert(
-                                                DataTypeUtils.toFlinkDataType(addColumn.getType())
-                                                        .getLogicalType()),
-                                        addColumn.getComment());
+                        updateSchema.addColumn(
+                                addColumn.getName(),
+                                FlinkSchemaUtil.convert(
+                                        DataTypeUtils.toFlinkDataType(addColumn.getType())
+                                                .getLogicalType()),
+                                addColumn.getComment());
                         break;
                     case BEFORE:
-                        table.updateSchema()
-                                .addColumn(
-                                        addColumn.getName(),
-                                        FlinkSchemaUtil.convert(
-                                                DataTypeUtils.toFlinkDataType(addColumn.getType())
-                                                        .getLogicalType()),
-                                        addColumn.getComment());
-                        table.updateSchema()
-                                .moveBefore(
-                                        addColumn.getName(),
-                                        columnWithPosition.getExistedColumnName());
+                        updateSchema.addColumn(
+                                addColumn.getName(),
+                                FlinkSchemaUtil.convert(
+                                        DataTypeUtils.toFlinkDataType(addColumn.getType())
+                                                .getLogicalType()),
+                                addColumn.getComment());
+                        updateSchema.moveBefore(
+                                addColumn.getName(), columnWithPosition.getExistedColumnName());
                         break;
                     case AFTER:
                         checkNotNull(
                                 columnWithPosition.getExistedColumnName(),
                                 "Existing column name must be provided for AFTER position");
-                        table.updateSchema()
-                                .addColumn(
-                                        addColumn.getName(),
-                                        FlinkSchemaUtil.convert(
-                                                DataTypeUtils.toFlinkDataType(addColumn.getType())
-                                                        .getLogicalType()),
-                                        addColumn.getComment());
-                        table.updateSchema()
-                                .moveAfter(
-                                        columnWithPosition.getAddColumn().getName(),
-                                        columnWithPosition.getExistedColumnName());
+                        updateSchema.addColumn(
+                                addColumn.getName(),
+                                FlinkSchemaUtil.convert(
+                                        DataTypeUtils.toFlinkDataType(addColumn.getType())
+                                                .getLogicalType()),
+                                addColumn.getComment());
+                        updateSchema.moveAfter(
+                                columnWithPosition.getAddColumn().getName(),
+                                columnWithPosition.getExistedColumnName());
                         break;
                     default:
                         throw new SchemaEvolveException(
@@ -241,6 +231,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
                                 "Unknown column position: " + columnWithPosition.getPosition());
                 }
             }
+            updateSchema.commit();
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
@@ -248,12 +239,11 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyDropColumn(DropColumnEvent event) {
         try {
-            Namespace namespace = Namespace.of(event.tableId().getNamespace());
-            TableIdentifier tableIdentifier =
-                    TableIdentifier.of(namespace, event.tableId().getSchemaName());
-            Table table = catalog.loadTable(tableIdentifier);
-            event.getDroppedColumnNames()
-                    .forEach((column) -> table.updateSchema().deleteColumn(column));
+            UpdateSchema updateSchema =
+                    catalog.loadTable(TableIdentifier.parse(event.tableId().identifier()))
+                            .updateSchema();
+            event.getDroppedColumnNames().forEach(updateSchema::deleteColumn);
+            updateSchema.commit();
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
@@ -261,14 +251,11 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyRenameColumn(RenameColumnEvent event) {
         try {
-            Namespace namespace = Namespace.of(event.tableId().getNamespace());
-            TableIdentifier tableIdentifier =
-                    TableIdentifier.of(namespace, event.tableId().getSchemaName());
-            Table table = catalog.loadTable(tableIdentifier);
-            event.getNameMapping()
-                    .forEach(
-                            (oldName, newName) ->
-                                    table.updateSchema().renameColumn(oldName, newName));
+            UpdateSchema updateSchema =
+                    catalog.loadTable(TableIdentifier.parse(event.tableId().identifier()))
+                            .updateSchema();
+            event.getNameMapping().forEach(updateSchema::renameColumn);
+            updateSchema.commit();
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
@@ -276,10 +263,9 @@ public class IcebergMetadataApplier implements MetadataApplier {
 
     private void applyAlterColumnType(AlterColumnTypeEvent event) {
         try {
-            Namespace namespace = Namespace.of(event.tableId().getNamespace());
-            TableIdentifier tableIdentifier =
-                    TableIdentifier.of(namespace, event.tableId().getSchemaName());
-            Table table = catalog.loadTable(tableIdentifier);
+            UpdateSchema updateSchema =
+                    catalog.loadTable(TableIdentifier.parse(event.tableId().identifier()))
+                            .updateSchema();
             event.getTypeMapping()
                     .forEach(
                             (oldName, newType) -> {
@@ -288,7 +274,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
                                                         DataTypeUtils.toFlinkDataType(newType)
                                                                 .getLogicalType())
                                                 .asPrimitiveType();
-                                table.updateSchema().updateColumn(oldName, type);
+                                updateSchema.updateColumn(oldName, type);
                             });
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);

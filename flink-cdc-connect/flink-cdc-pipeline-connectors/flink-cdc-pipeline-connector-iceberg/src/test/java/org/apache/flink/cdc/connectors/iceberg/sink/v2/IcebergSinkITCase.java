@@ -81,6 +81,7 @@ public class IcebergSinkITCase {
                 new File(temporaryFolder.toFile(), UUID.randomUUID().toString()).toString();
         catalogOptions.put("type", "hadoop");
         catalogOptions.put("warehouse", warehouse);
+        catalogOptions.put("cache-enabled", "false");
         catalog =
                 CatalogUtil.buildIcebergCatalog(
                         "cdc-iceberg-catalog", catalogOptions, new Configuration());

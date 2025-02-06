@@ -57,6 +57,7 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
                                 value);
                     }
                 });
+        catalogOptions.put("cache-enabled", "false");
         ZoneId zoneId = ZoneId.systemDefault();
         if (!Objects.equals(
                 context.getPipelineConfiguration().get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE),

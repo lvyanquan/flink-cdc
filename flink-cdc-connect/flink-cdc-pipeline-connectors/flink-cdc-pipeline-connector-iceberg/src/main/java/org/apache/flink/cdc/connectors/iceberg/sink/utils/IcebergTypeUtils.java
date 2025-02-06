@@ -28,7 +28,7 @@ import org.apache.iceberg.types.Types;
 import java.util.List;
 
 /** Util class for {@link IcebergDataSink}. */
-public class IcebergUtils {
+public class IcebergTypeUtils {
 
     /** Convert column from CDC framework to Iceberg framework. */
     public static Types.NestedField convertCDCColumnToIcebergField(

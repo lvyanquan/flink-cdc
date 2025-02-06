@@ -40,9 +40,12 @@ public class IcebergSink
 
     protected final Map<String, String> catalogOptions;
 
+    private final ZoneId zoneId;
+
     public IcebergSink(
             Map<String, String> catalogOptions, String schemaOperatorUid, ZoneId zoneId) {
         this.catalogOptions = catalogOptions;
+        this.zoneId = zoneId;
     }
 
     @Override
@@ -66,7 +69,8 @@ public class IcebergSink
         return new IcebergWriter(
                 catalogOptions,
                 context.getTaskInfo().getIndexOfThisSubtask(),
-                context.getTaskInfo().getAttemptNumber());
+                context.getTaskInfo().getAttemptNumber(),
+                zoneId);
     }
 
     @Override
@@ -74,6 +78,7 @@ public class IcebergSink
         return new IcebergWriter(
                 catalogOptions,
                 context.getTaskInfo().getIndexOfThisSubtask(),
-                context.getTaskInfo().getAttemptNumber());
+                context.getTaskInfo().getAttemptNumber(),
+                zoneId);
     }
 }

@@ -20,12 +20,15 @@ package org.apache.flink.cdc.connectors.iceberg.sink.v2;
 import org.apache.flink.api.connector.sink2.Committer;
 import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
+import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
+import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.connectors.iceberg.sink.IcebergMetadataApplier;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
@@ -44,7 +47,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -64,10 +69,12 @@ public class IcebergWriterTest {
                 new File(temporaryFolder.toFile(), UUID.randomUUID().toString()).toString();
         catalogOptions.put("type", "hadoop");
         catalogOptions.put("warehouse", warehouse);
+        catalogOptions.put("cache-enabled", "false");
         Catalog catalog =
                 CatalogUtil.buildIcebergCatalog(
                         "cdc-iceberg-catalog", catalogOptions, new Configuration());
-        IcebergWriter icebergWriter = new IcebergWriter(catalogOptions, 1, 1);
+        IcebergWriter icebergWriter =
+                new IcebergWriter(catalogOptions, 1, 1, ZoneId.systemDefault());
         IcebergMetadataApplier icebergMetadataApplier = new IcebergMetadataApplier(catalogOptions);
         TableId tableId = TableId.parse("test.iceberg_table");
 
@@ -137,6 +144,56 @@ public class IcebergWriterTest {
         }
         Assertions.assertThat(result)
                 .containsExactlyInAnyOrder("Record(1, Mark, 10, test)", "Record(2, Bob, 10, test)");
+
+        // Add column.
+        AddColumnEvent addColumnEvent =
+                new AddColumnEvent(
+                        tableId,
+                        Arrays.asList(
+                                AddColumnEvent.last(
+                                        new PhysicalColumn(
+                                                "newStringColumn",
+                                                DataTypes.STRING(),
+                                                "comment for newStringColumn",
+                                                "not important"))));
+        icebergMetadataApplier.applySchemaChange(addColumnEvent);
+        icebergWriter.write(addColumnEvent, null);
+        binaryRecordDataGenerator =
+                new BinaryRecordDataGenerator(
+                        SchemaUtils.applySchemaChangeEvent(
+                                        createTableEvent.getSchema(), addColumnEvent)
+                                .getColumnDataTypes()
+                                .toArray(new DataType[0]));
+        recordData =
+                binaryRecordDataGenerator.generate(
+                        new Object[] {
+                            3L,
+                            BinaryStringData.fromString("Mark"),
+                            10,
+                            BinaryStringData.fromString("test"),
+                            BinaryStringData.fromString("newStringColumn"),
+                        });
+        dataChangeEvent = DataChangeEvent.insertEvent(tableId, recordData);
+        icebergWriter.write(dataChangeEvent, null);
+        writeResults = icebergWriter.prepareCommit();
+        collection =
+                writeResults.stream().map(MockCommitRequestImpl::new).collect(Collectors.toList());
+        icebergCommitter.commit(collection);
+        records =
+                IcebergGenerics.read(
+                                catalog.loadTable(
+                                        TableIdentifier.of(
+                                                tableId.getSchemaName(), tableId.getTableName())))
+                        .build();
+        result = new ArrayList<>();
+        for (Record record : records) {
+            result.add(record.toString());
+        }
+        Assertions.assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "Record(1, Mark, 10, test, null)",
+                        "Record(2, Bob, 10, test, null)",
+                        "Record(3, Mark, 10, test, newStringColumn)");
     }
 
     private static class MockCommitRequestImpl<CommT> extends CommitRequestImpl<CommT> {
