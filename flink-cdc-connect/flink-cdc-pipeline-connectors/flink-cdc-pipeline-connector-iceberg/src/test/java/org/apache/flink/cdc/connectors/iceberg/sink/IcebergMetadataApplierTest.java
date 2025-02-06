@@ -18,11 +18,16 @@
 package org.apache.flink.cdc.connectors.iceberg.sink;
 
 import org.apache.flink.cdc.common.event.AddColumnEvent;
+import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
+import org.apache.flink.cdc.common.event.DropColumnEvent;
+import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
+
+import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CatalogUtil;
@@ -120,9 +125,9 @@ public class IcebergMetadataApplierTest {
                         Arrays.asList(
                                 AddColumnEvent.last(
                                         new PhysicalColumn(
-                                                "newStringColumn",
-                                                DataTypes.STRING(),
-                                                "comment for newStringColumn",
+                                                "newIntColumn",
+                                                DataTypes.INT(),
+                                                "comment for newIntColumn",
                                                 "not important"))));
         icebergMetadataApplier.applySchemaChange(addColumnEvent);
         table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
@@ -149,9 +154,94 @@ public class IcebergMetadataApplierTest {
                                 Types.NestedField.of(
                                         5,
                                         true,
-                                        "newStringColumn",
+                                        "newIntColumn",
+                                        Types.IntegerType.get(),
+                                        "comment for newIntColumn")),
+                        new HashSet<>(Arrays.asList(1)));
+        assertThat(table.schema().sameSchema(schema)).isTrue();
+
+        // Drop Column.
+        DropColumnEvent dropColumnEvent =
+                new DropColumnEvent(tableId, Arrays.asList("description"));
+        icebergMetadataApplier.applySchemaChange(dropColumnEvent);
+        table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
+        schema =
+                new org.apache.iceberg.Schema(
+                        0,
+                        Arrays.asList(
+                                Types.NestedField.of(
+                                        1, false, "id", Types.LongType.get(), "column for id"),
+                                Types.NestedField.of(
+                                        2,
+                                        false,
+                                        "name",
                                         Types.StringType.get(),
-                                        "comment for newStringColumn")),
+                                        "column for name"),
+                                Types.NestedField.of(
+                                        3, true, "age", Types.IntegerType.get(), "column for age"),
+                                Types.NestedField.of(
+                                        5,
+                                        true,
+                                        "newIntColumn",
+                                        Types.IntegerType.get(),
+                                        "comment for newIntColumn")),
+                        new HashSet<>(Arrays.asList(1)));
+        assertThat(table.schema().sameSchema(schema)).isTrue();
+
+        // Rename Column.
+        RenameColumnEvent renameColumnEvent =
+                new RenameColumnEvent(tableId, ImmutableMap.of("newIntColumn", "renamedIntColumn"));
+        icebergMetadataApplier.applySchemaChange(renameColumnEvent);
+        table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
+        schema =
+                new org.apache.iceberg.Schema(
+                        0,
+                        Arrays.asList(
+                                Types.NestedField.of(
+                                        1, false, "id", Types.LongType.get(), "column for id"),
+                                Types.NestedField.of(
+                                        2,
+                                        false,
+                                        "name",
+                                        Types.StringType.get(),
+                                        "column for name"),
+                                Types.NestedField.of(
+                                        3, true, "age", Types.IntegerType.get(), "column for age"),
+                                Types.NestedField.of(
+                                        5,
+                                        true,
+                                        "renamedIntColumn",
+                                        Types.IntegerType.get(),
+                                        "comment for newIntColumn")),
+                        new HashSet<>(Arrays.asList(1)));
+        assertThat(table.schema().sameSchema(schema)).isTrue();
+
+        // Alter Column Type.
+        AlterColumnTypeEvent alterColumnTypeEvent =
+                new AlterColumnTypeEvent(
+                        tableId, ImmutableMap.of("renamedIntColumn", DataTypes.BIGINT()));
+        icebergMetadataApplier.applySchemaChange(alterColumnTypeEvent);
+        table = catalog.loadTable(TableIdentifier.parse(defaultTableId));
+        schema =
+                new org.apache.iceberg.Schema(
+                        0,
+                        Arrays.asList(
+                                Types.NestedField.of(
+                                        1, false, "id", Types.LongType.get(), "column for id"),
+                                Types.NestedField.of(
+                                        2,
+                                        false,
+                                        "name",
+                                        Types.StringType.get(),
+                                        "column for name"),
+                                Types.NestedField.of(
+                                        3, true, "age", Types.IntegerType.get(), "column for age"),
+                                Types.NestedField.of(
+                                        5,
+                                        true,
+                                        "renamedIntColumn",
+                                        Types.LongType.get(),
+                                        "comment for newIntColumn")),
                         new HashSet<>(Arrays.asList(1)));
         assertThat(table.schema().sameSchema(schema)).isTrue();
     }

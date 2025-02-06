@@ -268,14 +268,15 @@ public class IcebergMetadataApplier implements MetadataApplier {
                             .updateSchema();
             event.getTypeMapping()
                     .forEach(
-                            (oldName, newType) -> {
+                            (name, newType) -> {
                                 Type.PrimitiveType type =
                                         FlinkSchemaUtil.convert(
                                                         DataTypeUtils.toFlinkDataType(newType)
                                                                 .getLogicalType())
                                                 .asPrimitiveType();
-                                updateSchema.updateColumn(oldName, type);
+                                updateSchema.updateColumn(name, type);
                             });
+            updateSchema.commit();
         } catch (Exception e) {
             throw new SchemaEvolveException(event, e.getMessage(), e);
         }
