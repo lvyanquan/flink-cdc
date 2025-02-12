@@ -24,8 +24,6 @@ import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +34,7 @@ import java.util.Optional;
  * determines split processing order.
  */
 @Internal
-public interface MySqlSplitAssigner extends Closeable {
+public interface MySqlSplitAssigner {
 
     /**
      * Called to open the assigner to acquire any resources, like threads or network connections.
@@ -56,6 +54,11 @@ public interface MySqlSplitAssigner extends Closeable {
      * #onFinishedSplits(Map)}.
      */
     boolean waitingForFinishedSplits();
+
+    /** Whether the split assigner is finished stream split assigning. */
+    default boolean isStreamSplitAssigned() {
+        throw new UnsupportedOperationException("Not support to assigning StreamSplit.");
+    }
 
     /**
      * Gets the finished splits' information. This is useful metadata to generate a binlog split
@@ -122,5 +125,5 @@ public interface MySqlSplitAssigner extends Closeable {
      * Called to close the assigner, in case it holds on to any resources, like threads or network
      * connections.
      */
-    void close() throws IOException;
+    void close();
 }

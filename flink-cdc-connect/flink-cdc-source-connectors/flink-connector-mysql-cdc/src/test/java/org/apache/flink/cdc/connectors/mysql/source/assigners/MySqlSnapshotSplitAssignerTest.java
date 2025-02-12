@@ -51,6 +51,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset.ofEarliest;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSplitEnumeratorContext;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -476,11 +477,15 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration, DEFAULT_PARALLELISM, new ArrayList<>(), false);
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        new ArrayList<>(),
+                        false,
+                        getMySqlSplitEnumeratorContext());
 
         assertTrue(assigner.needToDiscoveryTables());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assertTrue(assigner.getNext().isPresent());
         assertFalse(assigner.needToDiscoveryTables());
     }
@@ -551,7 +556,11 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         .collect(Collectors.toList());
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        configuration, DEFAULT_PARALLELISM, remainingTables, false);
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        remainingTables,
+                        false,
+                        getMySqlSplitEnumeratorContext());
         return getSplitsFromAssigner(assigner);
     }
 
@@ -578,7 +587,7 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
 
         RowType splitKeyType =
                 ChunkUtils.getChunkKeyColumnType(
-                        Column.editor().name("id").type("INT").jdbcType(4).create());
+                        Column.editor().name("id").type("INT").jdbcType(4).create(), true);
         List<MySqlSchemalessSnapshotSplit> remainingSplits =
                 Arrays.asList(
                         new MySqlSchemalessSnapshotSplit(
@@ -644,13 +653,17 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                         true,
                         ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
         final MySqlSnapshotSplitAssigner assigner =
-                new MySqlSnapshotSplitAssigner(configuration, DEFAULT_PARALLELISM, checkpoint);
+                new MySqlSnapshotSplitAssigner(
+                        configuration,
+                        DEFAULT_PARALLELISM,
+                        checkpoint,
+                        getMySqlSplitEnumeratorContext());
         return getSplitsFromAssigner(assigner);
     }
 
     private List<String> getSplitsFromAssigner(final MySqlSnapshotSplitAssigner assigner) {
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
 
         List<MySqlSplit> sqlSplits = new ArrayList<>();
         while (true) {
@@ -707,7 +720,7 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
                 .distributionFactorLower(distributionLower)
                 .username(database.getUsername())
                 .password(database.getPassword())
-                .serverTimeZone(ZoneId.of("UTC").toString())
+                .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString())
                 .chunkKeyColumn(chunkKeys)
                 .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                 .createConfig(0);

@@ -63,6 +63,7 @@ public class MySqlChunkSplitter implements ChunkSplitter {
 
     private final MySqlSourceConfig sourceConfig;
     private final MySqlSchema mySqlSchema;
+    private final boolean treatTinyint1AsBool;
 
     @Nullable private TableId currentSplittingTableId;
     @Nullable private ChunkSplitterState.ChunkBound nextChunkStart;
@@ -102,6 +103,8 @@ public class MySqlChunkSplitter implements ChunkSplitter {
         this.currentSplittingTableId = currentSplittingTableId;
         this.nextChunkStart = nextChunkStart;
         this.nextChunkId = nextChunkId;
+
+        this.treatTinyint1AsBool = sourceConfig.isTreatTinyintAsBoolean();
     }
 
     @Override
@@ -148,7 +151,7 @@ public class MySqlChunkSplitter implements ChunkSplitter {
             splitColumn =
                     ChunkUtils.getChunkKeyColumn(
                             currentSplittingTable, sourceConfig.getChunkKeyColumns());
-            splitType = ChunkUtils.getChunkKeyColumnType(splitColumn);
+            splitType = ChunkUtils.getChunkKeyColumnType(splitColumn, treatTinyint1AsBool);
             minMaxOfSplitColumn =
                     StatementUtils.queryMinMax(jdbcConnection, tableId, splitColumn.name());
             approximateRowCnt = StatementUtils.queryApproximateRowCnt(jdbcConnection, tableId);
@@ -410,8 +413,8 @@ public class MySqlChunkSplitter implements ChunkSplitter {
     }
 
     /** Checks whether split column is evenly distributed across its range. */
-    private static boolean isEvenlySplitColumn(Column splitColumn) {
-        DataType flinkType = MySqlTypeUtils.fromDbzColumn(splitColumn);
+    private boolean isEvenlySplitColumn(Column splitColumn) {
+        DataType flinkType = MySqlTypeUtils.fromDbzColumn(splitColumn, treatTinyint1AsBool);
         LogicalTypeRoot typeRoot = flinkType.getLogicalType().getTypeRoot();
 
         // currently, we only support the optimization that split column with type BIGINT, INT,

@@ -24,8 +24,6 @@ import org.apache.flink.cdc.connectors.base.source.meta.offset.Offset;
 import org.apache.flink.cdc.connectors.base.source.meta.split.FinishedSnapshotSplitInfo;
 import org.apache.flink.cdc.connectors.base.source.meta.split.SourceSplitBase;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +34,7 @@ import java.util.Optional;
  * determines split processing order.
  */
 @Experimental
-public interface SplitAssigner extends Closeable {
+public interface SplitAssigner {
 
     /**
      * Called to open the assigner to acquire any resources, like threads or network connections.
@@ -122,5 +120,5 @@ public interface SplitAssigner extends Closeable {
      * Called to close the assigner, in case it holds on to any resources, like threads or network
      * connections.
      */
-    void close() throws IOException;
+    void close();
 }

@@ -23,16 +23,15 @@ import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
+import org.apache.flink.cdc.connectors.mysql.source.config.CapturingMode;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHook;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
-import org.apache.flink.cdc.connectors.mysql.table.MySqlDeserializationConverterFactory;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.testutils.TestTable;
 import org.apache.flink.cdc.connectors.mysql.testutils.TestTableSchemas;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.StringDebeziumDeserializationSchema;
-import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.metrics.Counter;
@@ -50,10 +49,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
-import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.DataType;
@@ -64,6 +60,8 @@ import org.apache.flink.types.Row;
 import org.apache.flink.types.RowUtils;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Collector;
+
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.jdbc.JdbcConnection;
@@ -82,7 +80,6 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -90,7 +87,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -102,6 +98,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static java.lang.String.format;
 import static org.apache.flink.api.common.JobStatus.RUNNING;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics.IS_BINLOG_READING;
@@ -121,6 +119,7 @@ import static org.apache.flink.runtime.metrics.MetricNames.IO_NUM_RECORDS_IN;
 import static org.apache.flink.runtime.metrics.MetricNames.SOURCE_IDLE_TIME;
 import static org.apache.flink.util.Preconditions.checkState;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -183,22 +182,44 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                     "+I[2003, user_24, Shanghai, 123567891234]",
                     "+U[1010, user_11, Hangzhou, 123567891234]");
 
-    @Parameterized.Parameter public String tableName;
+    /**
+     * First part binlog events in string with logMode, which is made by {@link
+     * #makeFirstPartBinlogEvents}.
+     */
+    private final List<String> firstPartBinlogEventsInLogMode =
+            Arrays.asList(
+                    "+I[103, user_3, Shanghai, 123567891234]",
+                    "+I[103, user_3, Hangzhou, 123567891234]",
+                    "+I[102, user_2, Shanghai, 123567891234]",
+                    "+I[102, user_2, Shanghai, 123567891234]",
+                    "+I[103, user_3, Hangzhou, 123567891234]",
+                    "+I[103, user_3, Shanghai, 123567891234]");
 
     @Parameterized.Parameter(1)
+    public String tableName;
+
+    @Parameterized.Parameter(2)
     public String chunkColumnName;
 
     private static final int USE_POST_LOWWATERMARK_HOOK = 1;
     private static final int USE_PRE_HIGHWATERMARK_HOOK = 2;
-
     private static final int USE_POST_HIGHWATERMARK_HOOK = 3;
 
-    @Parameterized.Parameters(name = "table: {0}, chunkColumn: {1}")
-    public static Collection<Object[]> parameters() {
-        return Arrays.asList(
-                new Object[][] {
-                    {"customers", null}, {"customers", "id"}, {"customers_no_pk", "id"}
-                });
+    @Parameterized.Parameters(
+            name = "debeziumProperties: {0}, tableName: {1}, chunkColumnName: {2}")
+    public static Object[] parameters() {
+        return new Object[][] {
+            new Object[] {
+                ImmutableMap.<String, String>builder()
+                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
+                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .build(),
+                "customers",
+                null
+            },
+            new Object[] {new HashMap<>(), "customers", "id"},
+            new Object[] {new HashMap<>(), "customers_no_pk", "id"}
+        };
     }
 
     @Test
@@ -300,13 +321,15 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void testSnapshotSplitReadingFailCrossCheckpoints() throws Exception {
         customDatabase.createAndInitialize();
+        TestTable customers =
+                new TestTable(customDatabase, "customers", TestTableSchemas.CUSTOMERS);
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(DEFAULT_PARALLELISM);
         env.enableCheckpointing(5000L);
         env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
 
         // The sleeping source will sleep awhile after send per record
-        MySqlSource<RowData> sleepingSource = buildSleepingSource();
+        MySqlSource<RowData> sleepingSource = buildSleepingSource(customers);
         DataStreamSource<RowData> source =
                 env.fromSource(sleepingSource, WatermarkStrategy.noWatermarks(), "selfSource");
 
@@ -334,21 +357,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                     "+I[1019, user_20, Shanghai, 123567891234]",
                     "+I[2000, user_21, Shanghai, 123567891234]"
                 };
-        TypeSerializer<RowData> serializer =
-                source.getTransformation().getOutputType().createSerializer(env.getConfig());
-        String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
-        CollectSinkOperatorFactory<RowData> factory =
-                new CollectSinkOperatorFactory(serializer, accumulatorName);
-        CollectSinkOperator<RowData> operator = (CollectSinkOperator) factory.getOperator();
-        CollectResultIterator<RowData> iterator =
-                new CollectResultIterator(
-                        operator.getOperatorIdFuture(),
-                        serializer,
-                        accumulatorName,
-                        env.getCheckpointConfig());
-        CollectStreamSink<RowData> sink = new CollectStreamSink(source, factory);
-        sink.name("Data stream collect sink");
-        env.addOperator(sink.getTransformation());
+        CollectResultIterator<RowData> iterator = addCollector(env, source);
         JobClient jobClient = env.executeAsync("snapshotSplitTest");
         iterator.setJobClient(jobClient);
         JobID jobId = jobClient.getJobID();
@@ -365,7 +374,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         // Check all snapshot records are sent with exactly-once semantics
         assertEqualsInAnyOrder(
                 Arrays.asList(expectedSnapshotData),
-                fetchRowData(iterator, expectedSnapshotData.length));
+                fetchRowData(iterator, expectedSnapshotData.length, customers::stringify));
         assertTrue(!hasNextData(iterator));
         jobClient.cancel().get();
     }
@@ -381,6 +390,119 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     @Test
     public void testStartFromLatestOffset() throws Exception {
         testStartingOffset(StartupOptions.latest(), Collections.emptyList());
+    }
+
+    @Test
+    public void testStartFromEarliestOffsetInAppendOnlyMode() throws Exception {
+        List<String> expected = new ArrayList<>();
+        expected.addAll(initialChanges);
+        expected.addAll(firstPartBinlogEventsInLogMode);
+        // Initialize customer database
+        customDatabase.createAndInitialize();
+        TestTable customers =
+                new TestTable(customDatabase, "customers", TestTableSchemas.CUSTOMERS);
+
+        // Make some changes before starting the CDC job
+        makeFirstPartBinlogEvents(getConnection(), customers.getTableId());
+
+        // Create Flink execution environment
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        // Build deserializer
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD("id", DataTypes.BIGINT()),
+                        DataTypes.FIELD("name", DataTypes.STRING()),
+                        DataTypes.FIELD("address", DataTypes.STRING()),
+                        DataTypes.FIELD("phone_number", DataTypes.STRING()));
+        LogicalType logicalType = TypeConversions.fromDataToLogicalType(dataType);
+        InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(logicalType);
+        RowDataDebeziumDeserializeSchema deserializer =
+                RowDataDebeziumDeserializeSchema.newBuilder()
+                        .setPhysicalRowType((RowType) dataType.getLogicalType())
+                        .setResultTypeInfo(typeInfo)
+                        .setReadChangelogAsAppend(true)
+                        .build();
+
+        // Build source
+        MySqlSource<RowData> mySqlSource =
+                MySqlSource.<RowData>builder()
+                        .hostname(MYSQL_CONTAINER.getHost())
+                        .port(MYSQL_CONTAINER.getDatabasePort())
+                        .databaseList(customDatabase.getDatabaseName())
+                        .tableList(customers.getTableId())
+                        .username(customDatabase.getUsername())
+                        .password(customDatabase.getPassword())
+                        .serverId("5401-5404")
+                        .deserializer(deserializer)
+                        .startupOptions(StartupOptions.earliest())
+                        .chunkKeyColumn(
+                                new ObjectPath(customDatabase.getDatabaseName(), tableName),
+                                chunkColumnName)
+                        .build();
+
+        // Build and execute the job
+        DataStreamSource<RowData> source =
+                env.fromSource(mySqlSource, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
+        try (CloseableIterator<RowData> iterator = source.executeAndCollect()) {
+            List<String> rows = fetchRowData(iterator, expected.size(), customers::stringify);
+            assertEqualsInAnyOrder(expected, rows);
+        }
+    }
+
+    @Test
+    public void testSnapshotOnlyMode() throws Exception {
+        if (!debeziumProperties.isEmpty()) {
+            return;
+        }
+        customDatabase.createAndInitialize();
+        TestTable shoppingCartBig =
+                new TestTable(customDatabase, "shopping_cart_big", TestTableSchemas.SHOPPING_CART);
+        String tableId = shoppingCartBig.getTableId();
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.enableCheckpointing(1000);
+        env.setParallelism(1);
+
+        MySqlSource<RowData> source =
+                MySqlSource.<RowData>builder()
+                        .hostname(MYSQL_CONTAINER.getHost())
+                        .port(MYSQL_CONTAINER.getDatabasePort())
+                        .username(customDatabase.getUsername())
+                        .password(customDatabase.getPassword())
+                        .databaseList(customDatabase.getDatabaseName())
+                        .tableList(shoppingCartBig.getTableId())
+                        .splitSize(1)
+                        .capturingMode(CapturingMode.SNAPSHOT_ONLY)
+                        .startupOptions(StartupOptions.snapshot())
+                        .deserializer(shoppingCartBig.getDeserializer())
+                        .debeziumProperties(dbzProperties)
+                        .build();
+
+        SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
+        snapshotHooks.setPostHighWatermarkAction(
+                (connection, splitId) -> {
+                    connection.setAutoCommit(false);
+                    connection.execute(
+                            String.format(
+                                    "INSERT INTO %s VALUES (default, 'kind_213', 'user_213', 'new item')",
+                                    tableId));
+                    connection.commit();
+                });
+        source.setSnapshotHooks(snapshotHooks);
+        try (CloseableIterator<RowData> iterator =
+                env.fromSource(source, WatermarkStrategy.noWatermarks(), "Snapshot-only Source")
+                        .executeAndCollect()) {
+            List<String> records = fetchRowData(iterator, 5, shoppingCartBig::stringify);
+            List<String> expected =
+                    Arrays.asList(
+                            "+I[1, KIND_001, user_1, my shopping cart]",
+                            "+I[2, KIND_002, user_1, my shopping cart]",
+                            "+I[3, KIND_003, user_1, my shopping cart]",
+                            "+I[4, kind_213, user_213, new item]",
+                            "+I[5, kind_213, user_213, new item]");
+            assertEqualsInAnyOrder(expected, records);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -617,7 +739,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .deserializer(new StringDebeziumDeserializationSchema())
                         .serverId(getServerId())
                         .includeSchemaChanges(true)
-                        .serverTimeZone("UTC")
+                        .serverTimeZone(getSystemTimeZone())
+                        .debeziumProperties(dbzProperties)
                         .build();
         DataStreamSource<String> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
@@ -789,6 +912,9 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         assertTrue(currentFetchEventTimeLag.getValue() < TIMEOUT.toMillis());
         // sourceIdleTime should be positive (we can't know the exact value)
         assertTrue(metrics.containsKey(SOURCE_IDLE_TIME));
+        Gauge<Long> sourceIdleTime = (Gauge<Long>) metrics.get(SOURCE_IDLE_TIME);
+        assertTrue(sourceIdleTime.getValue() > 0);
+        assertTrue(sourceIdleTime.getValue() < TIMEOUT.toMillis());
         // currentReadTimestampMs
         assertTrue(metrics.containsKey(CURRENT_READ_TIMESTAMP_MS));
         Gauge<Long> currentReadTimestampMs = (Gauge<Long>) metrics.get(CURRENT_READ_TIMESTAMP_MS);
@@ -872,7 +998,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .port(customDatabase.getDatabasePort())
                         .username(customDatabase.getUsername())
                         .password(customDatabase.getPassword())
-                        .serverTimeZone("UTC")
+                        .serverTimeZone(getSystemTimeZone())
                         .databaseList(customDatabase.getDatabaseName())
                         .tableList(customerTable.getTableId())
                         .deserializer(customerTable.getDeserializer())
@@ -925,10 +1051,11 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
             throws Exception {
         // Initialize customer database
         customDatabase.createAndInitialize();
-        String tableId = getTableId();
+        TestTable customers =
+                new TestTable(customDatabase, "customers", TestTableSchemas.CUSTOMERS);
 
         // Make some changes before starting the CDC job
-        makeFirstPartBinlogEvents(getConnection(), tableId);
+        makeFirstPartBinlogEvents(getConnection(), customers.getTableId());
 
         // Create Flink execution environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -954,8 +1081,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .hostname(MYSQL_CONTAINER.getHost())
                         .port(MYSQL_CONTAINER.getDatabasePort())
                         .databaseList(customDatabase.getDatabaseName())
-                        .serverTimeZone("UTC")
-                        .tableList(tableId)
+                        .serverTimeZone(getSystemTimeZone())
+                        .tableList(customers.getTableId())
                         .username(customDatabase.getUsername())
                         .password(customDatabase.getPassword())
                         .serverId("5401-5404")
@@ -964,13 +1091,16 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .chunkKeyColumn(
                                 new ObjectPath(customDatabase.getDatabaseName(), tableName),
                                 chunkColumnName)
+                        .debeziumProperties(dbzProperties)
                         .build();
 
         // Build and execute the job
         DataStreamSource<RowData> source =
                 env.fromSource(mySqlSource, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
         try (CloseableIterator<RowData> iterator = source.executeAndCollect()) {
-            List<String> rows = fetchRowData(iterator, expectedChangelogAfterStart.size());
+            List<String> rows =
+                    fetchRowData(
+                            iterator, expectedChangelogAfterStart.size(), customers::stringify);
             assertEqualsInAnyOrder(expectedChangelogAfterStart, rows);
         }
     }
@@ -1000,8 +1130,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         .deserializer(new StringDebeziumDeserializationSchema())
                         .serverId(getServerId())
                         .includeSchemaChanges(true)
-                        .serverTimeZone("UTC")
-                        .debeziumProperties(new Properties())
+                        .serverTimeZone(getSystemTimeZone())
+                        .debeziumProperties(dbzProperties)
                         .build();
         DataStreamSource<String> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "MySQL CDC Source");
@@ -1152,6 +1282,82 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         connection.close();
     }
 
+    @Test
+    public void testSkippingSnapshotBackfill() throws Exception {
+        customDatabase.createAndInitialize();
+        TestTable customerTable =
+                new TestTable(customDatabase, "customers", TestTableSchemas.CUSTOMERS);
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        MySqlSource<RowData> source =
+                MySqlSource.<RowData>builder()
+                        .hostname(customDatabase.getHost())
+                        .port(customDatabase.getDatabasePort())
+                        .username(customDatabase.getUsername())
+                        .password(customDatabase.getPassword())
+                        .databaseList(customDatabase.getDatabaseName())
+                        .tableList(customerTable.getTableId())
+                        .deserializer(customerTable.getDeserializer())
+                        .skipSnapshotBackfill(true)
+                        .debeziumProperties(dbzProperties)
+                        .build();
+
+        String[] statements =
+                new String[] {
+                    String.format(
+                            "INSERT INTO %s VALUES (15213, 'user_15213', 'Shanghai', '123567891234')",
+                            customerTable.getTableId()),
+                    String.format(
+                            "UPDATE %s SET address='Pittsburgh' WHERE id=2000",
+                            customerTable.getTableId()),
+                    String.format("DELETE FROM %s WHERE id=1019", customerTable.getTableId())
+                };
+
+        SnapshotPhaseHooks hooks = new SnapshotPhaseHooks();
+        hooks.setPreHighWatermarkAction(
+                (connection, splitId) -> {
+                    connection.setAutoCommit(false);
+                    connection.execute(statements);
+                    connection.commit();
+                });
+
+        source.setSnapshotHooks(hooks);
+
+        try (CloseableIterator<RowData> iterator =
+                env.fromSource(source, WatermarkStrategy.noWatermarks(), "Backfill Skipped Source")
+                        .executeAndCollect()) {
+            List<String> records = fetchRowData(iterator, 25, customerTable::stringify);
+            List<String> expectedRecords =
+                    Arrays.asList(
+                            "+I[101, user_1, Shanghai, 123567891234]",
+                            "+I[102, user_2, Shanghai, 123567891234]",
+                            "+I[103, user_3, Shanghai, 123567891234]",
+                            "+I[109, user_4, Shanghai, 123567891234]",
+                            "+I[110, user_5, Shanghai, 123567891234]",
+                            "+I[111, user_6, Shanghai, 123567891234]",
+                            "+I[118, user_7, Shanghai, 123567891234]",
+                            "+I[121, user_8, Shanghai, 123567891234]",
+                            "+I[123, user_9, Shanghai, 123567891234]",
+                            "+I[1009, user_10, Shanghai, 123567891234]",
+                            "+I[1010, user_11, Shanghai, 123567891234]",
+                            "+I[1011, user_12, Shanghai, 123567891234]",
+                            "+I[1012, user_13, Shanghai, 123567891234]",
+                            "+I[1013, user_14, Shanghai, 123567891234]",
+                            "+I[1014, user_15, Shanghai, 123567891234]",
+                            "+I[1015, user_16, Shanghai, 123567891234]",
+                            "+I[1016, user_17, Shanghai, 123567891234]",
+                            "+I[1017, user_18, Shanghai, 123567891234]",
+                            "+I[1018, user_19, Shanghai, 123567891234]",
+                            "+I[1019, user_20, Shanghai, 123567891234]",
+                            "+I[2000, user_21, Shanghai, 123567891234]",
+                            "+I[15213, user_15213, Shanghai, 123567891234]",
+                            "-U[2000, user_21, Shanghai, 123567891234]",
+                            "+U[2000, user_21, Pittsburgh, 123567891234]",
+                            "-D[1019, user_20, Shanghai, 123567891234]");
+            assertEqualsInAnyOrder(expectedRecords, records);
+        }
+    }
+
     private <T> CollectResultIterator<T> addCollector(
             StreamExecutionEnvironment env, DataStream<T> stream) {
         TypeSerializer<T> serializer =
@@ -1172,32 +1378,9 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         return iterator;
     }
 
-    private MySqlSource<RowData> buildSleepingSource() {
-        ResolvedSchema physicalSchema =
-                new ResolvedSchema(
-                        Arrays.asList(
-                                Column.physical("id", DataTypes.BIGINT().notNull()),
-                                Column.physical("name", DataTypes.STRING()),
-                                Column.physical("address", DataTypes.STRING()),
-                                Column.physical("phone_number", DataTypes.STRING())),
-                        new ArrayList<>(),
-                        UniqueConstraint.primaryKey("pk", Collections.singletonList("id")));
-        RowType physicalDataType =
-                (RowType) physicalSchema.toPhysicalRowDataType().getLogicalType();
-        MetadataConverter[] metadataConverters = new MetadataConverter[0];
-        final TypeInformation<RowData> typeInfo = InternalTypeInfo.of(physicalDataType);
-
+    private MySqlSource<RowData> buildSleepingSource(TestTable table) {
         SleepingRowDataDebeziumDeserializeSchema deserializer =
-                new SleepingRowDataDebeziumDeserializeSchema(
-                        RowDataDebeziumDeserializeSchema.newBuilder()
-                                .setPhysicalRowType(physicalDataType)
-                                .setMetadataConverters(metadataConverters)
-                                .setResultTypeInfo(typeInfo)
-                                .setServerTimeZone(ZoneId.of("UTC"))
-                                .setUserDefinedConverterFactory(
-                                        MySqlDeserializationConverterFactory.instance())
-                                .build(),
-                        1000L);
+                new SleepingRowDataDebeziumDeserializeSchema(table.getDeserializer(), 1000L);
         return MySqlSource.<RowData>builder()
                 .hostname(MYSQL_CONTAINER.getHost())
                 .port(MYSQL_CONTAINER.getDatabasePort())
@@ -1205,7 +1388,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                 .tableList(getTableId())
                 .username(customDatabase.getUsername())
                 .password(customDatabase.getPassword())
-                .serverTimeZone("UTC")
+                .serverTimeZone(getSystemTimeZone())
                 .serverId(getServerId())
                 .splitSize(8096)
                 .splitMetaGroupSize(1000)
@@ -1215,7 +1398,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                 .connectTimeout(Duration.ofSeconds(30))
                 .connectMaxRetries(3)
                 .connectionPoolSize(20)
-                .debeziumProperties(new Properties())
+                .debeziumProperties(dbzProperties)
                 .startupOptions(StartupOptions.initial())
                 .deserializer(deserializer)
                 .scanNewlyAddedTableEnabled(false)
@@ -1305,7 +1488,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                 + " 'scan.startup.mode' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
                                 + " 'scan.incremental.snapshot.backfill.skip' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s'"
                                 + " %s"
                                 + ")",
@@ -1317,6 +1500,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         getTableNameRegex(captureCustomerTables),
                         scanStartupMode,
                         skipSnapshotBackfill,
+                        getSystemTimeZone(),
                         getServerId(),
                         chunkColumnName == null
                                 ? ""
@@ -1467,16 +1651,6 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         return rows.stream().map(stringifier).collect(Collectors.toList());
     }
 
-    private static List<String> fetchRowData(Iterator<RowData> iter, int size) {
-        List<RowData> rows = new ArrayList<>(size);
-        while (size > 0 && iter.hasNext()) {
-            RowData row = iter.next();
-            rows.add(row);
-            size--;
-        }
-        return convertRowDataToRowString(rows);
-    }
-
     private String getTableNameRegex(String[] captureCustomerTables) {
         checkState(captureCustomerTables.length > 0);
         if (captureCustomerTables.length == 1) {
@@ -1484,19 +1658,6 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         } else {
             // pattern that matches multiple tables
             return format("(%s)", StringUtils.join(captureCustomerTables, "|"));
-        }
-    }
-
-    private String getServerId() {
-        final Random random = new Random();
-        int serverId = random.nextInt(100) + 5400;
-        return serverId + "-" + (serverId + DEFAULT_PARALLELISM);
-    }
-
-    private void sleepMs(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException ignored) {
         }
     }
 
@@ -1553,7 +1714,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         properties.put("database.port", String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
         properties.put("database.user", customDatabase.getUsername());
         properties.put("database.password", customDatabase.getPassword());
-        properties.put("database.serverTimezone", ZoneId.of("UTC").toString());
+        properties.put("database.serverTimezone", ZoneId.of(getSystemTimeZone()).toString());
         io.debezium.config.Configuration configuration =
                 io.debezium.config.Configuration.from(properties);
         return DebeziumUtils.createMySqlConnection(configuration, new Properties());

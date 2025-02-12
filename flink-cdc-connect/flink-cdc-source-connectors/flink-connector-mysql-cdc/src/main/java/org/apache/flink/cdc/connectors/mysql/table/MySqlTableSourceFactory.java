@@ -44,7 +44,9 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -59,10 +61,15 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_IS_SHARDING_TABLE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_PREFIX;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.VERVERICA_START_TIME_MILLS;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -78,9 +85,19 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         final FactoryUtil.TableFactoryHelper helper =
                 FactoryUtil.createTableFactoryHelper(this, context);
         helper.validateExcept(
-                DebeziumOptions.DEBEZIUM_OPTIONS_PREFIX, JdbcUrlUtils.PROPERTIES_PREFIX);
+                DebeziumOptions.DEBEZIUM_OPTIONS_PREFIX,
+                INTERNAL_PREFIX,
+                JdbcUrlUtils.PROPERTIES_PREFIX);
 
-        final ReadableConfig config = helper.getOptions();
+        final ReadableConfig tableOptionsFromCatalog = helper.getOptions();
+        final Map<String, String> tableOptionsFromTableConfig =
+                OptionUtils.getTableOptionsFromTableConfig(context);
+        Map<String, String> mergedTableOptions =
+                new HashMap<>(((Configuration) tableOptionsFromCatalog).toMap());
+        // NOTE: Table options from TableConfig will override options from catalog here
+        mergedTableOptions.putAll(tableOptionsFromTableConfig);
+        final ReadableConfig config = Configuration.fromMap(mergedTableOptions);
+
         String hostname = config.get(MySqlSourceOptions.HOSTNAME);
         String username = config.get(MySqlSourceOptions.USERNAME);
         String password = config.get(MySqlSourceOptions.PASSWORD);
@@ -105,8 +122,11 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 config.get(MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
         double distributionFactorLower =
                 config.get(MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
-        boolean scanNewlyAddedTableEnabled =
-                config.get(MySqlSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED);
+        // Disable scanNewlyAddedTableEnabled in VVR to avoid inconsistent schema in user SQL
+        // We could open evolvingScanNewlyAddedTableEnabled in CDAS/CTAS jobs
+        boolean evolvingScanNewlyAddedTableEnabled =
+                context.getConfiguration()
+                        .get(TableConfigOptions.EVOLVING_SCAN_NEWLY_ADDED_TABLE_ENABLED);
         Duration heartbeatInterval = config.get(MySqlSourceOptions.HEARTBEAT_INTERVAL);
         String chunkKeyColumn =
                 config.getOptional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN)
@@ -114,13 +134,28 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
 
         boolean enableParallelRead =
                 config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
-        boolean closeIdleReaders =
-                config.get(MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        boolean closeIdleReaders = config.get(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         boolean skipSnapshotBackFill =
                 config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+        boolean readChangelogAsAppend = config.get(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
+        boolean scanParallelDeserializeChangelog =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
+        int scanParallelDeserializeHandlerSize =
+                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
+
+        checkEvolvingScanNewlyAddedTableOption(
+                evolvingScanNewlyAddedTableEnabled, closeIdleReaders);
 
         if (enableParallelRead) {
-            validatePrimaryKeyIfEnableParallel(physicalSchema, chunkKeyColumn);
+            /*
+            Users can create the MySQL cdc source and MySQL lookup source with the same identifier 'mysql' in flink-connector-mysql.
+            MySQL cdc source request to have a primary key or set the 'scan.incremental.snapshot.chunk.key-column' for tables without primary key.
+            MySQL lookup source has no limit on this.
+            But `createDynamicTableSource` will fail for the tables without primary key in flink-connector-mysql.
+            We skip the validation(validatePrimaryKeyIfEnableParallel) on the primary key for cdc sources here.
+            The validation is moved to the SourceProvider when not merging sources.
+            The validation lies in the ChunkUtils when merging sources.
+            */
             validateIntegerOption(
                     MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
             validateIntegerOption(MySqlSourceOptions.CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
@@ -133,6 +168,10 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                     MySqlSourceOptions.CONNECT_TIMEOUT, connectTimeout, Duration.ofMillis(250));
         }
 
+        boolean isShardingTable = config.get(INTERNAL_IS_SHARDING_TABLE);
+        boolean scanOnlyDeserializeCapturedTablesChangelog =
+                config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
         AssignStrategy scanChunkAssignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
 
@@ -141,12 +180,6 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         if (isReadingArchivedBinlogEnabled(config)) {
             rdsConfig = AliyunRdsConfig.fromConfig(config);
         }
-        boolean scanOnlyDeserializeCapturedTablesChangelog =
-                config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
-        boolean scanParallelDeserializeChangelog =
-                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
-        int scanParallelDeserializeHandlerSize =
-                config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
 
         return new MySqlTableSource(
                 physicalSchema,
@@ -169,16 +202,19 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 distributionFactorUpper,
                 distributionFactorLower,
                 startupOptions,
-                scanNewlyAddedTableEnabled,
+                evolvingScanNewlyAddedTableEnabled,
                 closeIdleReaders,
                 JdbcUrlUtils.getJdbcProperties(context.getCatalogTable().getOptions()),
                 heartbeatInterval,
+                context.getObjectIdentifier(),
+                isShardingTable,
                 chunkKeyColumn,
                 skipSnapshotBackFill,
                 rdsConfig,
-                scanChunkAssignStrategy,
                 scanOnlyDeserializeCapturedTablesChangelog,
+                readChangelogAsAppend,
                 scanParallelDeserializeChangelog,
+                scanChunkAssignStrategy,
                 scanParallelDeserializeHandlerSize);
     }
 
@@ -221,11 +257,12 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         options.add(MySqlSourceOptions.CONNECT_MAX_RETRIES);
         options.add(MySqlSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED);
-        options.add(MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         options.add(MySqlSourceOptions.HEARTBEAT_INTERVAL);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
         options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
+        options.add(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
 
@@ -251,6 +288,17 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
     private static final String SCAN_STARTUP_MODE_VALUE_TIMESTAMP = "timestamp";
 
     private static StartupOptions getStartupOptions(ReadableConfig config) {
+        // If VERVERICA_START_TIME_MILLS is set in table options,
+        // startup mode should be overwritten to TIMESTAMP.
+        if (config.getOptional(VERVERICA_START_TIME_MILLS).isPresent()) {
+            Long startupTimestampMillis = config.get(VERVERICA_START_TIME_MILLS);
+            LOGGER.warn(
+                    "Overriding startup options with timestamp {} as option {} exists",
+                    startupTimestampMillis,
+                    VERVERICA_START_TIME_MILLS);
+            return StartupOptions.timestamp(startupTimestampMillis);
+        }
+
         String modeString = config.get(MySqlSourceOptions.SCAN_STARTUP_MODE);
 
         switch (modeString.toLowerCase()) {
@@ -462,6 +510,25 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         } else {
             // None of RDS options exist. We automatically disable RDS related feature.
             return false;
+        }
+    }
+
+    /**
+     * SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED cannot be enabled when open
+     * SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED. All operator states in savepoint will be
+     * PARTIALLY_FINISHED. But the new sink operator will be treated as ALL_RUNNING. The
+     * VerticesFinishedStatusCache#calculateFinishedState will fail when recovering from the
+     * savepoint.
+     */
+    private void checkEvolvingScanNewlyAddedTableOption(
+            boolean scanNewlyAddedTableEnabled, boolean closeIdleReaders) {
+        if (scanNewlyAddedTableEnabled && closeIdleReaders) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "%s must not be used when enable %s for CDAS/CTAS. This will lead to the failure when recovering from a savepoint. Please disable %s.",
+                            SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED.key(),
+                            TableConfigOptions.EVOLVING_SCAN_NEWLY_ADDED_TABLE_ENABLED.key(),
+                            SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED.key()));
         }
     }
 }

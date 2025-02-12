@@ -22,6 +22,7 @@ import org.apache.flink.cdc.connectors.mysql.debezium.EmbeddedFlinkDatabaseHisto
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
+import org.apache.flink.cdc.connectors.mysql.table.StartupMode;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.table.catalog.ObjectPath;
 
@@ -41,6 +42,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.EnvironmentUtils.checkSupportCheckpointsAfterTasksFinished;
+import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** A factory to construct {@link MySqlSourceConfig}. */
@@ -77,12 +79,14 @@ public class MySqlSourceConfigFactory implements Serializable {
     private Properties dbzProperties;
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     private boolean skipSnapshotBackfill = false;
+    private CapturingMode capturingMode;
     @Nullable private AliyunRdsConfig rdsConfig;
     private boolean scanOnlyDeserializeCapturedTablesChangelog = false;
 
     private boolean scanParallelDeserializeChangelog = false;
 
-    private int scanParallelDeserializeHandlerSize = 2;
+    private int scanParallelDeserializeHandlerSize =
+            SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE.defaultValue();
 
     private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
 
@@ -292,6 +296,18 @@ public class MySqlSourceConfigFactory implements Serializable {
     }
 
     /**
+     * Capturing mode of MySQL CDC source. See JavaDoc of {@link CapturingMode} for more details.
+     */
+    @Deprecated
+    public MySqlSourceConfigFactory capturingMode(CapturingMode capturingMode) {
+        this.capturingMode = capturingMode;
+        if (capturingMode == CapturingMode.SNAPSHOT_ONLY) {
+            this.startupOptions = StartupOptions.snapshot();
+        }
+        return this;
+    }
+
+    /**
      * Whether to close idle readers at the end of the snapshot phase. This feature depends on
      * FLIP-147: Support Checkpoints After Tasks Finished. The flink version is required to be
      * greater than or equal to 1.14, and the configuration <code>
@@ -417,6 +433,8 @@ public class MySqlSourceConfigFactory implements Serializable {
             jdbcProperties = new Properties();
         }
 
+        validateCapturingMode();
+
         return new MySqlSourceConfig(
                 hostname,
                 port,
@@ -445,5 +463,50 @@ public class MySqlSourceConfigFactory implements Serializable {
                 skipSnapshotBackfill,
                 rdsConfig,
                 scanChunkAssignStrategy);
+    }
+
+    private void validateCapturingMode() {
+        if (capturingMode != null) {
+            // Sanity check
+            switch (capturingMode) {
+                case BINLOG_ONLY:
+                    checkArgument(
+                            isBinlogOnlyStartupMode(startupOptions.startupMode),
+                            "StartupMode must be set to %s, %s, %s or %s under capturing mode %s",
+                            StartupMode.EARLIEST_OFFSET,
+                            StartupMode.LATEST_OFFSET,
+                            StartupMode.SPECIFIC_OFFSETS,
+                            StartupMode.TIMESTAMP,
+                            CapturingMode.BINLOG_ONLY);
+                    break;
+                case HYBRID:
+                    checkArgument(
+                            isHybridStartupMode(startupOptions.startupMode),
+                            "StartupMode must be set to %s under capturing mode %s",
+                            StartupMode.INITIAL,
+                            CapturingMode.HYBRID);
+                    break;
+                case SNAPSHOT_ONLY:
+                    checkArgument(
+                            startupOptions.startupMode == StartupMode.SNAPSHOT,
+                            "StartupMode must be set to %s under capturing mode %s",
+                            StartupMode.SNAPSHOT,
+                            CapturingMode.SNAPSHOT_ONLY);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unrecognized capturing mode");
+            }
+        }
+    }
+
+    private boolean isBinlogOnlyStartupMode(StartupMode startupMode) {
+        return startupMode == StartupMode.EARLIEST_OFFSET
+                || startupMode == StartupMode.LATEST_OFFSET
+                || startupMode == StartupMode.SPECIFIC_OFFSETS
+                || startupMode == StartupMode.TIMESTAMP;
+    }
+
+    private boolean isHybridStartupMode(StartupMode startupMode) {
+        return startupMode == StartupMode.INITIAL;
     }
 }

@@ -28,7 +28,9 @@ import org.apache.flink.util.CloseableIterator;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.sql.Connection;
 import java.sql.Statement;
@@ -44,6 +46,9 @@ import static java.lang.String.format;
  * test.
  */
 public class PolardbxSourceITCase extends PolardbxSourceTestBase {
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(60);
+
     private static final String DDL_FILE = "polardbx_ddl_test";
     private static final String DATABASE_NAME = "cdc_s_" + getRandomSuffix();
 
@@ -135,6 +140,9 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
 
         waitForSinkSize("sink", realSnapshotData.size());
         assertEqualsInAnyOrder(expectedSnapshotData, TestValuesTableFactory.getRawResults("sink"));
+
+        // sleep 20s to finish snapshot phase
+        Thread.sleep(20000L);
 
         // third step: check dml events
         try (Connection connection = getJdbcConnection();
@@ -354,6 +362,9 @@ public class PolardbxSourceITCase extends PolardbxSourceTestBase {
         waitForSinkSize("multi_key_sink", realSnapshotData.size());
         assertEqualsInAnyOrder(
                 expectedSnapshotData, TestValuesTableFactory.getRawResults("multi_key_sink"));
+
+        // sleep 20s to finish snapshot phase
+        Thread.sleep(20000L);
 
         // third step: check dml events
         try (Connection connection = getJdbcConnection();

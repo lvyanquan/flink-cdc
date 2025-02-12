@@ -77,12 +77,12 @@
                             "field": "char_c"
                         },
                         {
-                            "type": "float32",
+                            "type": "double",
                             "optional": true,
                             "field": "real_c"
                         },
                         {
-                            "type": "float32",
+                            "type": "double",
                             "optional": true,
                             "field": "float_c"
                         },
@@ -349,12 +349,12 @@
                             "field": "char_c"
                         },
                         {
-                            "type": "float32",
+                            "type": "double",
                             "optional": true,
                             "field": "real_c"
                         },
                         {
-                            "type": "float32",
+                            "type": "double",
                             "optional": true,
                             "field": "float_c"
                         },

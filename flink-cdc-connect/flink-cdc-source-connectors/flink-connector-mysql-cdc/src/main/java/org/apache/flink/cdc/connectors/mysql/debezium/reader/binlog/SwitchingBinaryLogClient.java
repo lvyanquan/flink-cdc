@@ -92,11 +92,13 @@ public class SwitchingBinaryLogClient extends BinaryLogClient {
 
     private void readLocalBinlogFiles(String stoppingBinlogFilename) {
         LOG.info("Start reading local binlog files with startingOffset={}", startingOffset);
+        eventDeserializer.setDeserializeInParallel(false);
         try {
             LocalBinlogFile binlogFile;
             while (binlogFileFetcher.hasNext()) {
                 binlogFile = binlogFileFetcher.next();
                 if (binlogFile.getFilename().compareToIgnoreCase(stoppingBinlogFilename) >= 0) {
+                    readingState = ReadingState.LOCAL_READ;
                     break;
                 }
 
@@ -122,6 +124,7 @@ public class SwitchingBinaryLogClient extends BinaryLogClient {
                 readingState,
                 startingOffset);
         readingState = ReadingState.REMOTE_READ;
+        eventDeserializer.setDeserializeInParallel(true);
         if (isLocalOnly) {
             disconnect();
             return;

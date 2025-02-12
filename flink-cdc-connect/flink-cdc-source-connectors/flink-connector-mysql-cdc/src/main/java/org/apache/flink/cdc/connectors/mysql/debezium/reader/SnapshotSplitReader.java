@@ -184,7 +184,7 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                         // changes into snapshot
                         backfill(snapshotResult, sourceContext);
 
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         setReadException(e);
                     } finally {
                         stopCurrentTask();
@@ -264,6 +264,7 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
 
     private MySqlBinlogSplitReadTask createBackfillBinlogReadTask(
             MySqlBinlogSplit backfillBinlogSplit) {
+        LOG.info("Create backfill binlog read task for split {}", backfillBinlogSplit);
         // we should only capture events for the current table,
         // otherwise, we may can't find corresponding schema
         Configuration dezConf =

@@ -21,6 +21,7 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.HybridPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.events.TriggerSplitRequestEvent;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -54,10 +55,15 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     private final MySqlSourceConfig sourceConfig;
 
     private boolean isBinlogSplitAssigned;
+    // Whether stop returning splits when invoking getNext method
+    private boolean blockSplitAssignmentToSetSignal = false;
+    private boolean isInitialBinlogSplitAssignment = true;
+    private boolean skipSetIsInsertOnly;
 
     private final MySqlSnapshotSplitAssigner snapshotSplitAssigner;
 
     private final SplitEnumeratorContext<MySqlSplit> enumeratorContext;
+    private final boolean isCdcYamlSource;
     private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     public MySqlHybridSplitAssigner(
@@ -65,28 +71,39 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             int currentParallelism,
             List<TableId> remainingTables,
             boolean isTableIdCaseSensitive,
-            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, currentParallelism, remainingTables, isTableIdCaseSensitive),
+                        sourceConfig,
+                        currentParallelism,
+                        remainingTables,
+                        isTableIdCaseSensitive,
+                        enumeratorContext),
                 false,
                 sourceConfig.getSplitMetaGroupSize(),
-                enumeratorContext);
+                enumeratorContext,
+                isCdcYamlSource);
     }
 
     public MySqlHybridSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             HybridPendingSplitsState checkpoint,
-            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
         this(
                 sourceConfig,
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, currentParallelism, checkpoint.getSnapshotPendingSplits()),
+                        sourceConfig,
+                        currentParallelism,
+                        checkpoint.getSnapshotPendingSplits(),
+                        enumeratorContext),
                 checkpoint.isBinlogSplitAssigned(),
                 sourceConfig.getSplitMetaGroupSize(),
-                enumeratorContext);
+                enumeratorContext,
+                isCdcYamlSource);
     }
 
     private MySqlHybridSplitAssigner(
@@ -94,17 +111,32 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             MySqlSnapshotSplitAssigner snapshotSplitAssigner,
             boolean isBinlogSplitAssigned,
             int splitMetaGroupSize,
-            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
         this.sourceConfig = sourceConfig;
         this.snapshotSplitAssigner = snapshotSplitAssigner;
         this.isBinlogSplitAssigned = isBinlogSplitAssigned;
         this.splitMetaGroupSize = splitMetaGroupSize;
         this.enumeratorContext = enumeratorContext;
+        this.isCdcYamlSource = isCdcYamlSource;
+
+        try {
+            Class enumertorContextClass = enumeratorContext.getClass();
+            enumertorContextClass.getMethod("setIsInsertOnly", boolean.class, Runnable.class);
+            this.skipSetIsInsertOnly = false;
+            LOG.info("Support setIsInsertOnly in enumeratorContext.");
+        } catch (NoSuchMethodException e) {
+            this.skipSetIsInsertOnly = true;
+            LOG.warn(
+                    "Cannot find setIsInsertOnly method in enumeratorContext, skip the related code.",
+                    e);
+        }
     }
 
     @Override
     public void open() {
-        this.enumeratorMetrics = new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup());
+        this.enumeratorMetrics =
+                new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup(), isCdcYamlSource);
 
         if (isBinlogSplitAssigned) {
             enumeratorMetrics.enterBinlogReading();
@@ -112,14 +144,27 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             enumeratorMetrics.exitBinlogReading();
         }
 
+        snapshotSplitAssigner.setEnumeratorMetrics(enumeratorMetrics);
         snapshotSplitAssigner.open();
-        snapshotSplitAssigner.initEnumeratorMetrics(enumeratorMetrics);
+
+        if (snapshotSplitAssigner.shouldEnterProcessingBacklog()) {
+            enumeratorContext.setIsProcessingBacklog(true);
+            if (!skipSetIsInsertOnly) {
+                safelySetInsertOnlySignal(true);
+            }
+        } else {
+            enumeratorContext.setIsProcessingBacklog(false);
+        }
     }
 
     @Override
     public Optional<MySqlSplit> getNext() {
         if (AssignerStatus.isNewlyAddedAssigningSnapshotFinished(getAssignerStatus())) {
             // do not assign split until the adding table process finished
+            return Optional.empty();
+        }
+        if (!skipSetIsInsertOnly && blockSplitAssignmentToSetSignal) {
+            // do not assign split until the insert only signal is sent
             return Optional.empty();
         }
         if (snapshotSplitAssigner.noMoreSplits()) {
@@ -130,6 +175,17 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
                 return Optional.empty();
             } else if (AssignerStatus.isInitialAssigningFinished(
                     snapshotSplitAssigner.getAssignerStatus())) {
+                // Set isInsertOnly to false and return an empty result when the assigner should
+                // return a BinlogSplit at the first time.
+                // After setting isInsertOnly to false in all readers, the callback will trigger all
+                // readers to request splits again.
+                // Then the assigner will assign the BinlogSplit.
+                if (!skipSetIsInsertOnly && isInitialBinlogSplitAssignment) {
+                    safelySetInsertOnlySignal(false);
+                    this.isInitialBinlogSplitAssignment = false;
+                    return Optional.empty();
+                }
+
                 // we need to wait snapshot-assigner to be finished before
                 // assigning the binlog split. Otherwise, records emitted from binlog split
                 // might be out-of-order in terms of same primary key with snapshot splits.
@@ -155,6 +211,11 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     @Override
     public boolean waitingForFinishedSplits() {
         return snapshotSplitAssigner.waitingForFinishedSplits();
+    }
+
+    @Override
+    public boolean isStreamSplitAssigned() {
+        return isBinlogSplitAssigned;
     }
 
     @Override
@@ -218,6 +279,10 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         snapshotSplitAssigner.close();
     }
 
+    public boolean noMoreSnapshotSplits() {
+        return snapshotSplitAssigner.noMoreSplits();
+    }
+
     // --------------------------------------------------------------------------------------------
 
     private MySqlBinlogSplit createBinlogSplit() {
@@ -269,5 +334,30 @@ public class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
                 divideMetaToGroups ? new ArrayList<>() : finishedSnapshotSplitInfos,
                 new HashMap<>(),
                 finishedSnapshotSplitInfos.size());
+    }
+
+    private void safelySetInsertOnlySignal(Boolean isInsertOnly) {
+        LOG.info(
+                "Current split assignment has been blocked to wait source operator set insertOnly = {} signal.",
+                isInsertOnly);
+        this.blockSplitAssignmentToSetSignal = true;
+        enumeratorContext.setIsInsertOnly(
+                isInsertOnly,
+                () -> {
+                    this.blockSplitAssignmentToSetSignal = false;
+                    LOG.info(
+                            "The MySqlHybridSplitAssigner triggers all readers to request splits after set insertOnly = {} signal success.",
+                            isInsertOnly);
+                    for (int subtaskId : getRegisteredReader()) {
+                        enumeratorContext.sendEventToSourceReader(
+                                subtaskId, new TriggerSplitRequestEvent());
+                    }
+                });
+    }
+
+    private int[] getRegisteredReader() {
+        return this.enumeratorContext.registeredReaders().keySet().stream()
+                .mapToInt(Integer::intValue)
+                .toArray();
     }
 }

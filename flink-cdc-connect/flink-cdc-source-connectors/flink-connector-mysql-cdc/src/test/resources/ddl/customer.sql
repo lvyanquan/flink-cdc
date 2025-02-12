@@ -326,3 +326,10 @@ CREATE TABLE default_value_test (
 INSERT INTO default_value_test
 VALUES (1,'user1','Shanghai',123567),
        (2,'user2','Shanghai',123567);
+
+CREATE TABLE customers_no_data (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL DEFAULT 'flink',
+    address VARCHAR(1024),
+    phone_number VARCHAR(512)
+);

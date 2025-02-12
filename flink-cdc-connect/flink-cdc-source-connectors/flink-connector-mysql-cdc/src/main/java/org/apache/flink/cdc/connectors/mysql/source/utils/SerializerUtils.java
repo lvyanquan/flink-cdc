@@ -20,6 +20,8 @@ package org.apache.flink.cdc.connectors.mysql.source.utils;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffsetKind;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffsetSerializer;
+import org.apache.flink.cdc.connectors.mysql.table.MySqlReadableMetadata;
+import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 
@@ -32,6 +34,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.List;
 
 /** Utils for serialization and deserialization. */
 public class SerializerUtils {
@@ -114,5 +117,16 @@ public class SerializerUtils {
                             "Failed to deserialize split boundary with value '%s'", serialized),
                     e);
         }
+    }
+
+    public static MetadataConverter[] getMetadataConverters(List<String> metadataKeys) {
+        if (metadataKeys == null || metadataKeys.isEmpty()) {
+            return new MetadataConverter[0];
+        }
+
+        return metadataKeys.stream()
+                .map(MySqlReadableMetadata::getMysqlReadableMetadata)
+                .map(MySqlReadableMetadata::getConverter)
+                .toArray(MetadataConverter[]::new);
     }
 }

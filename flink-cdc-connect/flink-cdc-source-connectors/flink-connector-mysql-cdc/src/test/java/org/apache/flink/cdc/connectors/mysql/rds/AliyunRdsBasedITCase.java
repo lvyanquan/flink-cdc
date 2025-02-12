@@ -22,6 +22,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
+import org.apache.flink.cdc.connectors.mysql.source.config.CapturingMode;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.utils.RecordUtils;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
@@ -34,8 +35,9 @@ import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Collector;
 
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -49,6 +51,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
@@ -58,45 +61,62 @@ class AliyunRdsBasedITCase {
 
     @RegisterExtension private static final AliyunRdsExtension RDS = new AliyunRdsExtension();
 
-    @Test
-    void testReadFromRdsMySql() throws Exception {
+    @RegisterExtension
+    private static final AliyunRdsExtension RDS_PARALLEL_ENABLED = new AliyunRdsExtension(true);
+
+    static Stream<AliyunRdsExtension> testAliyunRdsExtensionProvider() {
+        return Stream.of(RDS, RDS_PARALLEL_ENABLED);
+    }
+
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testReadFromRdsMySql(AliyunRdsExtension aliyunRdsExtension) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         MySqlSource<RowData> source =
-                createSourceBuilder(RDS.getCustomerTable().getDeserializer()).build();
+                createSourceBuilder(
+                                aliyunRdsExtension,
+                                aliyunRdsExtension.getCustomerTable().getDeserializer())
+                        .build();
         DataStreamSource<RowData> stream =
                 env.fromSource(source, WatermarkStrategy.noWatermarks(), "RDS MySQL Source");
         try (CloseableIterator<RowData> iterator = stream.executeAndCollect()) {
             List<String> records =
                     fetchRecords(
                             iterator,
-                            RDS.getExpectedCustomerTableRecords().size(),
-                            RDS.getCustomerTable()::stringify,
+                            aliyunRdsExtension.getExpectedCustomerTableRecords().size(),
+                            aliyunRdsExtension.getCustomerTable()::stringify,
                             Duration.ofSeconds(30));
-            assertThat(records).hasSameElementsAs(RDS.getExpectedCustomerTableRecords());
+            assertThat(records)
+                    .hasSameElementsAs(aliyunRdsExtension.getExpectedCustomerTableRecords());
         }
     }
 
-    @Test
-    void testReadFromEarliestArchivedBinlog() throws Exception {
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testReadFromEarliestArchivedBinlog(AliyunRdsExtension aliyunRdsExtension)
+            throws Exception {
         long stopTimestampMs = System.currentTimeMillis();
         long startTimestampMs = 0;
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         List<String> archivedBinlogFiles =
-                RDS.getArchivedBinlogFiles(startTimestampMs, stopTimestampMs);
+                aliyunRdsExtension.getArchivedBinlogFiles(startTimestampMs, stopTimestampMs);
         assumeThat(archivedBinlogFiles).hasSizeGreaterThan(1);
         BinlogOffset startingOffset =
                 BinlogOffset.ofBinlogFilePosition(archivedBinlogFiles.get(1), 4);
         MySqlSource<BinlogOffset> source =
-                createSourceBuilder(binlogOffsetDeserializer())
+                createSourceBuilder(aliyunRdsExtension, binlogOffsetDeserializer())
+                        .capturingMode(CapturingMode.BINLOG_ONLY)
                         .startupOptions(StartupOptions.specificOffset(startingOffset))
                         .build();
+
         // Note that "currentBinlogOffset" returns the offset of the NEXT event. We need to create
         // some binlog events to push the offset forward in order to make sure the loop can finish.
         BinlogOffset latestOnlineOffset =
-                DebeziumUtils.currentBinlogOffset(RDS.getMySqlConnection());
-        RDS.clearCustomerTable();
+                DebeziumUtils.currentBinlogOffset(aliyunRdsExtension.getMySqlConnection());
+        aliyunRdsExtension.clearCustomerTable();
+
         // Unfortunately we can't validate contents in the archived binlog files. We just check if
         // events are monotonically increasing.
         DataStreamSource<BinlogOffset> stream =
@@ -122,16 +142,16 @@ class AliyunRdsBasedITCase {
     // --------------------------- Helper functions ----------------------------
 
     private static <T> MySqlSourceBuilder<T> createSourceBuilder(
-            DebeziumDeserializationSchema<T> deserializer) {
+            AliyunRdsExtension aliyunRdsExtension, DebeziumDeserializationSchema<T> deserializer) {
         return MySqlSource.<T>builder()
-                .hostname(RDS.getJdbcConnectionConfig().getHost())
-                .port(RDS.getJdbcConnectionConfig().getPort())
-                .username(RDS.getJdbcConnectionConfig().getUsername())
-                .password(RDS.getJdbcConnectionConfig().getPassword())
-                .databaseList(RDS.getJdbcConnectionConfig().getDatabase())
-                .tableList(RDS.getCustomerTable().getTableId())
+                .hostname(aliyunRdsExtension.getJdbcConnectionConfig().getHost())
+                .port(aliyunRdsExtension.getJdbcConnectionConfig().getPort())
+                .username(aliyunRdsExtension.getJdbcConnectionConfig().getUsername())
+                .password(aliyunRdsExtension.getJdbcConnectionConfig().getPassword())
+                .databaseList(aliyunRdsExtension.getJdbcConnectionConfig().getDatabase())
+                .tableList(aliyunRdsExtension.getCustomerTable().getTableId())
                 .deserializer(deserializer)
-                .enableReadingRdsArchivedBinlog(RDS.getRdsConfigBuilder().build());
+                .enableReadingRdsArchivedBinlog(aliyunRdsExtension.getRdsConfigBuilder().build());
     }
 
     private <T> List<String> fetchRecords(
@@ -171,9 +191,11 @@ class AliyunRdsBasedITCase {
         if (a.getFilename().compareToIgnoreCase(b.getFilename()) != 0) {
             return a.getFilename().compareToIgnoreCase(b.getFilename());
         }
+
         if (a.getPosition() != b.getPosition()) {
             return Long.compare(a.getPosition(), b.getPosition());
         }
+
         return 0;
     }
 

@@ -48,6 +48,7 @@ public class MySqlSourceReaderMetrics {
     public static final String NAMESPACE_GROUP_KEY = "cdcns";
     public static final String SCHEMA_GROUP_KEY = "schema";
     public static final String TABLE_GROUP_KEY = "table";
+    public static final String DATABASE_GROUP_KEY = "database";
 
     // Metric names
     public static final String NUM_SNAPSHOT_RECORDS = "numSnapshotRecords";
@@ -79,7 +80,9 @@ public class MySqlSourceReaderMetrics {
     // Timestamp when the current processing event was produced in MySQL.
     private volatile long currentReadTimestampMs = UNDEFINED;
 
-    public MySqlSourceReaderMetrics(SourceReaderMetricGroup metricGroup) {
+    private final boolean isCdcYamlSource;
+
+    public MySqlSourceReaderMetrics(SourceReaderMetricGroup metricGroup, boolean isCdcYamlSource) {
         this.metricGroup = metricGroup;
         metricGroup.gauge(MetricNames.CURRENT_FETCH_EVENT_TIME_LAG, () -> fetchDelay);
         metricGroup.gauge(CURRENT_READ_TIMESTAMP_MS, () -> currentReadTimestampMs);
@@ -88,6 +91,7 @@ public class MySqlSourceReaderMetrics {
         updateCounter = metricGroup.counter(NUM_UPDATE_DML_RECORDS);
         deleteCounter = metricGroup.counter(NUM_DELETE_DML_RECORDS);
         schemaChangeCounter = metricGroup.counter(NUM_DDL_RECORDS);
+        this.isCdcYamlSource = isCdcYamlSource;
     }
 
     public void markInput(long count) {
@@ -160,7 +164,8 @@ public class MySqlSourceReaderMetrics {
 
     private TableMetrics getTableMetrics(TableId tableId) {
         return tableMetricsMap.computeIfAbsent(
-                tableId, id -> new TableMetrics(id.catalog(), id.table(), metricGroup));
+                tableId,
+                id -> new TableMetrics(id.catalog(), id.table(), metricGroup, isCdcYamlSource));
     }
 
     // ----------------------------------- Helper classes --------------------------------
@@ -185,12 +190,24 @@ public class MySqlSourceReaderMetrics {
         private final Counter deleteCounter;
         private final Counter schemaChangeCounter;
 
-        public TableMetrics(String databaseName, String tableName, MetricGroup parentGroup) {
-            MetricGroup metricGroup =
-                    parentGroup
-                            .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
-                            .addGroup(SCHEMA_GROUP_KEY, databaseName)
-                            .addGroup(TABLE_GROUP_KEY, tableName);
+        public TableMetrics(
+                String databaseName,
+                String tableName,
+                MetricGroup parentGroup,
+                boolean isCdcYamlSource) {
+            MetricGroup metricGroup;
+            if (isCdcYamlSource) {
+                metricGroup =
+                        parentGroup
+                                .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
+                                .addGroup(SCHEMA_GROUP_KEY, databaseName)
+                                .addGroup(TABLE_GROUP_KEY, tableName);
+            } else {
+                metricGroup =
+                        parentGroup
+                                .addGroup(DATABASE_GROUP_KEY, databaseName)
+                                .addGroup(TABLE_GROUP_KEY, tableName);
+            }
             recordsCounter = metricGroup.counter(MetricNames.IO_NUM_RECORDS_IN);
             snapshotCounter = metricGroup.counter(NUM_SNAPSHOT_RECORDS);
             insertCounter = metricGroup.counter(NUM_INSERT_DML_RECORDS);

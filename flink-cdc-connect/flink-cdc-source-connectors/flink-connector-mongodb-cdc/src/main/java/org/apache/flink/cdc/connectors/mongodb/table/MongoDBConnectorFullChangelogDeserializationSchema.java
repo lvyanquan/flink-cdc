@@ -17,8 +17,8 @@
 
 package org.apache.flink.cdc.connectors.mongodb.table;
 
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.table.data.GenericRowData;
@@ -35,6 +35,9 @@ import org.bson.BsonDocument;
 
 import java.time.ZoneId;
 
+import static org.apache.flink.cdc.connectors.mongodb.source.utils.MongoRecordUtils.extractBsonDocument;
+import static org.apache.flink.cdc.connectors.mongodb.source.utils.MongoRecordUtils.operationTypeFor;
+
 /**
  * Deserialization schema from Mongodb ChangeStreamDocument to Flink Table/SQL internal data that
  * produces full changelog mode structure {@link RowData}.
@@ -49,8 +52,14 @@ public class MongoDBConnectorFullChangelogDeserializationSchema
             RowType physicalDataType,
             MetadataConverter[] metadataConverters,
             TypeInformation<RowData> resultTypeInfo,
-            ZoneId localTimeZone) {
-        super(physicalDataType, metadataConverters, resultTypeInfo, localTimeZone);
+            ZoneId localTimeZone,
+            boolean flattenNestedColumns) {
+        super(
+                physicalDataType,
+                metadataConverters,
+                resultTypeInfo,
+                localTimeZone,
+                flattenNestedColumns);
     }
 
     @Override

@@ -24,7 +24,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
@@ -58,12 +57,6 @@ public class MySqSourceTestUtils {
             }
         }
         return Tuple2.of(result, createTableEvents);
-    }
-
-    public static String getServerId(int parallelism) {
-        final Random random = new Random();
-        int serverId = random.nextInt(100) + 5400;
-        return serverId + "-" + (serverId + parallelism);
     }
 
     public static void loopCheck(

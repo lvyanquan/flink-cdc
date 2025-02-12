@@ -38,10 +38,13 @@ import java.util.Map;
  *
  * <p>Line 46: modify the visibility of {@link #eventHeaderDeserializer} from private to public.
  *
- * <p>Line 255: modify the visibility of {@link #deserializeFormatDescriptionEventData} from private
+ * <p>Line 63: add {@link #deserializeInParallel} to Indicate that whether parallel conversion of
+ * byte to {@link Event} is supported.
+ *
+ * <p>Line 266: modify the visibility of {@link #deserializeFormatDescriptionEventData} from private
  * to public.
  *
- * <p>Line 340: modify the visibility of {@link #deserializeEventData} from private to public.
+ * <p>Line 351: modify the visibility of {@link #deserializeEventData} from private to public.
  */
 public class EventDeserializer {
 
@@ -56,6 +59,9 @@ public class EventDeserializer {
 
     private EventDataDeserializer tableMapEventDataDeserializer;
     private EventDataDeserializer formatDescEventDataDeserializer;
+
+    /** Indicate that EventData should be deserialized later in parallel. */
+    protected boolean deserializeInParallel = false;
 
     public EventDeserializer() {
         this(new EventHeaderV4Deserializer(), new NullEventDataDeserializer());
@@ -90,6 +96,10 @@ public class EventDeserializer {
         this.eventDataDeserializers = eventDataDeserializers;
         this.tableMapEventByTableId = tableMapEventByTableId;
         afterEventDataDeserializerSet(null);
+    }
+
+    public void setDeserializeInParallel(boolean deserializeInParallel) {
+        this.deserializeInParallel = deserializeInParallel;
     }
 
     private void registerDefaultEventDataDeserializers() {

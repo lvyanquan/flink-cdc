@@ -18,8 +18,12 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlEvolvingSourceDeserializeSchema;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlMergedSourceDeserializeSchema;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
@@ -27,15 +31,25 @@ import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
+import org.apache.flink.table.api.ValidationException;
+import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.EvolvingSourceProvider;
+import org.apache.flink.table.connector.source.MergedSourceProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
 import org.apache.flink.table.connector.source.SourceProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
+import org.apache.flink.table.connector.source.abilities.SupportsReportProcessingBacklog;
+import org.apache.flink.table.connector.source.abilities.SupportsSchemaEvolutionReading;
+import org.apache.flink.table.connector.source.abilities.SupportsTableSourceMerge;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.SchemaSpec;
+import org.apache.flink.table.data.SourceRecord;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -46,7 +60,11 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,18 +73,28 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.debezium.config.CommonConnectorConfig.TOMBSTONES_ON_DELETE;
 import static io.debezium.connector.mysql.MySqlConnectorConfig.SNAPSHOT_MODE;
 import static io.debezium.engine.DebeziumEngine.OFFSET_FLUSH_INTERVAL_MS_PROP;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.utils.SerializerUtils.getMetadataConverters;
+import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * A {@link DynamicTableSource} that describes how to create a MySQL binlog source from a logical
  * description.
  */
-public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadata {
+public class MySqlTableSource
+        implements ScanTableSource,
+                SupportsReadingMetadata,
+                SupportsSchemaEvolutionReading,
+                SupportsTableSourceMerge,
+                SupportsReportProcessingBacklog {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlTableSource.class);
     private final Set<String> exceptDbzProperties =
@@ -76,7 +104,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                             TOMBSTONES_ON_DELETE.name())
                     .collect(Collectors.toSet());
 
-    private final ResolvedSchema physicalSchema;
+    private final ResolvedSchema physicalSchemaWithSystemData;
     private final int port;
     private final String hostname;
     private final String database;
@@ -96,34 +124,48 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     private final double distributionFactorUpper;
     private final double distributionFactorLower;
     private final StartupOptions startupOptions;
+    private final ObjectIdentifier sourceTablePath;
+    private final boolean isShardingTable;
     private final boolean scanNewlyAddedTableEnabled;
     private final boolean closeIdleReaders;
     private final Properties jdbcProperties;
     private final Duration heartbeatInterval;
-    private final String chunkKeyColumn;
+    private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     final boolean skipSnapshotBackFill;
     @Nullable private final AliyunRdsConfig rdsConfig;
+
+    private final boolean scanOnlyDeserializeCapturedTablesChangelog;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
     // --------------------------------------------------------------------------------------------
 
+    /** Physical schema of the captured tables. */
+    protected Map<ObjectPath, ResolvedSchema> tablePhysicalSchemas = new HashMap<>();
+
     /** Data type that describes the final output of the source. */
-    protected DataType producedDataType;
+    protected Map<ObjectPath, DataType> tableProducedDataTypes = new HashMap<>();
 
     /** Metadata that is appended at the end of a physical source row. */
     protected List<String> metadataKeys;
 
-    private AssignStrategy scanChunkAssignStrategy;
+    /** Flag to indicate whether the source is evolving source. */
+    private boolean isEvolvingSource;
+
+    /** Spec to describe the captured tables. */
+    protected Set<MySqlTableSpec> capturedTables;
+
+    /** Whether to read changelog as appendOnly. */
+    protected boolean readChangelogAsAppend;
 
     protected boolean scanParallelDeserializeChangelog;
 
     protected int scanParallelDeserializeHandlerSize;
 
-    private final boolean scanOnlyDeserializeCapturedTablesChangelog;
+    private AssignStrategy scanChunkAssignStrategy;
 
     public MySqlTableSource(
-            ResolvedSchema physicalSchema,
+            ResolvedSchema physicalSchemaWithSystemData,
             int port,
             String hostname,
             String database,
@@ -147,14 +189,17 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
             boolean closeIdleReaders,
             Properties jdbcProperties,
             Duration heartbeatInterval,
+            ObjectIdentifier sourceTablePath,
+            boolean isShardingTable,
             @Nullable String chunkKeyColumn,
             boolean skipSnapshotBackFill,
             @Nullable AliyunRdsConfig rdsConfig,
-            AssignStrategy scanChunkAssignStrategy,
             boolean scanOnlyDeserializeCapturedTablesChangelog,
+            boolean readChangelogAsAppend,
             boolean scanParallelDeserializeChangelog,
+            AssignStrategy scanChunkAssignStrategy,
             int scanParallelDeserializeHandlerSize) {
-        this.physicalSchema = physicalSchema;
+        this.physicalSchemaWithSystemData = physicalSchemaWithSystemData;
         this.port = port;
         this.hostname = checkNotNull(hostname);
         this.database = checkNotNull(database);
@@ -177,52 +222,119 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
         this.scanNewlyAddedTableEnabled = scanNewlyAddedTableEnabled;
         this.closeIdleReaders = closeIdleReaders;
         this.jdbcProperties = jdbcProperties;
-        // Mutable attributes
-        this.producedDataType = physicalSchema.toPhysicalRowDataType();
-        this.metadataKeys = Collections.emptyList();
         this.heartbeatInterval = heartbeatInterval;
-        this.chunkKeyColumn = chunkKeyColumn;
+        if (chunkKeyColumn != null) {
+            this.chunkKeyColumns.put(new ObjectPath(database, tableName), chunkKeyColumn);
+        }
+        this.isShardingTable = isShardingTable;
+        // Mutable attributes
+        this.tablePhysicalSchemas.put(sourceTablePath.toObjectPath(), physicalSchemaWithSystemData);
+        this.tableProducedDataTypes.put(
+                sourceTablePath.toObjectPath(),
+                physicalSchemaWithSystemData.toPhysicalRowDataType());
+        this.metadataKeys = Collections.emptyList();
         this.skipSnapshotBackFill = skipSnapshotBackFill;
+        this.sourceTablePath = sourceTablePath;
+        this.isEvolvingSource = false;
+        this.capturedTables = new HashSet<>();
+        capturedTables.add(
+                new MySqlTableSpec(
+                        sourceTablePath.toObjectPath(),
+                        new ObjectPath(database, tableName),
+                        isShardingTable));
         this.rdsConfig = rdsConfig;
-        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
         this.scanOnlyDeserializeCapturedTablesChangelog =
                 scanOnlyDeserializeCapturedTablesChangelog;
+        this.readChangelogAsAppend = readChangelogAsAppend;
         this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
+        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
         this.scanParallelDeserializeHandlerSize = scanParallelDeserializeHandlerSize;
     }
 
     @Override
     public ChangelogMode getChangelogMode() {
-        return ChangelogMode.all();
+        if (readChangelogAsAppend) {
+            return ChangelogMode.insertOnly();
+        } else {
+            return ChangelogMode.all();
+        }
     }
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext scanContext) {
-        RowType physicalDataType =
-                (RowType) physicalSchema.toPhysicalRowDataType().getLogicalType();
-        MetadataConverter[] metadataConverters = getMetadataConverters();
-        final TypeInformation<RowData> typeInfo =
-                scanContext.createTypeInformation(producedDataType);
+        if (!enableParallelRead && isEvolvingSource) {
+            throw new IllegalArgumentException(
+                    "MySql CDC as evolving source only works for the parallel source.");
+        }
 
-        DebeziumDeserializationSchema<RowData> deserializer =
-                RowDataDebeziumDeserializeSchema.newBuilder()
-                        .setPhysicalRowType(physicalDataType)
-                        .setMetadataConverters(metadataConverters)
-                        .setResultTypeInfo(typeInfo)
-                        .setServerTimeZone(serverTimeZone)
-                        .setUserDefinedConverterFactory(
-                                MySqlDeserializationConverterFactory.instance())
-                        .build();
+        List<String> databases = new ArrayList<>();
+        List<String> tableNames = new ArrayList<>();
+        Map<MySqlTableSpec, DebeziumDeserializationSchema<RowData>> deserializers = new HashMap<>();
+        Map<MySqlTableSpec, SchemaSpec> schemas = new HashMap<>();
+        Map<MySqlTableSpec, ResolvedSchema> physicalSchemas = new HashMap<>();
+        for (MySqlTableSpec tableSpec : capturedTables) {
+            ObjectPath tablePathInFlink = tableSpec.getTablePathInFlink();
+            ObjectPath tablePathInMySql = tableSpec.getTablePathInMySql();
+
+            databases.add(tablePathInMySql.getDatabaseName());
+            // MySQL debezium connector will use the regular expressions to match
+            // the fully-qualified table identifiers of tables.
+            // We need use "\\." insteadof "." .
+            tableNames.add(
+                    tablePathInMySql.getDatabaseName() + "\\." + tablePathInMySql.getObjectName());
+
+            ResolvedSchema physicalSchemaWithSystemData =
+                    tablePhysicalSchemas.get(tablePathInFlink);
+            MetadataConverter[] systemColumnConverters;
+            ResolvedSchema physicalSchema;
+            if (tableSpec.isShardingTable()) {
+                validateShardingTable(physicalSchemaWithSystemData);
+                systemColumnConverters =
+                        Arrays.stream(MySqlReadableSystemColumn.values())
+                                .map(MySqlReadableSystemColumn::getConverter)
+                                .toArray(MetadataConverter[]::new);
+                physicalSchema = extractPhysicalRowType(physicalSchemaWithSystemData);
+            } else {
+                systemColumnConverters = new MetadataConverter[0];
+                physicalSchema = physicalSchemaWithSystemData;
+            }
+            physicalSchemas.put(tableSpec, physicalSchema);
+
+            RowType physicalDataType =
+                    (RowType) physicalSchema.toPhysicalRowDataType().getLogicalType();
+            DataType producedDataType = tableProducedDataTypes.get(tablePathInFlink);
+            final TypeInformation<RowData> typeInfo =
+                    scanContext.createTypeInformation(producedDataType);
+
+            MetadataConverter[] metadataConverters =
+                    getMetadataConverters(tableSpec.getMetadataKeys());
+            final DebeziumDeserializationSchema<RowData> deserializer =
+                    RowDataDebeziumDeserializeSchema.newBuilder()
+                            .setPhysicalRowType(physicalDataType)
+                            .setSystemColumnConverters(systemColumnConverters)
+                            .setMetadataConverters(metadataConverters)
+                            .setResultTypeInfo(typeInfo)
+                            .setServerTimeZone(serverTimeZone)
+                            .setUserDefinedConverterFactory(
+                                    MySqlDeserializationConverterFactory.instance())
+                            .setReadChangelogAsAppend(readChangelogAsAppend)
+                            .build();
+            deserializers.put(tableSpec, deserializer);
+            schemas.put(tableSpec, SchemaSpec.fromRowDataType(producedDataType));
+        }
+
+        boolean isMergedSource = capturedTables.size() > 1;
+
         if (enableParallelRead) {
-            final MySqlSourceBuilder<RowData> parallelSourceBuilder = MySqlSource.builder();
+            final MySqlSourceBuilder<?> parallelSourceBuilder =
+                    isEvolvingSource || isMergedSource
+                            ? MySqlSource.<SourceRecord>builder()
+                            : MySqlSource.<RowData>builder();
             parallelSourceBuilder
                     .hostname(hostname)
                     .port(port)
-                    .databaseList(database)
-                    // MySQL debezium connector will use the regular expressions to match
-                    // the fully-qualified table identifiers of tables.
-                    // We need use "\\." insteadof "." .
-                    .tableList(database + "\\." + tableName)
+                    .databaseList(databases.toArray(new String[0]))
+                    .tableList(tableNames.toArray(new String[0]))
                     .username(username)
                     .password(password)
                     .serverTimeZone(serverTimeZone.toString())
@@ -237,18 +349,60 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                     .connectionPoolSize(connectionPoolSize)
                     .debeziumProperties(getParallelDbzProperties(dbzProperties))
                     .startupOptions(startupOptions)
-                    .deserializer(deserializer)
-                    .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                     .closeIdleReaders(closeIdleReaders)
+                    .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                     .jdbcProperties(jdbcProperties)
                     .heartbeatInterval(heartbeatInterval)
-                    .chunkKeyColumn(new ObjectPath(database, tableName), chunkKeyColumn)
                     .skipSnapshotBackfill(skipSnapshotBackFill)
-                    .scanChunkAssignStrategy(scanChunkAssignStrategy);
+                    .chunkKeyColumns(chunkKeyColumns)
+                    .scanOnlyDeserializeCapturedTablesChangelog(
+                            scanOnlyDeserializeCapturedTablesChangelog)
+                    .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
+                    .scanChunkAssignStrategy(scanChunkAssignStrategy)
+                    .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
             if (rdsConfig != null) {
                 parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
             }
-            return SourceProvider.of(parallelSourceBuilder.build());
+
+            if (isEvolvingSource) {
+                final MySqlEvolvingSourceDeserializeSchema evolvingSourceDeserializeSchema =
+                        new MySqlEvolvingSourceDeserializeSchema(
+                                capturedTables,
+                                serverTimeZone,
+                                scanContext.getEvolvingSourceTypeInfo(),
+                                Boolean.parseBoolean(
+                                        jdbcProperties.getProperty("tinyInt1isBit", "true")),
+                                readChangelogAsAppend);
+                return EvolvingSourceProvider.of(
+                        ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
+                                .deserializer(evolvingSourceDeserializeSchema)
+                                .build());
+            }
+
+            if (isMergedSource) {
+                final MySqlMergedSourceDeserializeSchema mergedSourceDeserializeSchema =
+                        new MySqlMergedSourceDeserializeSchema(
+                                capturedTables,
+                                deserializers,
+                                schemas,
+                                scanContext.getMergedSourceTypeInfo());
+
+                return getMergedSourceProviderWithCheckPK(
+                        ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
+                                .deserializer(mergedSourceDeserializeSchema)
+                                .build(),
+                        physicalSchemas,
+                        chunkKeyColumns);
+            }
+
+            checkArgument(capturedTables.size() == 1, "There should be one table to scan.");
+            MySqlTableSpec tableSpec = capturedTables.iterator().next();
+            return getParallelSourceProviderWithCheckPK(
+                    ((MySqlSourceBuilder<RowData>) parallelSourceBuilder)
+                            .deserializer(deserializers.get(tableSpec))
+                            .build(),
+                    physicalSchemas.get(tableSpec),
+                    chunkKeyColumns.get(tableSpec.getTablePathInMySql()));
         } else {
             org.apache.flink.cdc.connectors.mysql.MySqlSource.Builder<RowData> builder =
                     org.apache.flink.cdc.connectors.mysql.MySqlSource.<RowData>builder()
@@ -261,28 +415,12 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                             .serverTimeZone(serverTimeZone.toString())
                             .debeziumProperties(dbzProperties)
                             .startupOptions(startupOptions)
-                            .deserializer(deserializer);
+                            .deserializer(deserializers.values().iterator().next());
             Optional.ofNullable(serverId)
                     .ifPresent(serverId -> builder.serverId(Integer.parseInt(serverId)));
             DebeziumSourceFunction<RowData> sourceFunction = builder.build();
             return SourceFunctionProvider.of(sourceFunction, false);
         }
-    }
-
-    protected MetadataConverter[] getMetadataConverters() {
-        if (metadataKeys.isEmpty()) {
-            return new MetadataConverter[0];
-        }
-
-        return metadataKeys.stream()
-                .map(
-                        key ->
-                                Stream.of(MySqlReadableMetadata.values())
-                                        .filter(m -> m.getKey().equals(key))
-                                        .findFirst()
-                                        .orElseThrow(IllegalStateException::new))
-                .map(MySqlReadableMetadata::getConverter)
-                .toArray(MetadataConverter[]::new);
     }
 
     @Override
@@ -300,14 +438,23 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     @Override
     public void applyReadableMetadata(List<String> metadataKeys, DataType producedDataType) {
         this.metadataKeys = metadataKeys;
-        this.producedDataType = producedDataType;
+        this.tableProducedDataTypes.put(sourceTablePath.toObjectPath(), producedDataType);
+
+        // append metadata to the captured tables, this method happens before applyTableSource
+        Set<MySqlTableSpec> tablesWithMetadata = new HashSet<>();
+        for (MySqlTableSpec tableSpec : capturedTables) {
+            // this method will change the hashcode of table specs
+            tableSpec.setMetadataKeys(metadataKeys);
+            tablesWithMetadata.add(tableSpec);
+        }
+        this.capturedTables = tablesWithMetadata;
     }
 
     @Override
     public DynamicTableSource copy() {
-        MySqlTableSource source =
+        MySqlTableSource copiedSource =
                 new MySqlTableSource(
-                        physicalSchema,
+                        physicalSchemaWithSystemData,
                         port,
                         hostname,
                         database,
@@ -331,16 +478,23 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                         closeIdleReaders,
                         jdbcProperties,
                         heartbeatInterval,
-                        chunkKeyColumn,
+                        sourceTablePath,
+                        isShardingTable,
+                        null,
                         skipSnapshotBackFill,
                         rdsConfig,
-                        scanChunkAssignStrategy,
                         scanOnlyDeserializeCapturedTablesChangelog,
+                        readChangelogAsAppend,
                         scanParallelDeserializeChangelog,
+                        scanChunkAssignStrategy,
                         scanParallelDeserializeHandlerSize);
-        source.metadataKeys = metadataKeys;
-        source.producedDataType = producedDataType;
-        return source;
+        copiedSource.tablePhysicalSchemas = new HashMap<>(tablePhysicalSchemas);
+        copiedSource.metadataKeys = new ArrayList<>(metadataKeys);
+        copiedSource.tableProducedDataTypes = new HashMap<>(tableProducedDataTypes);
+        copiedSource.isEvolvingSource = isEvolvingSource;
+        copiedSource.capturedTables = new HashSet<>(capturedTables);
+        copiedSource.chunkKeyColumns = new HashMap<>(chunkKeyColumns);
+        return copiedSource;
     }
 
     @Override
@@ -359,9 +513,7 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 && fetchSize == that.fetchSize
                 && distributionFactorUpper == that.distributionFactorUpper
                 && distributionFactorLower == that.distributionFactorLower
-                && scanNewlyAddedTableEnabled == that.scanNewlyAddedTableEnabled
                 && closeIdleReaders == that.closeIdleReaders
-                && Objects.equals(physicalSchema, that.physicalSchema)
                 && Objects.equals(hostname, that.hostname)
                 && Objects.equals(database, that.database)
                 && Objects.equals(username, that.username)
@@ -374,19 +526,26 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 && Objects.equals(connectMaxRetries, that.connectMaxRetries)
                 && Objects.equals(connectionPoolSize, that.connectionPoolSize)
                 && Objects.equals(startupOptions, that.startupOptions)
-                && Objects.equals(producedDataType, that.producedDataType)
-                && Objects.equals(metadataKeys, that.metadataKeys)
+                && Objects.equals(scanNewlyAddedTableEnabled, that.scanNewlyAddedTableEnabled)
                 && Objects.equals(jdbcProperties, that.jdbcProperties)
                 && Objects.equals(heartbeatInterval, that.heartbeatInterval)
-                && Objects.equals(chunkKeyColumn, that.chunkKeyColumn)
+                && Objects.equals(tablePhysicalSchemas, that.tablePhysicalSchemas)
+                && Objects.equals(tableProducedDataTypes, that.tableProducedDataTypes)
+                && Objects.equals(metadataKeys, that.metadataKeys)
+                && Objects.equals(isEvolvingSource, that.isEvolvingSource)
+                && Objects.equals(sourceTablePath, that.sourceTablePath)
+                && Objects.equals(isShardingTable, that.isShardingTable)
+                && Objects.equals(capturedTables, that.capturedTables)
+                && Objects.equals(chunkKeyColumns, that.chunkKeyColumns)
                 && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
                 && Objects.equals(rdsConfig, that.rdsConfig)
-                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy)
                 && Objects.equals(
                         scanOnlyDeserializeCapturedTablesChangelog,
                         that.scanOnlyDeserializeCapturedTablesChangelog)
+                && Objects.equals(readChangelogAsAppend, that.readChangelogAsAppend)
                 && Objects.equals(
                         scanParallelDeserializeChangelog, that.scanParallelDeserializeChangelog)
+                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy)
                 && Objects.equals(
                         scanParallelDeserializeHandlerSize,
                         that.scanParallelDeserializeHandlerSize);
@@ -395,7 +554,6 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
     @Override
     public int hashCode() {
         return Objects.hash(
-                physicalSchema,
                 port,
                 hostname,
                 database,
@@ -415,24 +573,196 @@ public class MySqlTableSource implements ScanTableSource, SupportsReadingMetadat
                 distributionFactorUpper,
                 distributionFactorLower,
                 startupOptions,
-                producedDataType,
+                tablePhysicalSchemas,
+                tableProducedDataTypes,
                 metadataKeys,
                 scanNewlyAddedTableEnabled,
                 closeIdleReaders,
                 jdbcProperties,
                 heartbeatInterval,
-                chunkKeyColumn,
+                isEvolvingSource,
+                sourceTablePath,
+                isShardingTable,
+                capturedTables,
+                chunkKeyColumns,
                 skipSnapshotBackFill,
                 rdsConfig,
-                scanChunkAssignStrategy,
-                scanOnlyDeserializeCapturedTablesChangelog,
+                readChangelogAsAppend,
                 scanParallelDeserializeChangelog,
+                scanChunkAssignStrategy,
                 scanParallelDeserializeHandlerSize);
     }
 
     @Override
     public String asSummaryString() {
         return "MySQL-CDC";
+    }
+
+    @Override
+    public void applySchemaEvolution() {
+        isEvolvingSource = true;
+    }
+
+    @Override
+    public boolean applyTableSource(ScanTableSource anotherScanTableSource) {
+        if (anotherScanTableSource instanceof MySqlTableSource) {
+            MySqlTableSource anotherMySQLTableSource = (MySqlTableSource) anotherScanTableSource;
+            if (!(enableParallelRead && anotherMySQLTableSource.enableParallelRead)) {
+                return false;
+            }
+
+            if (hostname.equals(anotherMySQLTableSource.hostname)
+                    && port == anotherMySQLTableSource.port
+                    && Objects.equals(username, anotherMySQLTableSource.username)
+                    && dbzProperties.equals(anotherMySQLTableSource.dbzProperties)
+                    && startupOptions.equals(anotherMySQLTableSource.startupOptions)) {
+
+                // For sql source merge case (not CTAS/CDAS), the merge condition is stricter.
+                if (!isEvolvingSource) {
+                    if (!(serverTimeZone.equals(anotherMySQLTableSource.serverTimeZone)
+                                    && splitSize == anotherMySQLTableSource.splitSize
+                                    && splitMetaGroupSize
+                                            == anotherMySQLTableSource.splitMetaGroupSize
+                                    && Math.abs(
+                                                    distributionFactorUpper
+                                                            - anotherMySQLTableSource
+                                                                    .distributionFactorUpper)
+                                            < 1e-6
+                                    && Math.abs(
+                                                    distributionFactorLower
+                                                            - anotherMySQLTableSource
+                                                                    .distributionFactorLower)
+                                            < 1e-6
+                                    && fetchSize == anotherMySQLTableSource.fetchSize
+                                    && closeIdleReaders == anotherMySQLTableSource.closeIdleReaders
+                                    && jdbcProperties.equals(anotherMySQLTableSource.jdbcProperties)
+                                    && scanOnlyDeserializeCapturedTablesChangelog
+                                            == anotherMySQLTableSource
+                                                    .scanOnlyDeserializeCapturedTablesChangelog
+                                    && readChangelogAsAppend
+                                            == anotherMySQLTableSource.readChangelogAsAppend
+                                    && scanParallelDeserializeChangelog
+                                            == anotherMySQLTableSource
+                                                    .scanParallelDeserializeChangelog)
+                            && Objects.equals(
+                                    scanChunkAssignStrategy,
+                                    anotherMySQLTableSource.scanChunkAssignStrategy)) {
+                        return false;
+                    }
+                }
+                tablePhysicalSchemas.putAll(anotherMySQLTableSource.tablePhysicalSchemas);
+                tableProducedDataTypes.putAll(anotherMySQLTableSource.tableProducedDataTypes);
+                capturedTables.addAll(anotherMySQLTableSource.capturedTables);
+                chunkKeyColumns.putAll(anotherMySQLTableSource.chunkKeyColumns);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private SourceProvider getParallelSourceProviderWithCheckPK(
+            final Source<RowData, ?, ?> source,
+            final ResolvedSchema physicalSchema,
+            @Nullable final String chunkKeyColumn) {
+        return new SourceProvider() {
+            public Source<RowData, ?, ?> createSource() {
+                validatePrimaryKeyIfEnableParallel(physicalSchema, chunkKeyColumn);
+                return source;
+            }
+
+            public boolean isBounded() {
+                return Boundedness.BOUNDED.equals(source.getBoundedness());
+            }
+        };
+    }
+
+    private MergedSourceProvider getMergedSourceProviderWithCheckPK(
+            final Source<SourceRecord, ?, ?> source,
+            final Map<MySqlTableSpec, ResolvedSchema> physicalSchemas,
+            final Map<ObjectPath, String> chunkKeyColumns) {
+        return new MergedSourceProvider() {
+            public Source<SourceRecord, ?, ?> createSource() {
+                physicalSchemas.forEach(
+                        (tableSpec, physicalSchema) ->
+                                validatePrimaryKeyIfEnableParallel(
+                                        physicalSchema,
+                                        chunkKeyColumns.getOrDefault(
+                                                tableSpec.getTablePathInMySql(), null)));
+                return source;
+            }
+
+            public boolean isBounded() {
+                return Boundedness.BOUNDED.equals(source.getBoundedness());
+            }
+        };
+    }
+
+    private void validatePrimaryKeyIfEnableParallel(
+            ResolvedSchema physicalSchema, @Nullable String chunkKeyColumn) {
+        if (chunkKeyColumn == null && !physicalSchema.getPrimaryKey().isPresent()) {
+            throw new ValidationException(
+                    String.format(
+                            "'%s' is required for table without primary key when '%s' enabled.",
+                            SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
+                            SCAN_INCREMENTAL_SNAPSHOT_ENABLED.key()));
+        }
+    }
+
+    /**
+     * Check the physical schema whether contains all the system columns. Only the sharding table
+     * will contains all the system columns.
+     */
+    private void validateShardingTable(ResolvedSchema physicalSchema) {
+        boolean isLegal = false;
+        if (physicalSchema.getColumnCount() >= MySqlReadableSystemColumn.values().length) {
+            isLegal = true;
+            for (MySqlReadableSystemColumn systemData : MySqlReadableSystemColumn.values()) {
+                Optional<Column> column = physicalSchema.getColumn(systemData.getIndex());
+                if (!column.isPresent()) {
+                    isLegal = false;
+                    break;
+                }
+                Column actualColumn = column.get();
+                if (!actualColumn.getName().equals(systemData.getKey())
+                        || !actualColumn.getDataType().equals(systemData.getDataType())) {
+                    isLegal = false;
+                    break;
+                }
+            }
+        }
+        if (!isLegal) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Sharding table should has all the system columns, but get schema: %s.",
+                            physicalSchema));
+        }
+    }
+
+    private ResolvedSchema extractPhysicalRowType(ResolvedSchema inputSchema) {
+        return projectSchema(
+                inputSchema,
+                IntStream.range(
+                                MySqlReadableSystemColumn.values().length,
+                                inputSchema.getColumnCount())
+                        .mapToObj(i -> new int[] {i})
+                        .toArray(int[][]::new));
+    }
+
+    private ResolvedSchema projectSchema(ResolvedSchema tableSchema, int[][] projectedFields) {
+        List<Column> columns = new ArrayList<>();
+        for (int[] fieldPath : projectedFields) {
+            checkArgument(
+                    fieldPath.length == 1, "Nested projection push down is not supported yet.");
+            Column column = tableSchema.getColumn(fieldPath[0]).get();
+            columns.add(column);
+        }
+        return new ResolvedSchema(
+                columns, Collections.emptyList(), tableSchema.getPrimaryKey().orElse(null));
+    }
+
+    @VisibleForTesting
+    StartupOptions getStartupOptions() {
+        return startupOptions;
     }
 
     @VisibleForTesting

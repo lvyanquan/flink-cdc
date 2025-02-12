@@ -23,9 +23,12 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.flink.cdc.connectors.mysql.source.connection.PooledDataSourceFactory.createPooledDataSource;
 
 /** A Jdbc Connection pools implementation. */
 public class JdbcConnectionPools implements ConnectionPools {
@@ -47,16 +50,41 @@ public class JdbcConnectionPools implements ConnectionPools {
         synchronized (pools) {
             if (!pools.containsKey(poolId)) {
                 LOG.info("Create and register connection pool {}", poolId);
-                pools.put(poolId, PooledDataSourceFactory.createPooledDataSource(sourceConfig));
+                pools.put(poolId, new InnerHikariDataSource(poolId, sourceConfig));
             }
             return pools.get(poolId);
         }
     }
 
-    public void clear() throws IOException {
-        synchronized (pools) {
-            pools.values().stream().forEach(HikariDataSource::close);
-            pools.clear();
+    private class InnerHikariDataSource extends HikariDataSource {
+        private final ConnectionPoolId poolId;
+        private final MySqlSourceConfig sourceConfig;
+
+        private volatile HikariDataSource dataSource;
+
+        public InnerHikariDataSource(ConnectionPoolId poolId, MySqlSourceConfig sourceConfig) {
+            this.poolId = poolId;
+            this.sourceConfig = sourceConfig;
+        }
+
+        @Override
+        public Connection getConnection() throws SQLException {
+            synchronized (pools) {
+                if (dataSource == null || dataSource.isClosed()) {
+                    dataSource = createPooledDataSource(sourceConfig);
+                }
+                return dataSource.getConnection();
+            }
+        }
+
+        @Override
+        public void close() {
+            synchronized (pools) {
+                if (dataSource != null) {
+                    dataSource.close();
+                }
+                pools.remove(poolId);
+            }
         }
     }
 }

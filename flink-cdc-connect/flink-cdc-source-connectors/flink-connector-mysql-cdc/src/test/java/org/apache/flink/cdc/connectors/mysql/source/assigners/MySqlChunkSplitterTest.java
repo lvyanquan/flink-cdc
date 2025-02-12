@@ -17,6 +17,9 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.assigners;
 
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
+
 import io.debezium.relational.TableId;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +32,7 @@ public class MySqlChunkSplitterTest {
 
     @Test
     public void testSplitEvenlySizedChunksOverflow() {
-        MySqlChunkSplitter splitter = new MySqlChunkSplitter(null, null);
+        MySqlChunkSplitter splitter = new MySqlChunkSplitter(null, getFakeConfig());
         List<ChunkRange> res =
                 splitter.splitEvenlySizedChunks(
                         new TableId("catalog", "db", "tab"),
@@ -45,7 +48,7 @@ public class MySqlChunkSplitterTest {
 
     @Test
     public void testSplitEvenlySizedChunksNormal() {
-        MySqlChunkSplitter splitter = new MySqlChunkSplitter(null, null);
+        MySqlChunkSplitter splitter = new MySqlChunkSplitter(null, getFakeConfig());
         List<ChunkRange> res =
                 splitter.splitEvenlySizedChunks(
                         new TableId("catalog", "db", "tab"),
@@ -58,5 +61,15 @@ public class MySqlChunkSplitterTest {
         assertEquals(ChunkRange.of(null, 2147483637), res.get(0));
         assertEquals(ChunkRange.of(2147483637, 2147483647), res.get(1));
         assertEquals(ChunkRange.of(2147483647, null), res.get(2));
+    }
+
+    private MySqlSourceConfig getFakeConfig() {
+        return new MySqlSourceConfigFactory()
+                .hostname("localhost")
+                .username("user")
+                .password("password")
+                .databaseList("db")
+                .tableList("tbl")
+                .createConfig(0);
     }
 }

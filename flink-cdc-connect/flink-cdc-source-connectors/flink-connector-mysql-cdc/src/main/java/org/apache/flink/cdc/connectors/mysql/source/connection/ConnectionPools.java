@@ -27,7 +27,7 @@ import com.zaxxer.hikari.HikariDataSource;
 public interface ConnectionPools {
 
     /**
-     * Gets a connection pool from pools, create a new pool if the pool does not exists in the
+     * Gets a connection pool from pools, create a new pool if the pool does not exist in the
      * connection pools .
      */
     HikariDataSource getOrCreateConnectionPool(

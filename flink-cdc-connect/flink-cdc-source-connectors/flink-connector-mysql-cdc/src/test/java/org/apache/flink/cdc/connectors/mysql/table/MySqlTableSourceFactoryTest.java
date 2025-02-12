@@ -27,6 +27,7 @@ import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ObjectIdentifier;
+import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
@@ -35,6 +36,8 @@ import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.util.ExceptionUtils;
 
+import org.assertj.core.api.Assertions;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -43,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 
@@ -94,6 +98,8 @@ public class MySqlTableSourceFactoryTest {
     private static final String MY_PASSWORD = "flinkpw";
     private static final String MY_DATABASE = "myDB";
     private static final String MY_TABLE = "myTable";
+    private static final ObjectIdentifier SOURCE_TABLE_IDENTIFIER =
+            ObjectIdentifier.of("default", "default", "t1");
     private static final Properties PROPERTIES = new Properties();
 
     @Test
@@ -128,12 +134,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -179,12 +188,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         "testCol",
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -226,12 +238,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -271,12 +286,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -297,6 +315,10 @@ public class MySqlTableSourceFactoryTest {
         options.put("scan.incremental.snapshot.chunk.key-column", "testCol");
         options.put("scan.incremental.close-idle-reader.enabled", "true");
         options.put("scan.incremental.snapshot.backfill.skip", "true");
+        options.put("scan.only.deserialize.captured.tables.changelog.enabled", "true");
+        options.put("scan.read-changelog-as-append-only.enabled", "true");
+        options.put("scan.parallel-deserialize-changelog.enabled", "true");
+        options.put("scan.parallel-deserialize-changelog.handler.size", "4");
 
         DynamicTableSource actualSource = createTableSource(options);
         Properties dbzProperties = new Properties();
@@ -328,17 +350,21 @@ public class MySqlTableSourceFactoryTest {
                         CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND.defaultValue(),
                         CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND.defaultValue(),
                         StartupOptions.initial(),
-                        true,
+                        // close by default, only be able to open in CTAS/CDAS
+                        false,
                         true,
                         jdbcProperties,
                         Duration.ofMillis(15213),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         "testCol",
                         true,
                         null,
+                        true,
+                        true,
+                        true,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
-                        2);
+                        4);
         assertEquals(expectedSource, actualSource);
         assertTrue(actualSource instanceof MySqlTableSource);
         MySqlTableSource actualMySqlTableSource = (MySqlTableSource) actualSource;
@@ -391,12 +417,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -434,12 +463,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -478,12 +510,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -523,12 +558,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -566,12 +604,15 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expectedSource, actualSource);
     }
@@ -614,17 +655,82 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
                         null,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
-        expectedSource.producedDataType = SCHEMA_WITH_METADATA.toSourceRowDataType();
-        expectedSource.metadataKeys = Arrays.asList("op_ts", "database_name");
+        expectedSource.applyReadableMetadata(
+                Arrays.asList("op_ts", "database_name"),
+                SCHEMA_WITH_METADATA.toSourceRowDataType());
 
         assertEquals(expectedSource, actualSource);
+    }
+
+    @Test
+    public void testMergeTableSource() {
+        Map<String, String> options = getAllOptions();
+        options.put("scan.incremental.snapshot.enabled", String.valueOf(true));
+        options.put("database-name", "user_db_*");
+        options.put("table-name", "user_*");
+        ObjectIdentifier table1 = ObjectIdentifier.of("default", "user_db", "user");
+        MySqlTableSource source = (MySqlTableSource) createTableSource(options, table1);
+        MySqlTableSource expectedSource = (MySqlTableSource) createTableSource(options, table1);
+
+        // test case 1: can merge table source
+        // modify the database/table name to create another table source
+        options.put("database-name", "default_database");
+        options.put("table-name", "product_table");
+        ObjectIdentifier table2 = ObjectIdentifier.of("default", "default", "product");
+        MySqlTableSource mergedTable = (MySqlTableSource) createTableSource(options, table2);
+        Assert.assertTrue(source.applyTableSource(mergedTable));
+
+        options.put("database-name", "user_db_*");
+        options.put("table-name", "user_*");
+        mergedTable = (MySqlTableSource) createTableSource(options, table1);
+        Assert.assertTrue(source.applyTableSource(mergedTable));
+
+        expectedSource.capturedTables.clear();
+        expectedSource.capturedTables.addAll(
+                new HashSet<>(
+                        Arrays.asList(
+                                new MySqlTableSpec(
+                                        new ObjectPath("user_db", "user"),
+                                        new ObjectPath("user_db_*", "user_*"),
+                                        false),
+                                new MySqlTableSpec(
+                                        new ObjectPath("default", "product"),
+                                        new ObjectPath("default_database", "product_table"),
+                                        false))));
+        expectedSource.tablePhysicalSchemas.clear();
+        expectedSource.tablePhysicalSchemas.put(new ObjectPath("user_db", "user"), SCHEMA);
+        expectedSource.tablePhysicalSchemas.put(new ObjectPath("default", "product"), SCHEMA);
+        expectedSource.tableProducedDataTypes.clear();
+        expectedSource.tableProducedDataTypes.put(
+                new ObjectPath("user_db", "user"), SCHEMA.toPhysicalRowDataType());
+        expectedSource.tableProducedDataTypes.put(
+                new ObjectPath("default", "product"), SCHEMA.toPhysicalRowDataType());
+
+        Assert.assertEquals(expectedSource, source);
+
+        // test case 2: can't merge table source
+        options = getAllOptions();
+        options.put("scan.incremental.snapshot.enabled", String.valueOf(true));
+        options.put("hostname", MY_LOCALHOST + "_merge_test");
+        MySqlTableSource expectedNotMergedTable = (MySqlTableSource) createTableSource(options);
+        Assert.assertFalse(source.applyTableSource(expectedNotMergedTable));
+
+        // test case 3: merge failed when try to merge table source with incremental snapshot
+        Map<String, String> incrementalSnapshotDisableOptions = getAllOptions();
+        incrementalSnapshotDisableOptions.put("scan.incremental.snapshot.enabled", "false");
+        MySqlTableSource incrementalSnapshotDisableSource =
+                (MySqlTableSource) createTableSource(incrementalSnapshotDisableOptions);
+        Assert.assertFalse(source.applyTableSource(incrementalSnapshotDisableSource));
     }
 
     @Test
@@ -680,14 +786,30 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         new Properties(),
                         HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
                         null,
                         false,
                         expectedConfig,
+                        false,
+                        false,
+                        false,
                         AssignStrategy.DESCENDING_ORDER,
-                        false,
-                        false,
                         2);
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testSettingStartTimeInTableConfig() {
+        Map<String, String> options = getAllOptions();
+        options.put("scan.startup.mode", "latest");
+        Configuration tableConfig = new Configuration();
+        tableConfig.setString("table.dynamic.option.*.*.*.startTimeMs", "1615683600000");
+        DynamicTableSource actual = createTableSource(options, tableConfig);
+        Assertions.assertThat(actual).isInstanceOf(MySqlTableSource.class);
+        MySqlTableSource mySqlTableSource = (MySqlTableSource) actual;
+        Assertions.assertThat(mySqlTableSource.getStartupOptions())
+                .isEqualTo(StartupOptions.timestamp(1615683600000L));
     }
 
     @Test
@@ -926,10 +1048,13 @@ public class MySqlTableSourceFactoryTest {
     }
 
     private static DynamicTableSource createTableSource(
-            ResolvedSchema schema, Map<String, String> options) {
+            ResolvedSchema schema,
+            Map<String, String> options,
+            ObjectIdentifier objectIdentifier,
+            Configuration tableConfig) {
         return FactoryUtil.createTableSource(
                 null,
-                ObjectIdentifier.of("default", "default", "t1"),
+                objectIdentifier,
                 new ResolvedCatalogTable(
                         CatalogTable.of(
                                 Schema.newBuilder().fromResolvedSchema(schema).build(),
@@ -937,12 +1062,27 @@ public class MySqlTableSourceFactoryTest {
                                 new ArrayList<>(),
                                 options),
                         schema),
-                new Configuration(),
+                tableConfig,
                 MySqlTableSourceFactoryTest.class.getClassLoader(),
                 false);
     }
 
     private static DynamicTableSource createTableSource(Map<String, String> options) {
         return createTableSource(SCHEMA, options);
+    }
+
+    private static DynamicTableSource createTableSource(
+            ResolvedSchema schema, Map<String, String> options) {
+        return createTableSource(schema, options, SOURCE_TABLE_IDENTIFIER, new Configuration());
+    }
+
+    private static DynamicTableSource createTableSource(
+            Map<String, String> options, ObjectIdentifier objectIdentifier) {
+        return createTableSource(SCHEMA, options, objectIdentifier, new Configuration());
+    }
+
+    private static DynamicTableSource createTableSource(
+            Map<String, String> options, Configuration tableConfig) {
+        return createTableSource(SCHEMA, options, SOURCE_TABLE_IDENTIFIER, tableConfig);
     }
 }

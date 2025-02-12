@@ -23,19 +23,23 @@ import org.bson.BsonBoolean;
 import org.bson.BsonDateTime;
 import org.bson.BsonDecimal128;
 import org.bson.BsonDocument;
+import org.bson.BsonInt32;
 import org.bson.BsonJavaScriptWithScope;
 import org.bson.BsonNull;
 import org.bson.BsonRegularExpression;
 import org.bson.BsonString;
 import org.bson.BsonTimestamp;
 import org.bson.BsonUndefined;
+import org.bson.BsonValue;
 import org.bson.types.Decimal128;
 import org.junit.Test;
 
 import java.util.Arrays;
 
 import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.assertNull;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Unit test cases for <code>BsonUtils</code> utility class. */
 public class BsonUtilsTest {
@@ -288,5 +292,60 @@ public class BsonUtilsTest {
         assertEquals(0, BsonUtils.compareBsonValue(new BsonNull(), new BsonNull()));
         assertEquals(0, BsonUtils.compareBsonValue(new BsonUndefined(), new BsonUndefined()));
         assertTrue(BsonUtils.compareBsonValue(new BsonUndefined(), new BsonNull()) < 0);
+    }
+
+    @Test
+    public void testGetNestedFiledValue() {
+        // non nested field
+        BsonDocument document = new BsonDocument("test", new BsonString("test_value"));
+        BsonValue value = BsonUtils.getNestedFieldValue(document, "test");
+        assertEquals(new BsonString("test_value"), value);
+
+        // non nested field name contains '.'
+        document = new BsonDocument("test.a", new BsonString("test_value"));
+        value = BsonUtils.getNestedFieldValue(document, "test.a");
+        assertNull(value);
+
+        // level 1 nested
+        document = BsonDocument.parse("{'test': {'a': 'test1', b: 'test2'}}".replace('\'', '\"'));
+        value = BsonUtils.getNestedFieldValue(document, "test.a");
+        assertEquals(new BsonString("test1"), value);
+
+        value = BsonUtils.getNestedFieldValue(document, "test.b");
+        assertEquals(new BsonString("test2"), value);
+
+        value = BsonUtils.getNestedFieldValue(document, "test.c");
+        assertNull(value);
+
+        // level 2 nested
+        BsonDocument document2 =
+                BsonDocument.parse(
+                        "{'test': {'a': {'aa': 'value', 'bb': 100}, 'b': {'bb': 200}, 'c': 300}}"
+                                .replace('\'', '\"'));
+        value = BsonUtils.getNestedFieldValue(document2, "test.a");
+        assertEquals(BsonDocument.parse("{'aa': 'value', 'bb': 100}".replace('\'', '\"')), value);
+
+        value = BsonUtils.getNestedFieldValue(document2, "test.a.aa");
+        assertEquals(new BsonString("value"), value);
+
+        value = BsonUtils.getNestedFieldValue(document2, "test.a.bb");
+        assertEquals(new BsonInt32(100), value);
+
+        value = BsonUtils.getNestedFieldValue(document2, "test.b.bb");
+        assertEquals(new BsonInt32(200), value);
+
+        value = BsonUtils.getNestedFieldValue(document2, "test.c");
+        assertEquals(new BsonInt32(300), value);
+
+        // parse type error
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> BsonUtils.getNestedFieldValue(document2, "test.a.aa.aaa"));
+        assertEquals(
+                String.format(
+                        "Unable to parse nested field '%s' for document '%s'",
+                        "test.a.aa.aaa", document2),
+                exception.getMessage());
     }
 }

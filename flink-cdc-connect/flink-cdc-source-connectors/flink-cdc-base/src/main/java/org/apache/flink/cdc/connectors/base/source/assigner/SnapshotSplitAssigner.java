@@ -41,7 +41,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -570,7 +569,7 @@ public class SnapshotSplitAssigner<C extends SourceConfig> implements SplitAssig
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         closeExecutorService();
         if (chunkSplitter != null) {
             try {
@@ -579,7 +578,6 @@ public class SnapshotSplitAssigner<C extends SourceConfig> implements SplitAssig
                 LOG.warn("Fail to close the chunk splitter.");
             }
         }
-        dialect.close();
     }
 
     private void closeExecutorService() {

@@ -17,13 +17,13 @@
 
 package org.apache.flink.cdc.connectors.mysql.source.assigners;
 
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.schema.MySqlSchema;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.ChunkSplitterState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions;
-import org.apache.flink.cdc.connectors.mysql.source.connection.JdbcConnectionPools;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -60,8 +60,11 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.Collectors;
+
+import static org.apache.flink.cdc.connectors.mysql.source.assigners.AssignerStatus.INITIAL_ASSIGNING;
 
 /**
  * A {@link MySqlSplitAssigner} that splits tables into small chunk splits based on primary key
@@ -82,6 +85,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     // the table that need to be split into chunks
     private final List<TableId> remainingTables;
     private final boolean isRemainingTablesCheckpointed;
+    private final SplitEnumeratorContext<MySqlSplit> enumeratorContext;
     private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     private final MySqlPartition partition;
@@ -99,7 +103,8 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
             List<TableId> remainingTables,
-            boolean isTableIdCaseSensitive) {
+            boolean isTableIdCaseSensitive,
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this(
                 sourceConfig,
                 currentParallelism,
@@ -108,17 +113,19 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 new LinkedHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
-                AssignerStatus.INITIAL_ASSIGNING,
+                INITIAL_ASSIGNING,
                 remainingTables,
                 isTableIdCaseSensitive,
                 true,
-                ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
+                ChunkSplitterState.NO_SPLITTING_TABLE_STATE,
+                enumeratorContext);
     }
 
     public MySqlSnapshotSplitAssigner(
             MySqlSourceConfig sourceConfig,
             int currentParallelism,
-            SnapshotPendingSplitsState checkpoint) {
+            SnapshotPendingSplitsState checkpoint,
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this(
                 sourceConfig,
                 currentParallelism,
@@ -131,7 +138,8 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 checkpoint.getRemainingTables(),
                 checkpoint.isTableIdCaseSensitive(),
                 checkpoint.isRemainingTablesCheckpointed(),
-                checkpoint.getChunkSplitterState());
+                checkpoint.getChunkSplitterState(),
+                enumeratorContext);
     }
 
     private MySqlSnapshotSplitAssigner(
@@ -146,7 +154,8 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             List<TableId> remainingTables,
             boolean isTableIdCaseSensitive,
             boolean isRemainingTablesCheckpointed,
-            ChunkSplitterState chunkSplitterState) {
+            ChunkSplitterState chunkSplitterState,
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
         this.sourceConfig = sourceConfig;
         this.currentParallelism = currentParallelism;
         this.alreadyProcessedTables = alreadyProcessedTables;
@@ -172,20 +181,29 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 createChunkSplitter(sourceConfig, isTableIdCaseSensitive, chunkSplitterState);
         this.partition =
                 new MySqlPartition(sourceConfig.getMySqlConnectorConfig().getLogicalName());
+        this.enumeratorContext = enumeratorContext;
     }
 
+    /**
+     * Note: {@link MySqlSnapshotSplitAssigner#setEnumeratorMetrics(MySqlSourceEnumeratorMetrics)}
+     * must be invoked before this open method.
+     */
     @Override
     public void open() {
+        shouldEnterProcessingBacklog();
         chunkSplitter.open();
         discoveryCaptureTables();
         captureNewlyAddedTables();
         startAsynchronouslySplit();
+        initEnumeratorMetrics();
     }
 
     /** This should be invoked after this class's open method. */
-    public void initEnumeratorMetrics(MySqlSourceEnumeratorMetrics enumeratorMetrics) {
+    public void setEnumeratorMetrics(MySqlSourceEnumeratorMetrics enumeratorMetrics) {
         this.enumeratorMetrics = enumeratorMetrics;
+    }
 
+    private void initEnumeratorMetrics() {
         this.enumeratorMetrics.enterSnapshotPhase();
         this.enumeratorMetrics.registerMetrics(
                 alreadyProcessedTables::size, assignedSplits::size, remainingSplits::size);
@@ -329,7 +347,13 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                         new ThreadFactoryBuilder().setNameFormat("snapshot-splitting").build();
                 this.executor = Executors.newSingleThreadExecutor(threadFactory);
             }
-            executor.submit(this::splitChunksForRemainingTables);
+            try {
+                LOG.info("submit async snapshot-splitting task");
+                this.executor.submit(this::splitChunksForRemainingTables);
+            } catch (RejectedExecutionException e) {
+                LOG.error("submit async snapshot-splitting task error", e);
+                throw new FlinkRuntimeException("submit async snapshot-splitting task error", e);
+            }
         }
     }
 
@@ -445,17 +469,22 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     @Override
     public void onFinishedSplits(Map<String, BinlogOffset> splitFinishedOffsets) {
         this.splitFinishedOffsets.putAll(splitFinishedOffsets);
-        if (allSnapshotSplitsFinished()
-                && AssignerStatus.isAssigningSnapshotSplits(assignerStatus)) {
-            // Skip the waiting checkpoint when current parallelism is 1 which means we do not need
-            // to care about the global output data order of snapshot splits and binlog split.
-            if (currentParallelism == 1) {
-                assignerStatus = assignerStatus.onFinish();
-                LOG.info(
-                        "Snapshot split assigner received all splits finished and the job parallelism is 1, snapshot split assigner is turn into finished status.");
-            } else {
-                LOG.info(
-                        "Snapshot split assigner received all splits finished, waiting for a complete checkpoint to mark the assigner finished.");
+
+        if (allSnapshotSplitsFinished()) {
+            enumeratorContext.setIsProcessingBacklog(false);
+
+            if (AssignerStatus.isAssigningSnapshotSplits(assignerStatus)) {
+                // Skip the waiting checkpoint when current parallelism is 1 which means we do not
+                // need
+                // to care about the global output data order of snapshot splits and binlog split.
+                if (currentParallelism == 1) {
+                    assignerStatus = assignerStatus.onFinish();
+                    LOG.info(
+                            "Snapshot split assigner received all splits finished and the job parallelism is 1, snapshot split assigner is turn into finished status.");
+                } else {
+                    LOG.info(
+                            "Snapshot split assigner received all splits finished, waiting for a complete checkpoint to mark the assigner finished.");
+                }
             }
         }
     }
@@ -542,8 +571,6 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         if (chunkSplitter != null) {
             try {
                 chunkSplitter.close();
-                // clear jdbc connection pools
-                JdbcConnectionPools.getInstance().clear();
             } catch (Exception e) {
                 LOG.warn("Fail to close the chunk splitter.");
             }
@@ -575,7 +602,12 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     }
 
     /** Indicates there is no more splits available in this assigner. */
+    @Override
     public boolean noMoreSplits() {
+        return noMoreSnapshotSplits();
+    }
+
+    private boolean noMoreSnapshotSplits() {
         return !needToDiscoveryTables() && remainingTables.isEmpty() && remainingSplits.isEmpty();
     }
 
@@ -658,5 +690,9 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                             : ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
         }
         return new MySqlChunkSplitter(mySqlSchema, sourceConfig);
+    }
+
+    public boolean shouldEnterProcessingBacklog() {
+        return assignerStatus == INITIAL_ASSIGNING;
     }
 }

@@ -107,6 +107,8 @@ limitations under the License.
         <scala.version>2.12.16</scala.version>
         <!-- Maven shade plugin prior to 3.2.0 could not correctly shade nested classes with JDK 8+. -->
         <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
+        <!-- Keep jackson bom version update with Flink definition -->
+        <jackson-bom.version>2.14.3</jackson-bom.version>
     </properties>
 
     <dependencyManagement>

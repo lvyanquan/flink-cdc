@@ -49,7 +49,6 @@ import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
-import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.getServerId;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.loopCheck;
 import static org.apache.flink.configuration.CoreOptions.ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,6 +89,7 @@ public class MySqlParallelizedPipelineITCase extends MySqlSourceTestBase {
     @After
     public void cleanup() {
         System.setOut(standardOut);
+        parallelismDatabase.dropDatabase();
     }
 
     @Test
@@ -123,7 +123,7 @@ public class MySqlParallelizedPipelineITCase extends MySqlSourceTestBase {
         sourceConfig.set(MySqlDataSourceOptions.PORT, MYSQL_CONTAINER.getDatabasePort());
         sourceConfig.set(MySqlDataSourceOptions.USERNAME, TEST_USER);
         sourceConfig.set(MySqlDataSourceOptions.PASSWORD, TEST_PASSWORD);
-        sourceConfig.set(MySqlDataSourceOptions.SERVER_TIME_ZONE, "UTC");
+        sourceConfig.set(MySqlDataSourceOptions.SERVER_TIME_ZONE, getSystemTimeZone());
         sourceConfig.set(MySqlDataSourceOptions.TABLES, "\\.*.\\.*");
         sourceConfig.set(MySqlDataSourceOptions.SERVER_ID, getServerId(PARALLELISM));
 

@@ -48,6 +48,7 @@ import org.apache.flink.cdc.connectors.base.source.reader.IncrementalSourceRecor
 import org.apache.flink.cdc.connectors.base.source.reader.IncrementalSourceSplitReader;
 import org.apache.flink.cdc.connectors.base.source.utils.hooks.SnapshotPhaseHooks;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
@@ -131,11 +132,17 @@ public class IncrementalSource<T, C extends SourceConfig>
                                 sourceConfig,
                                 incrementalSourceReaderContext,
                                 snapshotHooks);
+
+        // Override the numRecordsIn counter registered in SourceReaderBase because the definition
+        // of "record" is different in MySQL CDC source. See FLINK-30234.
+        Configuration config = new Configuration(readerContext.getConfiguration());
+        config.setBoolean("source.reader.metric.num_records_in.override", true);
+
         return new IncrementalSourceReader<>(
                 elementsQueue,
                 splitReaderSupplier,
                 createRecordEmitter(sourceConfig, sourceReaderMetrics),
-                readerContext.getConfiguration(),
+                config,
                 incrementalSourceReaderContext,
                 sourceConfig,
                 sourceSplitSerializer,

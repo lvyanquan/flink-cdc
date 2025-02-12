@@ -21,7 +21,6 @@ import org.apache.flink.cdc.common.annotation.Experimental;
 import org.apache.flink.cdc.connectors.base.config.JdbcSourceConfig;
 import org.apache.flink.cdc.connectors.base.config.SourceConfig;
 import org.apache.flink.cdc.connectors.base.relational.connection.JdbcConnectionPoolFactory;
-import org.apache.flink.cdc.connectors.base.relational.connection.JdbcConnectionPools;
 import org.apache.flink.cdc.connectors.base.source.meta.split.SourceSplitBase;
 import org.apache.flink.cdc.connectors.base.source.reader.external.FetchTask;
 
@@ -29,7 +28,6 @@ import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.TableId;
 import io.debezium.relational.history.TableChanges.TableChange;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -61,8 +59,4 @@ public interface JdbcDataSourceDialect extends DataSourceDialect<JdbcSourceConfi
 
     @Override
     FetchTask<SourceSplitBase> createFetchTask(SourceSplitBase sourceSplitBase);
-
-    default void close() throws IOException {
-        JdbcConnectionPools.getInstance(getPooledDataSourceFactory()).clear();
-    }
 }

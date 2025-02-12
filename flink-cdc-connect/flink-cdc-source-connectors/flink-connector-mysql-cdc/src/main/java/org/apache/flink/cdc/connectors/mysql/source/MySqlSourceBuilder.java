@@ -20,12 +20,14 @@ package org.apache.flink.cdc.connectors.mysql.source;
 import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
+import org.apache.flink.cdc.connectors.mysql.source.config.CapturingMode;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.table.catalog.ObjectPath;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -55,6 +57,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public class MySqlSourceBuilder<T> {
     private final MySqlSourceConfigFactory configFactory = new MySqlSourceConfigFactory();
     private DebeziumDeserializationSchema<T> deserializer;
+    private boolean isCdcYamlSource = false;
 
     public MySqlSourceBuilder<T> hostname(String hostname) {
         this.configFactory.hostname(hostname);
@@ -128,6 +131,15 @@ public class MySqlSourceBuilder<T> {
      */
     public MySqlSourceBuilder<T> chunkKeyColumn(ObjectPath objectPath, String chunkKeyColumn) {
         this.configFactory.chunkKeyColumn(objectPath, chunkKeyColumn);
+        return this;
+    }
+
+    /**
+     * The chunk key of table snapshot, captured tables are split into multiple chunks by the chunk
+     * key column when read the snapshot of table.
+     */
+    public MySqlSourceBuilder<T> chunkKeyColumns(Map<ObjectPath, String> chunkKeyColumns) {
+        this.configFactory.chunkKeyColumn(chunkKeyColumns);
         return this;
     }
 
@@ -239,6 +251,11 @@ public class MySqlSourceBuilder<T> {
         return this;
     }
 
+    public MySqlSourceBuilder<T> capturingMode(CapturingMode capturingMode) {
+        this.configFactory.capturingMode(capturingMode);
+        return this;
+    }
+
     /**
      * Whether to support reading from RDS archived binlog files if the starting offset (or
      * recovering offset from checkpoint) is not available online.
@@ -305,12 +322,17 @@ public class MySqlSourceBuilder<T> {
         return this;
     }
 
+    public MySqlSourceBuilder<T> setCdcYamlSource(boolean cdcYamlSource) {
+        this.isCdcYamlSource = cdcYamlSource;
+        return this;
+    }
+
     /**
      * Build the {@link MySqlSource}.
      *
      * @return a MySqlParallelSource with the settings made for this builder.
      */
     public MySqlSource<T> build() {
-        return new MySqlSource<>(configFactory, checkNotNull(deserializer));
+        return new MySqlSource<>(configFactory, checkNotNull(deserializer), isCdcYamlSource);
     }
 }

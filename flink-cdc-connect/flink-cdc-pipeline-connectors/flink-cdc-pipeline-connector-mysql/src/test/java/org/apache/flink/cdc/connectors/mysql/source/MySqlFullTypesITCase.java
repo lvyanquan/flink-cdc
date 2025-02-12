@@ -113,6 +113,7 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
 
     @Test
     public void testMysql57TimeDataTypes() throws Throwable {
+        UniqueDatabase usedDd = fullTypesMySql57Database;
         RowType recordType =
                 RowType.of(
                         DataTypes.DECIMAL(20, 0).notNull(),
@@ -141,7 +142,7 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123456")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", usedDd)),
                     null
                 };
 
@@ -156,16 +157,16 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123456")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2000-01-01 00:00:00"))
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", usedDd)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2000-01-01 00:00:00", usedDd))
                 };
 
-        testTimeDataTypes(
-                fullTypesMySql57Database, recordType, expectedSnapshot, expectedStreamRecord);
+        testTimeDataTypes(usedDd, recordType, expectedSnapshot, expectedStreamRecord);
     }
 
     @Test
     public void testMysql8TimeDataTypes() throws Throwable {
+        UniqueDatabase usedDd = fullTypesMySql8Database;
         RowType recordType =
                 RowType.of(
                         DataTypes.DECIMAL(20, 0).notNull(),
@@ -196,9 +197,11 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123456")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22.123")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22.123456")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", usedDd)),
+                    LocalZonedTimestampData.fromInstant(
+                            toInstant("2020-07-17 18:00:22.123", usedDd)),
+                    LocalZonedTimestampData.fromInstant(
+                            toInstant("2020-07-17 18:00:22.123456", usedDd)),
                     null
                 };
 
@@ -213,14 +216,15 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22.123456")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22.123")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22.123456")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2000-01-01 00:00:00"))
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", usedDd)),
+                    LocalZonedTimestampData.fromInstant(
+                            toInstant("2020-07-17 18:00:22.123", usedDd)),
+                    LocalZonedTimestampData.fromInstant(
+                            toInstant("2020-07-17 18:00:22.123456", usedDd)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2000-01-01 00:00:00", usedDd))
                 };
 
-        testTimeDataTypes(
-                fullTypesMySql8Database, recordType, expectedSnapshot, expectedStreamRecord);
+        testTimeDataTypes(usedDd, recordType, expectedSnapshot, expectedStreamRecord);
     }
 
     @Test
@@ -274,9 +278,9 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00", database)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", database)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", database)),
                     2d,
                     3d,
                     5d,
@@ -303,9 +307,9 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
                     TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00", database)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", database)),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22", database)),
                     2d,
                     3d,
                     5d,
@@ -457,8 +461,11 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                 .isEqualTo(expectedStreamRecord);
     }
 
-    private Instant toInstant(String ts) {
-        return Timestamp.valueOf(ts).toLocalDateTime().atZone(ZoneId.of("UTC")).toInstant();
+    private Instant toInstant(String ts, UniqueDatabase database) {
+        return Timestamp.valueOf(ts)
+                .toLocalDateTime()
+                .atZone(ZoneId.of(getTimeZone(database)))
+                .toInstant();
     }
 
     private void testTimeDataTypes(
@@ -516,9 +523,13 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                         .fetchSize(2)
                         .username(database.getUsername())
                         .password(database.getPassword())
-                        .serverTimeZone(ZoneId.of("UTC").toString())
-                        .serverId(MySqSourceTestUtils.getServerId(env.getParallelism()));
+                        .serverTimeZone(getTimeZone(database))
+                        .serverId(getServerId(env.getParallelism()));
         return (FlinkSourceProvider) new MySqlDataSource(configFactory).getEventSourceProvider();
+    }
+
+    private String getTimeZone(UniqueDatabase database) {
+        return database == fullTypesMySql8Database ? "UTC" : getSystemTimeZone();
     }
 
     private static final RowType COMMON_TYPES =

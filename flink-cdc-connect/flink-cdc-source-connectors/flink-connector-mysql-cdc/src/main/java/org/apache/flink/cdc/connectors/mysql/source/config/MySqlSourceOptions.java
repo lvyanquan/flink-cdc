@@ -44,6 +44,7 @@ public class MySqlSourceOptions {
             ConfigOptions.key("username")
                     .stringType()
                     .noDefaultValue()
+                    .withFallbackKeys("userName")
                     .withDescription(
                             "Name of the MySQL database to use when connecting to the MySQL database server.");
 
@@ -64,6 +65,7 @@ public class MySqlSourceOptions {
             ConfigOptions.key("table-name")
                     .stringType()
                     .noDefaultValue()
+                    .withFallbackKeys("tableName")
                     .withDescription("Table name of the MySQL database to monitor.");
 
     public static final ConfigOption<String> SERVER_TIME_ZONE =
@@ -119,6 +121,7 @@ public class MySqlSourceOptions {
             ConfigOptions.key("connect.timeout")
                     .durationType()
                     .defaultValue(Duration.ofSeconds(30))
+                    .withFallbackKeys("connectionMaxWait")
                     .withDescription(
                             "The maximum time that the connector should wait after trying to connect to the MySQL database server before timing out. This value cannot be less than 250ms.");
 
@@ -126,6 +129,7 @@ public class MySqlSourceOptions {
             ConfigOptions.key("connection.pool.size")
                     .intType()
                     .defaultValue(20)
+                    .withFallbackKeys("connectionMaxActive")
                     .withDescription("The connection pool size.");
 
     public static final ConfigOption<Integer> CONNECT_MAX_RETRIES =
@@ -185,12 +189,31 @@ public class MySqlSourceOptions {
                     .withDescription(
                             "Optional timestamp used in case of \"timestamp\" startup mode");
 
+    public static final String INTERNAL_PREFIX = "__internal";
+
+    public static final ConfigOption<Boolean> INTERNAL_IS_SHARDING_TABLE =
+            ConfigOptions.key(String.format("%s.is-sharding-table", INTERNAL_PREFIX))
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "The specified flink table is a sharding table in the external database. The option also determines whether add system columns for the schema.");
+
     public static final ConfigOption<Duration> HEARTBEAT_INTERVAL =
             ConfigOptions.key("heartbeat.interval")
                     .durationType()
                     .defaultValue(Duration.ofSeconds(30))
                     .withDescription(
                             "Optional interval of sending heartbeat event for tracing the latest available binlog offsets");
+
+    /** See https://aliyuque.antfin.com/ververica/connectors/rge6g0 for more details. */
+    public static final ConfigOption<Long> VERVERICA_START_TIME_MILLS =
+            ConfigOptions.key("startTimeMs")
+                    .longType()
+                    .defaultValue(-1L)
+                    .withDescription(
+                            "Timestamp in millisecond specifying the time when the connector starts consuming from. "
+                                    + "This option is only used for specifying startup timestamp by VVP UI and cannot "
+                                    + "be used in CREATE TABLE WITH options.");
 
     // ----------------------------------------------------------------------------
     // experimental options, won't add them to documentation
@@ -281,6 +304,7 @@ public class MySqlSourceOptions {
                             .withDescription(
                                     "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 
+    @Experimental
     public static final ConfigOption<Boolean> SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED =
             ConfigOptions.key("scan.read-changelog-as-append-only.enabled")
                     .booleanType()

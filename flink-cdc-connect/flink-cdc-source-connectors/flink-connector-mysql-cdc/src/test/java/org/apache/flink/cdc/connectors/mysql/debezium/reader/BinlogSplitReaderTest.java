@@ -66,6 +66,8 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.testcontainers.lifecycle.Startables;
 
 import java.sql.Connection;
@@ -97,6 +99,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link org.apache.flink.cdc.connectors.mysql.debezium.reader.BinlogSplitReader}. */
+@RunWith(Parameterized.class)
 public class BinlogSplitReaderTest extends MySqlSourceTestBase {
     private static final String TEST_USER = "mysqluser";
     private static final String TEST_PASSWORD = "mysqlpw";
@@ -444,6 +447,12 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
         MySqlBinlogSplit split = createBinlogSplit(sourceConfig);
         BinlogSplitReader reader = createBinlogReader(sourceConfig);
         reader.submitSplit(split);
+        // wait and add one more record as the records may process in parallel.
+        Thread.sleep(1000);
+        mySqlConnection.execute(
+                "INSERT INTO "
+                        + tableId
+                        + " VALUES(200, 'user_2','Shanghai','123567891234', 15213)");
 
         // An exception is expected here because the table schema is changed, which is not allowed
         // under earliest startup mode.
@@ -908,13 +917,71 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
                                 binaryLogClient,
                                 mySqlConnection,
                                 new MySqlSourceReaderMetrics(
-                                        UnregisteredMetricsGroup.createSourceReaderMetricGroup())),
+                                        UnregisteredMetricsGroup.createSourceReaderMetricGroup(),
+                                        false)),
                 0);
+    }
+
+    @Test
+    public void testReadBinlogWithMultiRotates() throws Exception {
+        customerDatabase.createAndInitialize();
+        MySqlSourceConfig sourceConfig =
+                getConfig(StartupOptions.latest(), new String[] {"customers"});
+        binaryLogClient = DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
+        mySqlConnection = DebeziumUtils.createMySqlConnection(sourceConfig);
+
+        // Create reader and submit splits
+        MySqlBinlogSplit split = createBinlogSplit(sourceConfig);
+        BinlogSplitReader reader = createBinlogReader(sourceConfig);
+        reader.submitSplit(split);
+
+        final DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD("id", DataTypes.BIGINT()),
+                        DataTypes.FIELD("name", DataTypes.STRING()),
+                        DataTypes.FIELD("address", DataTypes.STRING()),
+                        DataTypes.FIELD("phone_number", DataTypes.STRING()));
+
+        // Create some binlog events
+        mySqlConnection.execute("FLUSH LOGS;");
+        makeCustomersBinlogEvents(
+                mySqlConnection, customerDatabase.qualifiedTableName("customers"), false);
+        List<String> expected =
+                new ArrayList<>(
+                        Arrays.asList(
+                                "-U[103, user_3, Shanghai, 123567891234]",
+                                "+U[103, user_3, Hangzhou, 123567891234]",
+                                "-D[102, user_2, Shanghai, 123567891234]",
+                                "+I[102, user_2, Shanghai, 123567891234]",
+                                "-U[103, user_3, Hangzhou, 123567891234]",
+                                "+U[103, user_3, Shanghai, 123567891234]",
+                                "-U[1010, user_11, Shanghai, 123567891234]",
+                                "+U[1010, Hangzhou, Shanghai, 123567891234]",
+                                "+I[2001, user_22, Shanghai, 123567891234]",
+                                "+I[2002, user_23, Shanghai, 123567891234]",
+                                "+I[2003, user_24, Shanghai, 123567891234]"));
+        // Frequently create some RotateEvents.
+        for (int i = 0; i < 20; i++) {
+            mySqlConnection.execute("FLUSH LOGS;");
+            for (int j = 0; j < 20; j++) {
+                mySqlConnection.execute(
+                        String.format(
+                                "INSERT INTO %s(id, name, address, phone_number) VALUES(%s, \"user\", \"Shanghai\", 123567891234);",
+                                customerDatabase.qualifiedTableName("customers"),
+                                100000 + i * 1000 + j));
+                expected.add(
+                        String.format(
+                                "+I[%s, user, Shanghai, 123567891234]", 100000 + i * 1000 + j));
+            }
+        }
+        List<String> actual = readBinlogSplits(dataType, reader, expected.size());
+        assertEqualsInOrder(expected, actual);
+        reader.close();
     }
 
     private MySqlBinlogSplit createBinlogSplit(MySqlSourceConfig sourceConfig) throws Exception {
         MySqlBinlogSplitAssigner binlogSplitAssigner =
-                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext());
+                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext(), false);
         binlogSplitAssigner.open();
         try (MySqlConnection jdbc = DebeziumUtils.createMySqlConnection(sourceConfig)) {
             Map<TableId, TableChanges.TableChange> tableSchemas =
@@ -980,7 +1047,7 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         final SnapshotSplitReader snapshotSplitReader =
                 new SnapshotSplitReader(statefulTaskContext, 0);
 
@@ -1196,9 +1263,13 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
 
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, DEFAULT_PARALLELISM, remainingTables, false);
+                        sourceConfig,
+                        DEFAULT_PARALLELISM,
+                        remainingTables,
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSnapshotSplit> mySqlSplits = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> mySqlSplit = assigner.getNext();
@@ -1223,6 +1294,7 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
             String[] captureTables) {
         return getConfigFactory(container, database, captureTables)
                 .startupOptions(startupOptions)
+                .debeziumProperties(dbzProperties)
                 .createConfig(0);
     }
 
@@ -1271,7 +1343,7 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
                     binaryLogClient,
                     connection,
                     new MySqlSourceReaderMetrics(
-                            UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                            UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         }
 
         @Override

@@ -29,7 +29,6 @@ import org.apache.flink.util.CloseableIterator;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -38,32 +37,26 @@ import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.lifecycle.Startables;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase.assertEqualsInAnyOrder;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase.assertEqualsInOrder;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase.buildMySqlConfigWithTimezone;
 
 /** Integration tests to check mysql-cdc works well under different MySQL server timezone. */
 @RunWith(Parameterized.class)
 public class MySqlTimezoneITCase {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlTimezoneITCase.class);
-    private static TemporaryFolder tempFolder;
     private static File resourceFolder;
     private final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
@@ -88,8 +81,6 @@ public class MySqlTimezoneITCase {
                                                         .getResource("."))
                                         .toURI())
                         .toFile();
-        tempFolder = new TemporaryFolder(resourceFolder);
-        tempFolder.create();
         if (incrementalSnapshot) {
             env.setParallelism(4);
             env.enableCheckpointing(200);
@@ -112,7 +103,8 @@ public class MySqlTimezoneITCase {
         MySqlContainer mySqlContainer =
                 (MySqlContainer)
                         new MySqlContainer()
-                                .withConfigurationOverride(buildMySqlConfigWithTimezone(timezone))
+                                .withConfigurationOverride(
+                                        buildMySqlConfigWithTimezone(resourceFolder, timezone))
                                 .withSetupSQL("docker/setup.sql")
                                 .withDatabaseName("flink-test")
                                 .withUsername("flinkuser")
@@ -236,27 +228,5 @@ public class MySqlTimezoneITCase {
             size--;
         }
         return rows;
-    }
-
-    private String buildMySqlConfigWithTimezone(String timezone) {
-        try {
-            File folder = tempFolder.newFolder(String.valueOf(UUID.randomUUID()));
-            Path cnf = Files.createFile(Paths.get(folder.getPath(), "my.cnf"));
-            String mysqldConf =
-                    "[mysqld]\n"
-                            + "binlog_format = row\n"
-                            + "log_bin = mysql-bin\n"
-                            + "server-id = 223344\n"
-                            + "binlog_row_image = FULL\n";
-            String timezoneConf = "default-time_zone = '" + timezone + "'\n";
-            Files.write(
-                    cnf,
-                    Collections.singleton(mysqldConf + timezoneConf),
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.APPEND);
-            return Paths.get(resourceFolder.getAbsolutePath()).relativize(cnf).toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create my.cnf file.", e);
-        }
     }
 }

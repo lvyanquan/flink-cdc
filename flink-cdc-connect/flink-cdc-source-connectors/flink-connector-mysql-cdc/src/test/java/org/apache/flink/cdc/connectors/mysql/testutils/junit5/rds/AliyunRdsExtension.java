@@ -110,6 +110,31 @@ public class AliyunRdsExtension implements BeforeAllCallback, AfterAllCallback, 
         this.rdsClient = initializeRDSClient(rdsConfigBuilder.build());
     }
 
+    public AliyunRdsExtension(boolean isParallelEnabled) {
+        this.rdsConfigBuilder = loadRdsConfigBuilderFromEnvVar();
+        this.jdbcConnectionConfig = loadJdbcConfigFromEnvVar();
+        this.sourceConfigFactory =
+                new MySqlSourceConfigFactory()
+                        .hostname(jdbcConnectionConfig.getHost())
+                        .port(jdbcConnectionConfig.getPort())
+                        .username(jdbcConnectionConfig.getUsername())
+                        .password(jdbcConnectionConfig.getPassword())
+                        .databaseList(jdbcConnectionConfig.getDatabase())
+                        .tableList(
+                                jdbcConnectionConfig.getDatabase()
+                                        + "."
+                                        + randomizedCustomerTableName)
+                        .enableReadingRdsArchivedBinlog(rdsConfigBuilder.build());
+        if (isParallelEnabled) {
+            sourceConfigFactory
+                    .scanParallelDeserializeChangelog(true)
+                    .scanOnlyDeserializeCapturedTablesChangelog(true);
+        }
+        this.mySqlConnection =
+                DebeziumUtils.createMySqlConnection(sourceConfigFactory.createConfig(0));
+        this.rdsClient = initializeRDSClient(rdsConfigBuilder.build());
+    }
+
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
         flushLogs();

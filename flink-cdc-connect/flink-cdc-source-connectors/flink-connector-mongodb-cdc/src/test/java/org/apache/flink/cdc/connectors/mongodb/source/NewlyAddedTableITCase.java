@@ -37,6 +37,7 @@ import com.mongodb.client.model.Updates;
 import org.bson.Document;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -62,6 +63,8 @@ import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBContainer.FLI
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** IT tests to cover various newly added collections during capture process. */
+@Ignore(
+        "ScanNewlyAddedTable feature isn't very stable for now. Disabling this until VVR-62844936 got closed.")
 public class NewlyAddedTableITCase extends MongoDBSourceTestBase {
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(500);

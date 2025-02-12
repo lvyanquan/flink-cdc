@@ -358,6 +358,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
         reader.addSplits(Collections.singletonList(binlogSplit));
 
         // sleep a while to ensure the fetcher is started
+        // wait the reader start reading to make sure get binlog position before this transaction.
         Thread.sleep(500);
 
         // step-1: make 6 change events in one MySQL transaction
@@ -414,16 +415,17 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         .port(MYSQL_CONTAINER.getDatabasePort())
                         .username(customerDatabase.getUsername())
                         .password(customerDatabase.getPassword())
-                        .serverTimeZone(ZoneId.of("UTC").toString())
+                        .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString())
                         .createConfig(0);
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
                         sourceConfig,
                         DEFAULT_PARALLELISM,
                         tableNames.stream().map(TableId::parse).collect(Collectors.toList()),
-                        false);
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSplit> splits = new ArrayList<>();
         MySqlSnapshotSplit split = (MySqlSnapshotSplit) assigner.getNext().get();
         splits.add(split);
@@ -470,16 +472,17 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         .port(MYSQL_CONTAINER.getDatabasePort())
                         .username(customerDatabase.getUsername())
                         .password(customerDatabase.getPassword())
-                        .serverTimeZone(ZoneId.of("UTC").toString())
+                        .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString())
                         .createConfig(0);
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
                         sourceConfig,
                         DEFAULT_PARALLELISM,
                         Collections.singletonList(TableId.parse(tableName)),
-                        false);
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
         // should contain only one split
         assertFalse(assigner.getNext().isPresent());
@@ -567,9 +570,10 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         sourceConfig,
                         DEFAULT_PARALLELISM,
                         Collections.singletonList(TableId.parse(tableName)),
-                        false);
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
         // should contain only one split
         assertFalse(assigner.getNext().isPresent());
@@ -642,7 +646,8 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                         1,
                         new ArrayList<>(),
                         false,
-                        getMySqlSplitEnumeratorContext());
+                        getMySqlSplitEnumeratorContext(),
+                        false);
         assigner.open();
         MySqlSnapshotSplit snapshotSplit = (MySqlSnapshotSplit) assigner.getNext().get();
         // should contain only one split
@@ -719,7 +724,10 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
         }
         assertFalse(assigner.waitingForFinishedSplits());
 
+        // The assigner will return empty at the first request.
         Optional<MySqlSplit> split = assigner.getNext();
+        // The assigner will return a BinlogSplit at the second request.
+        split = assigner.getNext();
         assertTrue(split.isPresent());
         assertTrue(split.get() instanceof MySqlBinlogSplit);
         MySqlBinlogSplit binlogSplit = split.get().asBinlogSplit();
@@ -767,7 +775,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 .port(MYSQL_CONTAINER.getDatabasePort())
                 .username(database.getUsername())
                 .password(database.getPassword())
-                .serverTimeZone(ZoneId.of("UTC").toString());
+                .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString());
     }
 
     private MySqlSourceReader<SourceRecord> createReader(MySqlSourceConfig configuration, int limit)
@@ -790,16 +798,16 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             throws Exception {
         final FutureCompletingBlockingQueue<RecordsWithSplitIds<SourceRecords>> elementsQueue =
                 new FutureCompletingBlockingQueue<>();
-        final RecordEmitter<SourceRecords, SourceRecord, MySqlSplitState> recordEmitter =
+        final MySqlRecordEmitter<SourceRecord> recordEmitter =
                 limit > 0
                         ? new MysqlLimitedRecordEmitter(
                                 new ForwardDeserializeSchema(),
-                                new MySqlSourceReaderMetrics(readerContext.metricGroup()),
+                                new MySqlSourceReaderMetrics(readerContext.metricGroup(), false),
                                 configuration.isIncludeSchemaChanges(),
                                 limit)
                         : new MySqlRecordEmitter<>(
                                 new ForwardDeserializeSchema(),
-                                new MySqlSourceReaderMetrics(readerContext.metricGroup()),
+                                new MySqlSourceReaderMetrics(readerContext.metricGroup(), false),
                                 configuration.isIncludeSchemaChanges());
         final MySqlSourceReaderContext mySqlSourceReaderContext =
                 new MySqlSourceReaderContext(readerContext);
@@ -822,7 +830,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 readerContext,
                 snapshotHooks,
                 new MySqlSourceReaderMetrics(
-                        UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                        UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
     }
 
     private void makeBinlogEventsInOneTransaction(MySqlSourceConfig sourceConfig, String tableId)
@@ -841,7 +849,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
 
     private MySqlSplit createBinlogSplit(MySqlSourceConfig sourceConfig) {
         MySqlBinlogSplitAssigner binlogSplitAssigner =
-                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext());
+                new MySqlBinlogSplitAssigner(sourceConfig, getMySqlSplitEnumeratorContext(), false);
         binlogSplitAssigner.open();
         return binlogSplitAssigner.getNext().get();
     }
@@ -863,7 +871,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 .fetchSize(2)
                 .username(customerDatabase.getUsername())
                 .password(customerDatabase.getPassword())
-                .serverTimeZone(ZoneId.of("UTC").toString())
+                .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString())
                 .createConfig(0);
     }
 
@@ -940,8 +948,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
      * A implementation of {@link RecordEmitter} which only emit records in given limit number, this
      * class is used for test purpose.
      */
-    private static class MysqlLimitedRecordEmitter
-            implements RecordEmitter<SourceRecords, SourceRecord, MySqlSplitState> {
+    private static class MysqlLimitedRecordEmitter extends MySqlRecordEmitter<SourceRecord> {
 
         private static final Logger LOG = LoggerFactory.getLogger(MySqlRecordEmitter.class);
         private static final FlinkJsonTableChangeSerializer TABLE_CHANGE_SERIALIZER =
@@ -958,6 +965,7 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
                 MySqlSourceReaderMetrics sourceReaderMetrics,
                 boolean includeSchemaChanges,
                 int limit) {
+            super(debeziumDeserializationSchema, sourceReaderMetrics, includeSchemaChanges);
             this.debeziumDeserializationSchema = debeziumDeserializationSchema;
             this.sourceReaderMetrics = sourceReaderMetrics;
             this.includeSchemaChanges = includeSchemaChanges;
@@ -983,7 +991,8 @@ public class MySqlSourceReaderTest extends MySqlSourceTestBase {
             }
         }
 
-        private void processElement(
+        @Override
+        protected void processElement(
                 SourceRecord element, SourceOutput<SourceRecord> output, MySqlSplitState splitState)
                 throws Exception {
             if (isWatermarkEvent(element)) {

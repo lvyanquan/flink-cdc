@@ -17,21 +17,24 @@
 
 package org.apache.flink.cdc.connectors.polardbx;
 
+import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
-import org.apache.flink.types.Row;
-import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.StringUtils;
 
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.Statement;
@@ -41,15 +44,17 @@ import java.util.Arrays;
 @RunWith(Parameterized.class)
 public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
 
+    private static final Logger LOG = LoggerFactory.getLogger(PolardbxCharsetITCase.class);
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(60);
+
     private static final String DDL_FILE = "charset_test";
     private static final String DATABASE_NAME = "cdc_c_" + getRandomSuffix();
 
     private final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
 
-    private final StreamTableEnvironment tEnv =
-            StreamTableEnvironment.create(
-                    env, EnvironmentSettings.newInstance().inStreamingMode().build());
+    private StreamTableEnvironment tEnv;
 
     private final String testName;
     private final String[] snapshotExpected;
@@ -69,6 +74,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 "utf8_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
+                    "+I[1, 测试数据]",
+                    "+I[2, Craig Marshall]",
+                    "+I[3, 另一个测试数据]",
                     "-D[1, 测试数据]",
                     "-D[2, Craig Marshall]",
                     "-D[3, 另一个测试数据]",
@@ -81,6 +89,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 "ascii_test",
                 new String[] {"+I[1, ascii test!?]", "+I[2, Craig Marshall]", "+I[3, {test}]"},
                 new String[] {
+                    "+I[1, ascii test!?]",
+                    "+I[2, Craig Marshall]",
+                    "+I[3, {test}]",
                     "-D[1, ascii test!?]",
                     "-D[2, Craig Marshall]",
                     "-D[3, {test}]",
@@ -93,6 +104,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 "gbk_test",
                 new String[] {"+I[1, 测试数据]", "+I[2, Craig Marshall]", "+I[3, 另一个测试数据]"},
                 new String[] {
+                    "+I[1, 测试数据]",
+                    "+I[2, Craig Marshall]",
+                    "+I[3, 另一个测试数据]",
                     "-D[1, 测试数据]",
                     "-D[2, Craig Marshall]",
                     "-D[3, 另一个测试数据]",
@@ -105,6 +119,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 "latin1_test",
                 new String[] {"+I[1, ÀÆÉ]", "+I[2, Craig Marshall]", "+I[3, Üæû]"},
                 new String[] {
+                    "+I[1, ÀÆÉ]",
+                    "+I[2, Craig Marshall]",
+                    "+I[3, Üæû]",
                     "-D[1, ÀÆÉ]",
                     "-D[2, Craig Marshall]",
                     "-D[3, Üæû]",
@@ -117,6 +134,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 "big5_test",
                 new String[] {"+I[1, 大五]", "+I[2, Craig Marshall]", "+I[3, 丹店]"},
                 new String[] {
+                    "+I[1, 大五]",
+                    "+I[2, Craig Marshall]",
+                    "+I[3, 丹店]",
                     "-D[1, 大五]",
                     "-D[2, Craig Marshall]",
                     "-D[3, 丹店]",
@@ -145,6 +165,9 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
     @Before
     public void before() {
         TestValuesTableFactory.clearAllData();
+        tEnv =
+                StreamTableEnvironment.create(
+                        env, EnvironmentSettings.newInstance().inStreamingMode().build());
         env.setParallelism(4);
         env.enableCheckpointing(200);
     }
@@ -186,15 +209,23 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                         getServerId(),
                         4);
         tEnv.executeSql(sourceDDL);
+        tEnv.executeSql(
+                "CREATE TABLE sink ("
+                        + "  table_id BIGINT,\n"
+                        + "  table_name STRING,\n"
+                        + "  primary key(table_id) not enforced"
+                        + ") WITH ("
+                        + " 'connector' = 'values',"
+                        + " 'sink-insert-only' = 'false'"
+                        + ")");
         // async submit job
         TableResult result =
-                tEnv.executeSql(String.format("SELECT table_id,table_name FROM %s", testName));
-
-        // test snapshot phase
-        CloseableIterator<Row> iterator = result.collect();
-        waitForSnapshotStarted(iterator);
+                tEnv.executeSql(
+                        String.format(
+                                "INSERT INTO sink SELECT table_id,table_name FROM %s", testName));
+        waitForSinkSize("sink", snapshotExpected.length);
         assertEqualsInAnyOrder(
-                Arrays.asList(snapshotExpected), fetchRows(iterator, snapshotExpected.length));
+                Arrays.asList(snapshotExpected), TestValuesTableFactory.getResults("sink"));
 
         // test binlog phase
         try (Connection connection = getJdbcConnection();
@@ -204,14 +235,13 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                             "/*TDDL:FORBID_EXECUTE_DML_ALL=FALSE*/UPDATE %s.%s SET table_id = table_id + 10;",
                             DATABASE_NAME, testName));
         }
+        waitForSinkSize("sink", binlogExpected.length);
+        LOG.info(
+                "Polar charset test {}: {}",
+                testName,
+                String.join(",", TestValuesTableFactory.getRawResults("sink")));
         assertEqualsInAnyOrder(
-                Arrays.asList(binlogExpected), fetchRows(iterator, binlogExpected.length));
-        result.getJobClient().get().cancel().get();
-    }
-
-    private static void waitForSnapshotStarted(CloseableIterator<Row> iterator) throws Exception {
-        while (!iterator.hasNext()) {
-            Thread.sleep(100);
-        }
+                Arrays.asList(binlogExpected), TestValuesTableFactory.getRawResults("sink"));
+        result.getJobClient().ifPresent(JobClient::cancel);
     }
 }

@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.debezium.utils;
 
 import org.apache.flink.cdc.common.annotation.Internal;
+import org.apache.flink.cdc.common.utils.Preconditions;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 
@@ -36,5 +37,11 @@ public class ResolvedSchemaUtils {
                         .collect(Collectors.toList()),
                 resolvedSchema.getWatermarkSpecs(),
                 resolvedSchema.getPrimaryKey().orElse(null));
+    }
+
+    /** Returns true if there are only physical columns in the given {@link ResolvedSchema}. */
+    public static boolean containsPhysicalColumnsOnly(ResolvedSchema schema) {
+        Preconditions.checkNotNull(schema);
+        return schema.getColumns().stream().allMatch(Column::isPhysical);
     }
 }

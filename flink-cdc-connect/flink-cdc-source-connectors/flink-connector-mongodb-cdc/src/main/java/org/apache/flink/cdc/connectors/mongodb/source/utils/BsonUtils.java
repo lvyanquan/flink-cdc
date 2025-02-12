@@ -327,4 +327,32 @@ public class BsonUtils {
                         "Unknown bson type : " + bsonValue.getBsonType());
         }
     }
+
+    public static BsonValue getNestedFieldValue(BsonDocument document, String fieldName) {
+        String[] fields = fieldName.split("\\.");
+        BsonValue value;
+        BsonDocument doc = document;
+        for (int i = 0; i < fields.length; i++) {
+            String field = fields[i];
+            value = doc.get(field);
+            if (i == fields.length - 1) {
+                return value;
+            }
+            if (value == null) {
+                return null;
+            }
+            if (!value.isDocument()) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Unable to parse nested field '%s' for document '%s'",
+                                fieldName, document));
+            }
+            doc = value.asDocument();
+        }
+        // Unreachable.
+        throw new IllegalArgumentException(
+                String.format(
+                        "Unable to parse nested field '%s' for document '%s'",
+                        fieldName, document));
+    }
 }

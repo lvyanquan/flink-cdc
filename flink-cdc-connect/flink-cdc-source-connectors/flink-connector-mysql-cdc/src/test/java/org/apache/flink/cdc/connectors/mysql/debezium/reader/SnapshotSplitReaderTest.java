@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSourceEnumeratorMetrics;
+import static org.apache.flink.cdc.connectors.mysql.testutils.MetricsUtils.getMySqlSplitEnumeratorContext;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -100,7 +101,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         final DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("id", DataTypes.BIGINT()),
@@ -132,7 +133,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         final DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("id", DataTypes.BIGINT()),
@@ -172,7 +173,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         final DataType dataType =
                 DataTypes.ROW(
@@ -211,7 +212,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         final DataType dataType =
                 DataTypes.ROW(
@@ -240,7 +241,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         DataType dataType =
                 DataTypes.ROW(
@@ -289,7 +290,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         DataType dataType =
                 DataTypes.ROW(
@@ -334,11 +335,12 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(
                 (mySqlConnection, split) -> {
+                    mySqlConnection.setAutoCommit(false);
                     mySqlConnection.execute(changingDataSql);
                     mySqlConnection.commit();
                 });
@@ -399,10 +401,11 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPostLowWatermarkAction(
                 (mySqlConnection, split) -> {
+                    mySqlConnection.setAutoCommit(false);
                     mySqlConnection.execute(insertDataSql);
                     mySqlConnection.commit();
                 });
@@ -466,10 +469,11 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(
                 (mySqlConnection, split) -> {
+                    mySqlConnection.setAutoCommit(false);
                     mySqlConnection.execute(deleteDataSql);
                     mySqlConnection.commit();
                 });
@@ -524,7 +528,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPostLowWatermarkAction(
@@ -584,7 +588,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                         binaryLogClient,
                         mySqlConnection,
                         new MySqlSourceReaderMetrics(
-                                UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                                UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
 
         SnapshotPhaseHooks snapshotHooks = new SnapshotPhaseHooks();
         snapshotHooks.setPreHighWatermarkAction(
@@ -714,9 +718,13 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
             MySqlSourceConfig sourceConfig, List<TableId> remainingTables) {
         final MySqlSnapshotSplitAssigner assigner =
                 new MySqlSnapshotSplitAssigner(
-                        sourceConfig, DEFAULT_PARALLELISM, remainingTables, false);
+                        sourceConfig,
+                        DEFAULT_PARALLELISM,
+                        remainingTables,
+                        false,
+                        getMySqlSplitEnumeratorContext());
+        assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-        assigner.initEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         List<MySqlSplit> mySqlSplitList = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> mySqlSplit = assigner.getNext();
@@ -759,15 +767,13 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 .createConfig(0);
     }
 
-    private boolean executeSql(MySqlSourceConfig sourceConfig, String[] sqlStatements) {
+    private void executeSql(MySqlSourceConfig sourceConfig, String[] sqlStatements) {
         try (JdbcConnection connection = DebeziumUtils.openJdbcConnection(sourceConfig)) {
             connection.setAutoCommit(false);
             connection.execute(sqlStatements);
             connection.commit();
         } catch (SQLException e) {
-            LOG.error("Failed to execute sql statements.", e);
-            return false;
+            throw new RuntimeException("Failed to execute sql statements.", e);
         }
-        return true;
     }
 }

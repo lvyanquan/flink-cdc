@@ -94,6 +94,11 @@ public class EventDispatcherImpl<T extends DataCollectionId>
     // Record exception that occur during parallel processing.
     private final AtomicReference<Throwable> disruptorException;
 
+    /**
+     * Note: the added method/change is VVR required, from line 146 to line 149.
+     *
+     * <p>Used to provide an additional parallel conversion solution.
+     */
     public EventDispatcherImpl(
             CommonConnectorConfig connectorConfig,
             TopicSelector<T> topicSelector,
@@ -260,7 +265,11 @@ public class EventDispatcherImpl<T extends DataCollectionId>
         }
     }
 
-    /** This method is overWrote to provide an additional parallel conversion solution. */
+    /**
+     * Note: the added method/change is VVR required, from line 343 to line 349.
+     *
+     * <p>Used to provide an additional parallel conversion solution.
+     */
     @Override
     public boolean dispatchDataChangeEvent(
             MySqlPartition partition,
@@ -296,6 +305,11 @@ public class EventDispatcherImpl<T extends DataCollectionId>
         return true;
     }
 
+    /**
+     * Note: the added method/change is VVR required, from line 343 to line 349.
+     *
+     * <p>Used to provide an additional parallel conversion solution.
+     */
     private void initializeDisruptor() {
         if (disruptor == null) {
             Configuration configuration = connectorConfig.getConfig();
@@ -310,7 +324,7 @@ public class EventDispatcherImpl<T extends DataCollectionId>
                             + handlerSize
                             + " handlers, "
                             + bufferSize
-                            + " bufferSize.");
+                            + " bufferSize(handler size * ringbuffer size).");
             disruptor =
                     new Disruptor<>(
                             ChangeRecordEvent::new,
@@ -330,6 +344,11 @@ public class EventDispatcherImpl<T extends DataCollectionId>
         }
     }
 
+    /**
+     * Note: the added method/change is VVR required, from line 343 to line 349.
+     *
+     * <p>Used to provide an additional parallel conversion solution.
+     */
     @Override
     public void close() {
         super.close();

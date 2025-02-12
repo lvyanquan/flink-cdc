@@ -26,7 +26,6 @@ import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 
 import org.junit.Test;
 
-import java.io.IOException;
 import java.time.ZoneId;
 import java.util.Optional;
 
@@ -42,40 +41,40 @@ import static org.junit.Assert.assertTrue;
 public class MySqlBinlogSplitAssignerTest {
 
     @Test
-    public void testStartFromEarliest() throws IOException {
+    public void testStartFromEarliest() {
         checkAssignedBinlogOffset(StartupOptions.earliest(), BinlogOffset.ofEarliest());
     }
 
     @Test
-    public void testStartFromLatestOffset() throws IOException {
+    public void testStartFromLatestOffset() {
         checkAssignedBinlogOffset(StartupOptions.latest(), BinlogOffset.ofLatest());
     }
 
     @Test
-    public void testStartFromTimestamp() throws IOException {
+    public void testStartFromTimestamp() {
         checkAssignedBinlogOffset(
                 StartupOptions.timestamp(15213000L), BinlogOffset.ofTimestampSec(15213L));
     }
 
     @Test
-    public void testStartFromBinlogFile() throws IOException {
+    public void testStartFromBinlogFile() {
         checkAssignedBinlogOffset(
                 StartupOptions.specificOffset("foo-file", 15213),
                 BinlogOffset.ofBinlogFilePosition("foo-file", 15213L));
     }
 
     @Test
-    public void testStartFromGtidSet() throws IOException {
+    public void testStartFromGtidSet() {
         checkAssignedBinlogOffset(
                 StartupOptions.specificOffset("foo-gtid"), BinlogOffset.ofGtidSet("foo-gtid"));
     }
 
     private void checkAssignedBinlogOffset(
-            StartupOptions startupOptions, BinlogOffset expectedOffset) throws IOException {
+            StartupOptions startupOptions, BinlogOffset expectedOffset) {
         // Set starting from the given option
         MySqlBinlogSplitAssigner assigner =
                 new MySqlBinlogSplitAssigner(
-                        getConfig(startupOptions), getMySqlSplitEnumeratorContext());
+                        getConfig(startupOptions), getMySqlSplitEnumeratorContext(), false);
         assigner.open();
         // Get splits from assigner
         Optional<MySqlSplit> optionalSplit = assigner.getNext();

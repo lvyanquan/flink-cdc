@@ -47,10 +47,10 @@ import org.apache.flink.cdc.connectors.mysql.source.reader.MySqlSourceReaderCont
 import org.apache.flink.cdc.connectors.mysql.source.reader.MySqlSplitReader;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplitSerializer;
-import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplitState;
 import org.apache.flink.cdc.connectors.mysql.source.split.SourceRecords;
 import org.apache.flink.cdc.connectors.mysql.source.utils.hooks.SnapshotPhaseHooks;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
@@ -102,6 +102,7 @@ public class MySqlSource<T>
     private final MySqlSourceConfigFactory configFactory;
     private final DebeziumDeserializationSchema<T> deserializationSchema;
     private final RecordEmitterSupplier<T> recordEmitterSupplier;
+    private final boolean isCdcYamlSource;
 
     // Actions to perform during the snapshot phase.
     // This field is introduced for testing purpose, for example testing if changes made in the
@@ -121,7 +122,8 @@ public class MySqlSource<T>
 
     MySqlSource(
             MySqlSourceConfigFactory configFactory,
-            DebeziumDeserializationSchema<T> deserializationSchema) {
+            DebeziumDeserializationSchema<T> deserializationSchema,
+            boolean isCdcYamlSource) {
         this(
                 configFactory,
                 deserializationSchema,
@@ -129,16 +131,19 @@ public class MySqlSource<T>
                         new MySqlRecordEmitter<>(
                                 deserializationSchema,
                                 sourceReaderMetrics,
-                                sourceConfig.isIncludeSchemaChanges()));
+                                sourceConfig.isIncludeSchemaChanges()),
+                isCdcYamlSource);
     }
 
     MySqlSource(
             MySqlSourceConfigFactory configFactory,
             DebeziumDeserializationSchema<T> deserializationSchema,
-            RecordEmitterSupplier<T> recordEmitterSupplier) {
+            RecordEmitterSupplier<T> recordEmitterSupplier,
+            boolean isCdcYamlSource) {
         this.configFactory = configFactory;
         this.deserializationSchema = deserializationSchema;
         this.recordEmitterSupplier = recordEmitterSupplier;
+        this.isCdcYamlSource = isCdcYamlSource;
     }
 
     public MySqlSourceConfigFactory getConfigFactory() {
@@ -165,7 +170,7 @@ public class MySqlSource<T>
                 new FutureCompletingBlockingQueue<>();
 
         final MySqlSourceReaderMetrics sourceReaderMetrics =
-                new MySqlSourceReaderMetrics(readerContext.metricGroup());
+                new MySqlSourceReaderMetrics(readerContext.metricGroup(), isCdcYamlSource);
         MySqlSourceReaderContext mySqlSourceReaderContext =
                 new MySqlSourceReaderContext(readerContext);
         Supplier<MySqlSplitReader> splitReaderSupplier =
@@ -176,11 +181,15 @@ public class MySqlSource<T>
                                 mySqlSourceReaderContext,
                                 snapshotHooks,
                                 sourceReaderMetrics);
+        // Override the numRecordsIn counter registered in SourceReaderBase because the definition
+        // of "record" is different in MySQL CDC source. See FLINK-30234.
+        Configuration config = new Configuration(readerContext.getConfiguration());
+        config.setBoolean("source.reader.metric.num_records_in.override", true);
         return new MySqlSourceReader<>(
                 elementsQueue,
                 splitReaderSupplier,
                 recordEmitterSupplier.get(sourceReaderMetrics, sourceConfig),
-                readerContext.getConfiguration(),
+                config,
                 mySqlSourceReaderContext,
                 sourceConfig);
     }
@@ -203,13 +212,15 @@ public class MySqlSource<T>
                                 enumContext.currentParallelism(),
                                 new ArrayList<>(),
                                 isTableIdCaseSensitive,
-                                enumContext);
+                                enumContext,
+                                isCdcYamlSource);
             } catch (Exception e) {
                 throw new FlinkRuntimeException(
                         "Failed to discover captured tables for enumerator", e);
             }
         } else {
-            splitAssigner = new MySqlBinlogSplitAssigner(sourceConfig, enumContext);
+            splitAssigner =
+                    new MySqlBinlogSplitAssigner(sourceConfig, enumContext, isCdcYamlSource);
         }
 
         return new MySqlSourceEnumerator(
@@ -229,11 +240,15 @@ public class MySqlSource<T>
                             sourceConfig,
                             enumContext.currentParallelism(),
                             (HybridPendingSplitsState) checkpoint,
-                            enumContext);
+                            enumContext,
+                            isCdcYamlSource);
         } else if (checkpoint instanceof BinlogPendingSplitsState) {
             splitAssigner =
                     new MySqlBinlogSplitAssigner(
-                            sourceConfig, (BinlogPendingSplitsState) checkpoint, enumContext);
+                            sourceConfig,
+                            (BinlogPendingSplitsState) checkpoint,
+                            enumContext,
+                            isCdcYamlSource);
         } else {
             throw new UnsupportedOperationException(
                     "Unsupported restored PendingSplitsState: " + checkpoint);
@@ -267,7 +282,6 @@ public class MySqlSource<T>
     @FunctionalInterface
     interface RecordEmitterSupplier<T> extends Serializable {
 
-        RecordEmitter<SourceRecords, T, MySqlSplitState> get(
-                MySqlSourceReaderMetrics metrics, MySqlSourceConfig sourceConfig);
+        MySqlRecordEmitter<T> get(MySqlSourceReaderMetrics metrics, MySqlSourceConfig sourceConfig);
     }
 }

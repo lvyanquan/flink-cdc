@@ -34,17 +34,22 @@ import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.bridge.java.StreamStatementSet;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.planner.factories.TestValuesEvolvingCatalog;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.ExceptionUtils;
 
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.apache.flink.shaded.guava30.com.google.common.collect.Lists;
 
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -57,6 +62,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -64,6 +70,8 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.api.common.JobStatus.RUNNING;
 import static org.apache.flink.cdc.connectors.mysql.LegacyMySqlSourceTest.currentMySqlLatestOffset;
 import static org.apache.flink.cdc.connectors.mysql.MySqlTestUtils.assertContainsErrorMsg;
@@ -76,6 +84,8 @@ import static org.junit.Assert.fail;
 /** Integration tests for MySQL Table source. */
 @RunWith(Parameterized.class)
 public class MySqlConnectorITCase extends MySqlSourceTestBase {
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlConnectorITCase.class);
 
@@ -115,17 +125,25 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     private final StreamTableEnvironment tEnv =
             StreamTableEnvironment.create(
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     // enable the incrementalSnapshot (i.e: The new source MySqlParallelSource)
-    private final boolean incrementalSnapshot;
+    @Parameterized.Parameter(1)
+    public boolean incrementalSnapshot;
 
-    public MySqlConnectorITCase(boolean incrementalSnapshot) {
-        this.incrementalSnapshot = incrementalSnapshot;
-    }
-
-    @Parameterized.Parameters(name = "incrementalSnapshot: {0}")
+    @Parameterized.Parameters(name = "debeziumProperties: {0}, incrementalSnapshot: {1}")
     public static Object[] parameters() {
-        return new Object[][] {new Object[] {false}, new Object[] {true}};
+        return new Object[][] {
+            new Object[] {
+                ImmutableMap.<String, String>builder()
+                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
+                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .build(),
+                true
+            },
+            new Object[] {new HashMap<>(), false},
+            new Object[] {new HashMap<>(), true}
+        };
     }
 
     @BeforeClass
@@ -145,6 +163,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     @Before
     public void before() {
         TestValuesTableFactory.clearAllData();
+        tEnv.registerCatalog("mycat", new TestValuesEvolvingCatalog("mycat", "mydb", false));
         if (incrementalSnapshot) {
             env.setParallelism(DEFAULT_PARALLELISM);
             env.enableCheckpointing(200);
@@ -185,7 +204,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + " %s"
@@ -197,6 +216,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         inventoryDatabase.getDatabaseName(),
                         "products",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize(),
                         otherTableOptions);
@@ -289,7 +309,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
         assertTrue(validationException.isPresent());
         assertEquals(
                 "'scan.incremental.snapshot.chunk.key-column' is required for table without primary key when 'scan.incremental.snapshot.enabled' enabled.",
-                validationException.get().getCause().getMessage());
+                validationException.get().getMessage());
     }
 
     // This test always enable the incrementalSnapshot
@@ -311,7 +331,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = 'products_no_pk',"
                                 + " 'scan.incremental.snapshot.enabled' = 'true',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '2'"
                                 + " %s"
@@ -321,6 +341,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_USER,
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         otherTableOptions);
         // If there is multi parallelism, the sink must have primary keys
@@ -443,7 +464,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -454,6 +475,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         "products",
                         incrementalSnapshot,
                         getServerId(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
 
@@ -505,15 +527,21 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
 
     @Test
     public void testMysql57AllDataTypes() throws Throwable {
-        testAllDataTypes(MYSQL_CONTAINER, fullTypesMySql57Database);
+        testAllDataTypes(MYSQL_CONTAINER, fullTypesMySql57Database, true);
+    }
+
+    @Test
+    public void testMysqlWithoutTreatTinyint1AsBool() throws Throwable {
+        testAllDataTypes(MYSQL_CONTAINER, fullTypesMySql57Database, false);
     }
 
     @Test
     public void testMySql8AllDataTypes() throws Throwable {
-        testAllDataTypes(MYSQL8_CONTAINER, fullTypesMySql8Database);
+        testAllDataTypes(MYSQL8_CONTAINER, fullTypesMySql8Database, true);
     }
 
-    public void testAllDataTypes(MySqlContainer mySqlContainer, UniqueDatabase database)
+    public void testAllDataTypes(
+            MySqlContainer mySqlContainer, UniqueDatabase database, boolean tinyint1AsBool)
             throws Throwable {
         database.createAndInitialize();
         String sourceDDL =
@@ -538,7 +566,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + "    big_un_z_c DECIMAL(20, 0),\n"
                                 + "    varchar_c VARCHAR(255),\n"
                                 + "    char_c CHAR(3),\n"
-                                + "    real_c FLOAT,\n"
+                                + "    real_c DOUBLE,\n"
                                 + "    float_c FLOAT,\n"
                                 + "    float_un_c FLOAT,\n"
                                 + "    float_un_z_c FLOAT,\n"
@@ -551,8 +579,12 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + "    numeric_c DECIMAL(6, 0),\n"
                                 + "    big_decimal_c STRING,\n"
                                 + "    bit1_c BOOLEAN,\n"
-                                + "    tiny1_c BOOLEAN,\n"
-                                + "    boolean_c BOOLEAN,\n"
+                                + (tinyint1AsBool
+                                        ? "    tiny1_c BOOLEAN,\n"
+                                        : "    tiny1_c TINYINT,\n")
+                                + (tinyint1AsBool
+                                        ? "    boolean_c BOOLEAN,\n"
+                                        : "    boolean_c TINYINT,\n")
                                 + "    date_c DATE,\n"
                                 + "    time_c TIME(0),\n"
                                 + "    datetime3_c TIMESTAMP(3),\n"
@@ -588,8 +620,11 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
+                                + (tinyint1AsBool
+                                        ? ""
+                                        : ", 'jdbc.properties.tinyInt1isBit'='false'")
                                 + ")",
                         mySqlContainer.getHost(),
                         mySqlContainer.getDatabasePort(),
@@ -599,6 +634,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         "full_types",
                         incrementalSnapshot,
                         getServerId(),
+                        getServerTimeZone(mySqlContainer),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
 
@@ -671,7 +707,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
         try (Connection connection = database.getJdbcConnection();
                 Statement statement = connection.createStatement()) {
             statement.execute(
-                    "UPDATE full_types SET timestamp_c = '2020-07-17 18:33:22' WHERE id=1;");
+                    "UPDATE full_types SET timestamp_c = '2020-07-17 18:33:22', tiny1_c = 2, boolean_c = false WHERE id=1;");
         }
         String expectedPointJsonText = "{\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}";
         String expectedGeometryJsonText =
@@ -692,7 +728,8 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                 new String[] {
                     "+I[1, 127, 255, 255, 32767, 65535, 65535, 8388607, 16777215, 16777215, 2147483647, 4294967295, 4294967295,"
                             + " 2147483647, 9223372036854775807, 18446744073709551615, 18446744073709551615, Hello World, abc, 123.102, 123.102, 123.103, 123.104, "
-                            + "404.4443, 404.4444, 404.4445, 123.4567, 123.4568, 123.4569, 346, 34567892.1, false, true, true,"
+                            + "404.4443, 404.4444, 404.4445, 123.4567, 123.4568, 123.4569, 346, 34567892.1, false, "
+                            + (tinyint1AsBool ? "true, true," : "1, 1,")
                             + " 2020-07-17, 18:00:22, 2020-07-17T18:00:22.123, 2020-07-17T18:00:22.123456, 2020-07-17T18:00:22, "
                             + "ZRrvv70IOQ9I77+977+977+9Nu+/vT57dAA=, [4, 4, 4, 4, 4, 4, 4, 4], text, [16], [16], [16], [16], 2021, red, [a, b], "
                             + (incrementalSnapshot
@@ -719,7 +756,8 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                     "-U[1, 127, 255, 255, 32767, 65535, 65535, 8388607, 16777215, 16777215, 2147483647, 4294967295, 4294967295,"
                             + " 2147483647, 9223372036854775807, 18446744073709551615, 18446744073709551615, Hello World, abc, 123.102,"
                             + " 123.102, 123.103, 123.104, 404.4443, 404.4444, 404.4445, 123.4567, 123.4568, 123.4569, 346, 34567892.1,"
-                            + " false, true, true,"
+                            + " false, "
+                            + (tinyint1AsBool ? "true, true," : "1, 1,")
                             + " 2020-07-17, 18:00:22, 2020-07-17T18:00:22.123, 2020-07-17T18:00:22.123456, 2020-07-17T18:00:22, "
                             + "ZRrvv70IOQ9I77+977+977+9Nu+/vT57dAA=, [4, 4, 4, 4, 4, 4, 4, 4], text, [16], [16], [16], [16], 2021, red, [a, b], "
                             + "{\"key1\":\"value1\",\"key2\":\"value2\",\"num1\":16708304,\"num2\":16708305}, "
@@ -742,7 +780,8 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                     "+U[1, 127, 255, 255, 32767, 65535, 65535, 8388607, 16777215, 16777215, 2147483647, 4294967295, 4294967295,"
                             + " 2147483647, 9223372036854775807, 18446744073709551615, 18446744073709551615, Hello World, abc, 123.102,"
                             + " 123.102, 123.103, 123.104, 404.4443, 404.4444, 404.4445, 123.4567, 123.4568, 123.4569, 346, 34567892.1,"
-                            + " false, true, true,"
+                            + " false, "
+                            + (tinyint1AsBool ? "false, false," : "2, 0,")
                             + " 2020-07-17, 18:00:22, 2020-07-17T18:00:22.123, 2020-07-17T18:00:22.123456, 2020-07-17T18:33:22, "
                             + "ZRrvv70IOQ9I77+977+977+9Nu+/vT57dAA=, [4, 4, 4, 4, 4, 4, 4, 4], text, [16], [16], [16], [16], 2021, red, [a, b], "
                             + "{\"key1\":\"value1\",\"key2\":\"value2\",\"num1\":16708304,\"num2\":16708305}, "
@@ -761,7 +800,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                             + expectMultipolygonJsonText
                             + ", "
                             + expectGeometryCollectionJsonText
-                            + "]",
+                            + "]"
                 };
 
         assertEqualsInAnyOrder(Arrays.asList(expected), fetchRows(iterator, expected.length));
@@ -801,7 +840,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -812,6 +851,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         "wide_table",
                         incrementalSnapshot,
                         getServerId(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
 
@@ -876,7 +916,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = 'big_table.*',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '2',"
                                 + " 'chunk-meta.group.size' = '3',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -884,6 +924,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         fullTypesMySql57Database.getUsername(),
                         fullTypesMySql57Database.getPassword(),
                         fullTypesMySql57Database.getDatabaseName(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId());
         String sinkDDL =
                 "CREATE TABLE sink ("
@@ -938,7 +979,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         "CREATE TABLE mysql_users ("
                                 + " db_name STRING METADATA FROM 'database_name' VIRTUAL,"
                                 + " table_name STRING METADATA VIRTUAL,"
-                                + " row_kind STRING METADATA FROM 'row_kind' VIRTUAL,"
+                                + " op_type STRING METADATA FROM 'op_type' VIRTUAL,"
                                 + " `id` DECIMAL(20, 0) NOT NULL,"
                                 + " name STRING,"
                                 + " address STRING,"
@@ -956,7 +997,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -967,13 +1008,14 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         "user_table_.*",
                         incrementalSnapshot,
                         getServerId(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getSplitSize());
 
         String sinkDDL =
                 "CREATE TABLE sink ("
                         + " database_name STRING,"
                         + " table_name STRING,"
-                        + " row_kind STRING,"
+                        + " op_type STRING,"
                         + " `id` DECIMAL(20, 0) NOT NULL,"
                         + " name STRING,"
                         + " address STRING,"
@@ -1007,7 +1049,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
         }
 
         // waiting for binlog finished (5 more events)
-        waitForSinkSize("sink", 7);
+        waitForSinkSize("sink", 9);
 
         List<String> expected =
                 Stream.of(
@@ -1034,6 +1076,105 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    public void testMetadataColumnsAsAppendOnly() throws Exception {
+        userDatabase1.createAndInitialize();
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE mysql_users ("
+                                + " db_name STRING METADATA FROM 'database_name' VIRTUAL,"
+                                + " table_name STRING METADATA VIRTUAL,"
+                                + " op_type STRING METADATA FROM 'op_type' VIRTUAL,"
+                                + " `id` DECIMAL(20, 0) NOT NULL,"
+                                + " name STRING,"
+                                + " address STRING,"
+                                + " phone_number STRING,"
+                                + " email STRING,"
+                                + " age INT,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s',"
+                                + " 'server-id' = '%s',"
+                                + " 'scan.incremental.snapshot.chunk.size' = '%s',"
+                                + " 'scan.read-changelog-as-append-only.enabled' = 'true'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        userDatabase1.getUsername(),
+                        userDatabase1.getPassword(),
+                        userDatabase1.getDatabaseName(),
+                        "user_table_.*",
+                        incrementalSnapshot,
+                        getServerId(),
+                        getSplitSize());
+
+        String sinkDDL =
+                "CREATE TABLE sink ("
+                        + " database_name STRING,"
+                        + " table_name STRING,"
+                        + " op_type STRING,"
+                        + " `id` DECIMAL(20, 0) NOT NULL,"
+                        + " name STRING,"
+                        + " address STRING,"
+                        + " phone_number STRING,"
+                        + " email STRING,"
+                        + " age INT,"
+                        + " primary key (database_name, table_name, id) not enforced"
+                        + ") WITH ("
+                        + " 'connector' = 'values',"
+                        + " 'sink-insert-only' = 'false'"
+                        + ")";
+        tEnv.executeSql(sourceDDL);
+        tEnv.executeSql(sinkDDL);
+
+        // async submit job
+        TableResult result = tEnv.executeSql("INSERT INTO sink SELECT * FROM mysql_users");
+
+        // wait for snapshot finished and begin binlog
+        waitForSinkSize("sink", 2);
+
+        try (Connection connection = userDatabase1.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+
+            statement.execute(
+                    "INSERT INTO user_table_1_2 VALUES (200,'user_200','Wuhan',123567891234);");
+            statement.execute(
+                    "INSERT INTO user_table_1_1 VALUES (300,'user_300','Hangzhou',123567891234, 'user_300@foo.com');");
+            statement.execute("UPDATE user_table_1_1 SET address='Beijing' WHERE id=300;");
+            statement.execute("UPDATE user_table_1_2 SET phone_number=88888888 WHERE id=121;");
+            statement.execute("DELETE FROM user_table_1_1 WHERE id=111;");
+        }
+
+        // waiting for binlog finished (5 more events)
+        waitForSinkSize("sink", 9);
+
+        List<String> expected =
+                Stream.of(
+                                "+I[%s, user_table_1_1, +I, 111, user_111, Shanghai, 123567891234, user_111@foo.com, null]",
+                                "+I[%s, user_table_1_2, +I, 121, user_121, Shanghai, 123567891234, null, null]",
+                                "+I[%s, user_table_1_2, +I, 200, user_200, Wuhan, 123567891234, null, null]",
+                                "+I[%s, user_table_1_1, +I, 300, user_300, Hangzhou, 123567891234, user_300@foo.com, null]",
+                                "+I[%s, user_table_1_1, +U, 300, user_300, Beijing, 123567891234, user_300@foo.com, null]",
+                                "+I[%s, user_table_1_2, +U, 121, user_121, Shanghai, 88888888, null, null]",
+                                "+I[%s, user_table_1_1, -D, 111, user_111, Shanghai, 123567891234, user_111@foo.com, null]",
+                                "+I[%s, user_table_1_1, -U, 300, user_300, Hangzhou, 123567891234, user_300@foo.com, null]",
+                                "+I[%s, user_table_1_2, -U, 121, user_121, Shanghai, 123567891234, null, null]")
+                        .map(s -> String.format(s, userDatabase1.getDatabaseName()))
+                        .sorted()
+                        .collect(Collectors.toList());
+
+        List<String> actual = TestValuesTableFactory.getRawResults("sink");
+        assertEqualsInAnyOrder(expected, actual);
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
     public void testStartupFromLatestOffset() throws Exception {
         inventoryDatabase.createAndInitialize();
         String sourceDDL =
@@ -1054,7 +1195,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.startup.mode' = 'latest-offset',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -1064,6 +1205,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         inventoryDatabase.getDatabaseName(),
                         "products",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId());
         tEnv.executeSql(sourceDDL);
 
@@ -1127,7 +1269,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1137,6 +1279,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "varbinary_pk_table",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1202,7 +1345,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1213,6 +1356,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         customerDatabase.getDatabaseName(),
                         "address",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1272,7 +1416,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1283,6 +1427,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         customer3_0Database.getDatabaseName(),
                         "customers3.0",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1337,7 +1482,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1352,6 +1497,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         String.format("%s.*", customerDatabase.getDatabaseName()),
                         "customers",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1413,7 +1559,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1424,6 +1570,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         customerDatabase.getDatabaseName(),
                         "default_value_test.*",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1551,7 +1698,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1562,6 +1709,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         customerDatabase.getDatabaseName(),
                         "default_value_test",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -1625,7 +1773,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.startup.mode' = 'specific-offset',"
                                 + " 'scan.startup.specific-offset.file' = '%s',"
                                 + " 'scan.startup.specific-offset.pos' = '%s',"
@@ -1637,6 +1785,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "products",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         offset.f0,
                         offset.f1,
                         incrementalSnapshot);
@@ -1677,6 +1826,95 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                 new String[] {"+I[110, jacket, new water resistent white wind breaker, 0.500]"};
 
         List<String> actual = TestValuesTableFactory.getResults("sink");
+        assertEqualsInAnyOrder(Arrays.asList(expected), actual);
+
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
+    public void testCtasStartupFromSpecificBinlogFilePos() throws Exception {
+        if (!incrementalSnapshot) {
+            return;
+        }
+
+        String sinkName = getSinkTableName("offsetTest");
+        inventoryDatabase.createAndInitialize();
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "UPDATE products SET description='18oz carpenter hammer' WHERE id=106;");
+            statement.execute("UPDATE products SET weight='5.1' WHERE id=107;");
+        }
+        Tuple2<String, Integer> offset =
+                currentMySqlLatestOffset(MYSQL_CONTAINER, inventoryDatabase, "products", 9, false);
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE debezium_source ("
+                                + " id INT NOT NULL,"
+                                + " name VARCHAR(255) NOT NULL,"
+                                + " description VARCHAR(512),"
+                                + " weight FLOAT,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        TEST_USER,
+                        TEST_PASSWORD,
+                        inventoryDatabase.getDatabaseName(),
+                        "products",
+                        incrementalSnapshot);
+        tEnv.executeSql(sourceDDL);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
+        }
+
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE debezium_source /*+ OPTIONS('scan.startup.mode' = 'specific-offset', 'scan.startup.specific-offset.file' = '%s', 'scan.startup.specific-offset.pos' = '%s') */",
+                        sinkName, offset.f0, offset.f1);
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+        // wait for the source startup, we don't have a better way to wait it, use sleep for now
+        Thread.sleep(5000L);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'scooter','Big 2-wheel scooter ',5.18);");
+            statement.execute(
+                    "UPDATE products SET description='new water resistent white wind breaker', weight='0.5' WHERE id=110;");
+            statement.execute("UPDATE products SET weight='5.17' WHERE id=111;");
+            statement.execute("DELETE FROM products WHERE id=111;");
+            statement.execute("ALTER TABLE products ADD COLUMN `new_col` int(10) ;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'new-item','test value',0.2,20);"); // 112
+        }
+
+        waitForSinkSize(sinkName, 8);
+
+        String[] expected =
+                new String[] {
+                    "+I[110, jacket, new water resistent white wind breaker, 0.5]",
+                    "+I[112, new-item, test value, 0.2, 20]"
+                };
+
+        List<String> actual = TestValuesTableFactory.getResults(sinkName);
         assertEqualsInAnyOrder(Arrays.asList(expected), actual);
 
         result.getJobClient().get().cancel().get();
@@ -1728,7 +1966,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.startup.mode' = 'specific-offset',"
                                 + " 'scan.startup.specific-offset.gtid-set' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s'"
@@ -1739,6 +1977,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "products",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         offset.getGtidSet(),
                         incrementalSnapshot);
         String sinkDDL =
@@ -1784,6 +2023,105 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    public void testCtasStartupFromSpecificGtidSet() throws Exception {
+        if (!incrementalSnapshot) {
+            return;
+        }
+
+        String sinkName = getSinkTableName("gtidTest");
+        inventoryDatabase.createAndInitialize();
+
+        BinlogOffset offset;
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "UPDATE products SET description='18oz carpenter hammer' WHERE id=106;");
+            statement.execute("UPDATE products SET weight='5.1' WHERE id=107;");
+            offset =
+                    DebeziumUtils.currentBinlogOffset(
+                            DebeziumUtils.createMySqlConnection(
+                                    new MySqlSourceConfigFactory()
+                                            .hostname(MYSQL_CONTAINER.getHost())
+                                            .port(MYSQL_CONTAINER.getDatabasePort())
+                                            .username(TEST_USER)
+                                            .password(TEST_PASSWORD)
+                                            .databaseList(inventoryDatabase.getDatabaseName())
+                                            .tableList("products")
+                                            .createConfig(0)));
+        }
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE debezium_source ("
+                                + " id INT NOT NULL,"
+                                + " name VARCHAR(255) NOT NULL,"
+                                + " description VARCHAR(512),"
+                                + " weight FLOAT,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        TEST_USER,
+                        TEST_PASSWORD,
+                        inventoryDatabase.getDatabaseName(),
+                        "products",
+                        incrementalSnapshot);
+        tEnv.executeSql(sourceDDL);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
+        }
+
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE debezium_source /*+ OPTIONS('scan.startup.mode' = 'specific-offset', 'scan.startup.specific-offset.gtid-set' = '%s') */",
+                        sinkName, offset.getGtidSet());
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+        // wait for the source startup, we don't have a better way to wait it, use sleep for now
+        Thread.sleep(5000L);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'scooter','Big 2-wheel scooter ',5.18);");
+            statement.execute(
+                    "UPDATE products SET description='new water resistent white wind breaker', weight='0.5' WHERE id=110;");
+            statement.execute("UPDATE products SET weight='5.17' WHERE id=111;");
+            statement.execute("DELETE FROM products WHERE id=111;");
+            statement.execute("ALTER TABLE products ADD COLUMN `new_col` int(10) ;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'new-item','test value',0.2,20);"); // 112
+        }
+
+        waitForSinkSize(sinkName, 8);
+
+        String[] expected =
+                new String[] {
+                    "+I[110, jacket, new water resistent white wind breaker, 0.5]",
+                    "+I[112, new-item, test value, 0.2, 20]"
+                };
+
+        List<String> actual = TestValuesTableFactory.getResults(sinkName);
+        assertEqualsInAnyOrder(Arrays.asList(expected), actual);
+
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
     public void testStartupFromEarliestOffset() throws Exception {
         inventoryDatabase.createAndInitialize();
         String sourceDDL =
@@ -1802,7 +2140,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.startup.mode' = 'earliest-offset',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s'"
                                 + ")",
@@ -1812,6 +2150,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "products",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         incrementalSnapshot);
         String sinkDDL =
                 "CREATE TABLE sink "
@@ -1864,6 +2203,189 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    public void testCtasStartupFromEarliestOffset() throws Exception {
+        if (!incrementalSnapshot) {
+            return;
+        }
+
+        String sinkName = getSinkTableName("earliestTest");
+        inventoryDatabase.createAndInitialize();
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE debezium_source ("
+                                + " id INT NOT NULL,"
+                                + " name VARCHAR(255) NOT NULL,"
+                                + " description VARCHAR(512),"
+                                + " weight FLOAT,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        TEST_USER,
+                        TEST_PASSWORD,
+                        inventoryDatabase.getDatabaseName(),
+                        "products",
+                        incrementalSnapshot);
+        tEnv.executeSql(sourceDDL);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "UPDATE products SET description='18oz carpenter hammer' WHERE id=106;");
+            statement.execute("UPDATE products SET weight='5.1' WHERE id=107;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'scooter','Big 2-wheel scooter ',5.18);");
+            statement.execute(
+                    "UPDATE products SET description='new water resistent white wind breaker', weight='0.5' WHERE id=110;");
+            statement.execute("UPDATE products SET weight='5.17' WHERE id=111;");
+            statement.execute("DELETE FROM products WHERE id=111;");
+        }
+
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE debezium_source /*+ OPTIONS('scan.startup.mode' = 'earliest-offset') */",
+                        sinkName);
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+        // wait for the source startup, we don't have a better way to wait it, use sleep for now
+        Thread.sleep(5000L);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE products ADD COLUMN `new_col` int(10) ;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'new-item','test value',0.2,20);"); // 112
+        }
+
+        waitForSinkSize(sinkName, 21);
+
+        String[] expected =
+                new String[] {
+                    "+I[101, scooter, Small 2-wheel scooter, 3.14]",
+                    "+I[102, car battery, 12V car battery, 8.1]",
+                    "+I[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.8]",
+                    "+I[104, hammer, 12oz carpenter's hammer, 0.75]",
+                    "+I[105, hammer, 14oz carpenter's hammer, 0.875]",
+                    "+I[108, jacket, water resistent black wind breaker, 0.1]",
+                    "+I[109, spare tire, 24 inch spare tire, 22.2]",
+                    "+I[106, hammer, 18oz carpenter hammer, 1.0]",
+                    "+I[107, rocks, box of assorted rocks, 5.1]",
+                    "+I[110, jacket, new water resistent white wind breaker, 0.5]",
+                    "+I[112, new-item, test value, 0.2, 20]"
+                };
+
+        List<String> actual = TestValuesTableFactory.getResults(sinkName);
+        assertEqualsInAnyOrder(Arrays.asList(expected), actual);
+
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
+    public void testCtasWithOpTypeColumnInAppendOnly() throws Exception {
+        if (!incrementalSnapshot) {
+            return;
+        }
+
+        String sinkName = getSinkTableName("earliestTest");
+        inventoryDatabase.createAndInitialize();
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE debezium_source ("
+                                + " id INT NOT NULL,"
+                                + " name VARCHAR(255) NOT NULL,"
+                                + " description VARCHAR(512),"
+                                + " weight FLOAT,"
+                                + " op_type STRING METADATA FROM 'op_type' VIRTUAL,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        TEST_USER,
+                        TEST_PASSWORD,
+                        inventoryDatabase.getDatabaseName(),
+                        "products",
+                        incrementalSnapshot);
+        tEnv.executeSql(sourceDDL);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "UPDATE products SET description='18oz carpenter hammer' WHERE id=106;");
+            statement.execute("UPDATE products SET weight='5.1' WHERE id=107;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'scooter','Big 2-wheel scooter ',5.18);");
+            statement.execute(
+                    "UPDATE products SET description='new water resistent white wind breaker', weight='0.5' WHERE id=110;");
+            statement.execute("UPDATE products SET weight='5.17' WHERE id=111;");
+            statement.execute("DELETE FROM products WHERE id=111;");
+        }
+
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE debezium_source /*+ OPTIONS('scan.startup.mode' = 'earliest-offset',"
+                                + " 'scan.read-changelog-as-append-only.enabled' = 'true') */",
+                        sinkName);
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+        // wait for the source startup, we don't have a better way to wait it, use sleep for now
+        Thread.sleep(5000L);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE products ADD COLUMN `new_col` int(10) ;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'new-item','test value',0.2,20);"); // 112
+        }
+
+        waitForSinkSize(sinkName, 21);
+
+        String[] expected =
+                new String[] {
+                    "+I[101, scooter, Small 2-wheel scooter, 3.14, +I]",
+                    "+I[102, car battery, 12V car battery, 8.1, +I]",
+                    "+I[103, 12-pack drill bits, 12-pack of drill bits with sizes ranging from #40 to #3, 0.8, +I]",
+                    "+I[104, hammer, 12oz carpenter's hammer, 0.75, +I]",
+                    "+I[105, hammer, 14oz carpenter's hammer, 0.875, +I]",
+                    "+I[106, hammer, 18oz carpenter hammer, 1.0, +U]",
+                    "+I[107, rocks, box of assorted rocks, 5.1, +U]",
+                    "+I[108, jacket, water resistent black wind breaker, 0.1, +I]",
+                    "+I[109, spare tire, 24 inch spare tire, 22.2, +I]",
+                    "+I[110, jacket, new water resistent white wind breaker, 0.5, +U]",
+                    "+I[111, scooter, Big 2-wheel scooter , 5.17, -D]",
+                    "+I[112, new-item, test value, 0.2, +I, 20]"
+                };
+
+        List<String> actual = TestValuesTableFactory.getResults(sinkName);
+        assertEqualsInAnyOrder(Arrays.asList(expected), actual);
+
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
     public void testStartupFromTimestamp() throws Exception {
         inventoryDatabase.createAndInitialize();
 
@@ -1887,7 +2409,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.startup.mode' = 'timestamp',"
                                 + " 'scan.startup.timestamp-millis' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s'"
@@ -1898,6 +2420,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "products",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         System.currentTimeMillis(),
                         incrementalSnapshot);
         String sinkDDL =
@@ -1939,6 +2462,90 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    public void testCtasStartupFromTimestamp() throws Exception {
+        if (!incrementalSnapshot) {
+            return;
+        }
+
+        String sinkName = getSinkTableName("timestampTest");
+        inventoryDatabase.createAndInitialize();
+
+        // Unfortunately we have to sleep here to differ initial and later-generating changes in
+        // binlog by timestamp
+        Thread.sleep(5000L);
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE debezium_source ("
+                                + " id INT NOT NULL,"
+                                + " name VARCHAR(255) NOT NULL,"
+                                + " description VARCHAR(512),"
+                                + " weight FLOAT,"
+                                + " primary key (`id`) not enforced"
+                                + ") WITH ("
+                                + " 'connector' = 'mysql-cdc',"
+                                + " 'hostname' = '%s',"
+                                + " 'port' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database-name' = '%s',"
+                                + " 'table-name' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        MYSQL_CONTAINER.getHost(),
+                        MYSQL_CONTAINER.getDatabasePort(),
+                        TEST_USER,
+                        TEST_PASSWORD,
+                        inventoryDatabase.getDatabaseName(),
+                        "products",
+                        incrementalSnapshot);
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE debezium_source /*+ OPTIONS('scan.startup.mode' = 'timestamp', 'scan.startup.timestamp-millis' = '%s') */",
+                        sinkName, System.currentTimeMillis());
+        tEnv.executeSql(sourceDDL);
+
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+        // wait for the source startup, we don't have a better way to wait it, use sleep for now
+        Thread.sleep(5000L);
+
+        try (Connection connection = inventoryDatabase.getJdbcConnection();
+                Statement statement = connection.createStatement()) {
+
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'scooter','Big 2-wheel scooter ',5.18);");
+            statement.execute(
+                    "UPDATE products SET description='new water resistent white wind breaker', weight='0.5' WHERE id=110;");
+            statement.execute("UPDATE products SET weight='5.17' WHERE id=111;");
+            statement.execute("DELETE FROM products WHERE id=111;");
+            statement.execute("ALTER TABLE products ADD COLUMN `new_col` int(10) ;");
+            statement.execute(
+                    "INSERT INTO products VALUES (default,'new-item','test value',0.2,20);"); // 112
+        }
+
+        waitForSinkSize(sinkName, 8);
+
+        String[] expected =
+                new String[] {
+                    "+I[110, jacket, new water resistent white wind breaker, 0.5]",
+                    "+I[112, new-item, test value, 0.2, 20]"
+                };
+
+        List<String> actual = TestValuesTableFactory.getResults(sinkName);
+        assertEqualsInAnyOrder(Arrays.asList(expected), actual);
+
+        result.getJobClient().get().cancel().get();
+    }
+
+    private String getSinkTableName(String prefix) {
+        return prefix + (incrementalSnapshot ? "Incremental" : "");
+    }
+
+    @Test
     public void testColumnOptionalWithDefaultValue() throws Exception {
         customerDatabase.createAndInitialize();
         String sourceDDL =
@@ -1958,7 +2565,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -1969,6 +2576,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         customerDatabase.getDatabaseName(),
                         "shopping_cart_dec",
                         incrementalSnapshot,
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -2016,7 +2624,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -2026,6 +2634,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         inventoryDatabase.getDatabaseName(),
                         "multi_max_table",
                         getServerId(),
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
 
@@ -2084,7 +2693,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                         + " 'table-name' = '%s',"
                                         + " 'scan.incremental.snapshot.enabled' = '%s',"
                                         + " 'server-id' = '%s',"
-                                        + " 'server-time-zone' = 'UTC',"
+                                        + " 'server-time-zone' = '%s',"
                                         + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                         + ")",
                                 i,
@@ -2096,6 +2705,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 "customers",
                                 incrementalSnapshot,
                                 getServerId(base),
+                                getServerTimeZone(MYSQL_CONTAINER),
                                 getSplitSize());
                 String sinkDDL =
                         String.format(
@@ -2150,7 +2760,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -2160,6 +2770,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         binlogDatabase.getDatabaseName(),
                         "binlog_metadata",
+                        getServerTimeZone(MYSQL8_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -2193,12 +2804,13 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
 
     // ------------------------------------------------------------------------------------
 
-    private String getServerId() {
+    @Override
+    protected String getServerId() {
+        if (incrementalSnapshot) {
+            return super.getServerId();
+        }
         final Random random = new Random();
         int serverId = random.nextInt(100) + 5400;
-        if (incrementalSnapshot) {
-            return serverId + "-" + (serverId + env.getParallelism());
-        }
         return String.valueOf(serverId);
     }
 
@@ -2299,7 +2911,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s',"
                                 + " 'debezium.binary.handling.mode' = 'base64'"
@@ -2310,6 +2922,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         inventoryDatabase.getDatabaseName(),
                         "varbinary_base64_table",
+                        getServerTimeZone(MYSQL_CONTAINER),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -2354,5 +2967,9 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
                 };
         assertEqualsInAnyOrder(Arrays.asList(expected), fetchRows(iterator, expected.length));
         result.getJobClient().get().cancel().get();
+    }
+
+    private String getServerTimeZone(MySqlContainer container) {
+        return container == MYSQL8_CONTAINER ? "UTC" : getSystemTimeZone();
     }
 }

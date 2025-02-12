@@ -40,6 +40,8 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.testcontainers.lifecycle.Startables;
 
 import java.sql.Connection;
@@ -56,6 +58,7 @@ import java.util.stream.Stream;
 import static org.junit.Assert.assertEquals;
 
 /** Integration tests for MySQL Table source. */
+@RunWith(Parameterized.class)
 public class MySqlBinlogParseITCase extends MySqlSourceTestBase {
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
@@ -104,7 +107,7 @@ public class MySqlBinlogParseITCase extends MySqlSourceTestBase {
                         "CREATE TABLE mysql_users ("
                                 + " db_name STRING METADATA FROM 'database_name' VIRTUAL,"
                                 + " table_name STRING METADATA VIRTUAL,"
-                                + " op_type STRING METADATA FROM 'row_kind' VIRTUAL,"
+                                + " op_type STRING METADATA FROM 'op_type' VIRTUAL,"
                                 + " `id` DECIMAL(20, 0) NOT NULL,"
                                 + " name STRING,"
                                 + " address STRING,"
@@ -254,6 +257,7 @@ public class MySqlBinlogParseITCase extends MySqlSourceTestBase {
                         .serverTimeZone("UTC")
                         .deserializer(new JsonDebeziumDeserializationSchema())
                         .startupOptions(StartupOptions.latest())
+                        .debeziumProperties(dbzProperties)
                         .includeSchemaChanges(true)
                         .build();
 

@@ -25,14 +25,20 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.planner.factories.TestValuesEvolvingCatalog;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -43,14 +49,20 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
 
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
+import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
+
 /** Integration tests for MySQL shardding tables. */
 @RunWith(Parameterized.class)
 public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
+
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(600);
 
     private static final Logger LOG =
             LoggerFactory.getLogger(MySqlConnectorShardingTableITCase.class);
@@ -74,17 +86,25 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
     private final StreamTableEnvironment tEnv =
             StreamTableEnvironment.create(
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     // enable the incrementalSnapshot (i.e: The new source MySqlParallelSource)
-    private final boolean incrementalSnapshot;
+    @Parameterized.Parameter(1)
+    public boolean incrementalSnapshot;
 
-    public MySqlConnectorShardingTableITCase(boolean incrementalSnapshot) {
-        this.incrementalSnapshot = incrementalSnapshot;
-    }
-
-    @Parameterized.Parameters(name = "incrementalSnapshot: {0}")
+    @Parameterized.Parameters(name = "debeziumProperties: {0}, incrementalSnapshot: {1}")
     public static Object[] parameters() {
-        return new Object[][] {new Object[] {false}, new Object[] {true}};
+        return new Object[][] {
+            new Object[] {
+                ImmutableMap.<String, String>builder()
+                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
+                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .build(),
+                true
+            },
+            new Object[] {new HashMap<>(), false},
+            new Object[] {new HashMap<>(), true}
+        };
     }
 
     @BeforeClass
@@ -104,6 +124,7 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
     @Before
     public void before() {
         TestValuesTableFactory.clearAllData();
+        tEnv.registerCatalog("mycat", new TestValuesEvolvingCatalog("mycat", "mydb", false));
         if (incrementalSnapshot) {
             env.setParallelism(DEFAULT_PARALLELISM);
             env.enableCheckpointing(200);
@@ -144,7 +165,7 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -155,6 +176,7 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                         "sharding_table_.*",
                         incrementalSnapshot,
                         getServerId(),
+                        getSystemTimeZone(),
                         getSplitSize());
         String sinkDDL =
                 "CREATE TABLE sink ("
@@ -224,7 +246,7 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
                                 + " 'scan.incremental.snapshot.enabled' = '%s',"
-                                + " 'server-time-zone' = 'UTC',"
+                                + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
                                 + ")",
@@ -237,6 +259,7 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 userDatabase1.getDatabaseName(), userDatabase2.getDatabaseName()),
                         "user_table_.*",
                         incrementalSnapshot,
+                        getSystemTimeZone(),
                         getServerId(),
                         getSplitSize());
         tEnv.executeSql(sourceDDL);
@@ -275,12 +298,13 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
 
     // ------------------------------------------------------------------------------------
 
-    private String getServerId() {
+    @Override
+    protected String getServerId() {
+        if (incrementalSnapshot) {
+            return super.getServerId();
+        }
         final Random random = new Random();
         int serverId = random.nextInt(100) + 5400;
-        if (incrementalSnapshot) {
-            return serverId + "-" + (serverId + env.getParallelism());
-        }
         return String.valueOf(serverId);
     }
 

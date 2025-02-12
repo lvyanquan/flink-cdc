@@ -39,6 +39,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -52,10 +53,13 @@ import io.debezium.jdbc.JdbcConnection;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.Timeout;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.sql.SQLException;
 import java.time.ZoneId;
@@ -81,7 +85,14 @@ import static java.lang.String.format;
 import static org.apache.flink.api.common.restartstrategy.RestartStrategies.noRestart;
 import static org.apache.flink.util.Preconditions.checkState;
 
-/** IT tests to cover various newly added tables during capture process. */
+/**
+ * IT tests to cover various newly added tables during capture process.
+ *
+ * <p>Note: We disable scanNewlyAddedTable feature in VVR to avoid inconsistent schema in user SQL
+ * job, you can run the test after enable the feature in {@link
+ * org.apache.flink.cdc.connectors.mysql.table.MySqlTableSource}.
+ */
+@RunWith(Parameterized.class)
 public class NewlyAddedTableITCase extends MySqlSourceTestBase {
 
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(300);
@@ -174,6 +185,8 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
     }
 
     @Test
+    @Ignore(
+            "scan.incremental.close-idle-reader.enabled must not be used when enable table.cdas.scan.newly-added-table.enabled for CDAS/CTAS")
     public void testNewlyAddedTableForExistsPipelineTwiceWithAheadBinlogAndAutoCloseReader()
             throws Exception {
         Map<String, String> otherOptions = new HashMap<>();
@@ -411,7 +424,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                             .hostname(MYSQL_CONTAINER.getHost())
                             .port(MYSQL_CONTAINER.getDatabasePort())
                             .databaseList(customDatabase.getDatabaseName())
-                            .serverTimeZone("UTC")
+                            .serverTimeZone(getSystemTimeZone())
                             .tableList(
                                     tableId0,
                                     customDatabase.getDatabaseName()
@@ -422,6 +435,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                             .serverId("5401-5404")
                             .deserializer(deserializer)
                             .scanNewlyAddedTableEnabled(true)
+                            .debeziumProperties(dbzProperties)
                             .build();
 
             // Build and execute the job
@@ -999,7 +1013,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                         + " 'table-name' = '%s',"
                         + " 'scan.incremental.snapshot.chunk.size' = '2',"
                         + " 'chunk-meta.group.size' = '2',"
-                        + " 'server-time-zone' = 'UTC',"
+                        + " 'server-time-zone' = '%s',"
                         + " 'server-id' = '%s',"
                         + " 'scan.newly-added-table.enabled' = 'true'"
                         + " %s"
@@ -1010,6 +1024,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                 customDatabase.getPassword(),
                 customDatabase.getDatabaseName(),
                 getTableNameRegex(captureTableNames),
+                getSystemTimeZone(),
                 getServerId(),
                 otherOptions.isEmpty()
                         ? ""
@@ -1024,8 +1039,11 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
     }
 
     private StreamExecutionEnvironment getStreamExecutionEnvironment(
-            String finishedSavePointPath, int parallelism) throws Exception {
+            String finishedSavePointPath, int parallelism) {
         Configuration configuration = new Configuration();
+        // scanNewlyAddedTableEnabled is disabled in VVR to avoid inconsistent schema in user SQL
+        // We could open evolvingScanNewlyAddedTableEnabled in CDAS/CTAS jobs
+        configuration.setBoolean(TableConfigOptions.EVOLVING_SCAN_NEWLY_ADDED_TABLE_ENABLED, true);
         if (finishedSavePointPath != null) {
             configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, finishedSavePointPath);
         }
@@ -1069,13 +1087,13 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
         }
     }
 
-    private String getServerId() {
+    protected String getServerId() {
         final Random random = new Random();
         int serverId = random.nextInt(100) + 5400;
         return serverId + "-" + (serverId + DEFAULT_PARALLELISM);
     }
 
-    private void sleepMs(long millis) {
+    protected void sleepMs(long millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException ignored) {
@@ -1211,7 +1229,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
         properties.put("database.port", String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
         properties.put("database.user", customDatabase.getUsername());
         properties.put("database.password", customDatabase.getPassword());
-        properties.put("database.serverTimezone", ZoneId.of("UTC").toString());
+        properties.put("database.serverTimezone", ZoneId.of(getSystemTimeZone()).toString());
         io.debezium.config.Configuration configuration =
                 io.debezium.config.Configuration.from(properties);
         return DebeziumUtils.createMySqlConnection(configuration, new Properties());

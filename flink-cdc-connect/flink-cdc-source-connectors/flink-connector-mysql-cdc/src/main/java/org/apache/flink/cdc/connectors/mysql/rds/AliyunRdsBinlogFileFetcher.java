@@ -87,8 +87,8 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     // Timeout and retries
     private final Duration downloadTimeout;
     // Boundary of fetching binlog files
-    private final long startingTimestampMs;
-    private final long stoppingTimestampMs;
+    private long startingTimestampMs;
+    private long stoppingTimestampMs;
     // RDS client
     private final Client rdsClient;
     // HTTP client
@@ -118,6 +118,9 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     // Timeout of requesting binlog files through http
     private final Duration requestTimeout;
 
+    // Automatically pull the next batch of binlog from OSS.
+    private boolean autoRollUpEnabled = true;
+
     public AliyunRdsBinlogFileFetcher(
             AliyunRdsConfig rdsConfig, long startTimestampMs, long stopTimestampMs) {
         this.rdsConfig = rdsConfig;
@@ -138,6 +141,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     @Nullable
     public String initialize(BinlogOffset startingOffset) {
         initialized = true;
+        isDownloadFinished = false;
         retryOnException(
                 () -> listBinlogFilesIntoQueue(startingTimestampMs, stoppingTimestampMs),
                 downloadTimeout,
@@ -199,6 +203,7 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         return earliestBinlogFilename;
     }
 
+    /** get file name of binlog that were uploaded to oss in the specific time range. */
     public String getLatestBinlogFilename() {
         DescribeBinlogFilesRequest request =
                 new DescribeBinlogFilesRequest()
@@ -245,6 +250,20 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
         checkInitialized();
         boolean hasNext = !(isDownloadFinished && localBinlogFileQueue.isEmpty());
         if (!hasNext && currentServingFile != null) {
+            if (autoRollUpEnabled) {
+                // Fetch next batch binlog files in oss.
+                startingTimestampMs = stoppingTimestampMs;
+                stoppingTimestampMs = System.currentTimeMillis();
+                // Skip last one binlog of before batch.
+                initialize(
+                        BinlogOffset.ofBinlogFilePosition(
+                                AliyunRdsUtils.generateNextBinlogFileName(
+                                        currentServingFile.getFilename()),
+                                0));
+                if (!rdsBinlogFileQueue.isEmpty()) {
+                    hasNext = true;
+                }
+            }
             maybeDeleteBinlogFile(currentServingFile);
             currentServingFile = null;
         }
@@ -506,6 +525,11 @@ public class AliyunRdsBinlogFileFetcher implements BinlogFileFetcher {
     @VisibleForTesting
     Path getBinlogFileDirectory() {
         return binlogFileDirectory;
+    }
+
+    @VisibleForTesting
+    void disableAutoRollUp() {
+        autoRollUpEnabled = false;
     }
 
     // ------------------------------------- Helper classes ----------------------------------

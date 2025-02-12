@@ -41,9 +41,9 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.apache.flink.api.common.JobStatus.RUNNING;
@@ -63,7 +63,7 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
             StreamTableEnvironment.create(
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
 
-    @Parameterized.Parameters(name = "incrementalSnapshot: {0}")
+    @Parameterized.Parameters(name = "MySQL Version: {1}")
     public static Object[] parameters() {
         // MySQL 8.0.17 brought the `CAST(JSON_EXTRACT AS ARRAY)` syntax firstly, and originates the
         // "extra 0 byte" bug.
@@ -71,22 +71,20 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
         // the bug.
         // MySQL 8.0.19 fixed this issue (eventually).
         return new Object[][] {
-            new Object[] {MySqlVersion.V8_0_17},
-            new Object[] {MySqlVersion.V8_0_18},
-            new Object[] {MySqlVersion.V8_0_19}
+            new Object[] {new HashMap<>(), MySqlVersion.V8_0_17},
+            new Object[] {new HashMap<>(), MySqlVersion.V8_0_18},
+            new Object[] {new HashMap<>(), MySqlVersion.V8_0_19}
         };
     }
 
-    private final MySqlVersion version;
-    private final MySqlContainer container;
+    @Parameterized.Parameter(1)
+    public MySqlVersion version;
 
-    public MySqlJsonArrayAsKeyIndexITCase(MySqlVersion version) {
-        this.version = version;
-        this.container = createMySqlContainer(version, "docker/server-gtids/expire-seconds/my.cnf");
-    }
+    private MySqlContainer container;
 
     @Before
     public void before() {
+        this.container = createMySqlContainer(version, "docker/server-gtids/expire-seconds/my.cnf");
         LOG.info("Starting MySQL {} containers...", version);
         Startables.deepStart(Stream.of(container)).join();
         LOG.info("Container MySQL {} is started.", version);
@@ -101,6 +99,7 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
 
     @Test
     public void testJsonArrayAsKeyIndex() {
+        env.setParallelism(DEFAULT_PARALLELISM);
         UniqueDatabase jaakiDatabase =
                 new UniqueDatabase(container, "json_array_as_key", TEST_USER, TEST_PASSWORD);
         jaakiDatabase.createAndInitialize();
@@ -158,7 +157,7 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
         String[] expected =
                 new String[] {
                     // snapshot records
-                    "+I[17]"
+                    "+I[17]", "+I[18]", "+I[19]", "-D[19]"
                 };
 
         assertEqualsInAnyOrder(Arrays.asList(expected), fetchRows(iterator, expected.length));
@@ -179,11 +178,5 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
             System.out.println("Gotta rows: " + rows);
         }
         return rows;
-    }
-
-    private String getServerId() {
-        final Random random = new Random();
-        int serverId = random.nextInt(100) + 5400;
-        return serverId + "-" + (serverId + env.getParallelism());
     }
 }

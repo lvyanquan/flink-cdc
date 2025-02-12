@@ -22,6 +22,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.planner.factories.TestValuesEvolvingCatalog;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.table.utils.LegacyRowResource;
 
@@ -50,9 +51,12 @@ import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBContainer.FLI
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBContainer.FLINK_USER_PASSWORD;
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBTestUtils.waitForSinkSize;
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBTestUtils.waitForSnapshotStarted;
+import static org.assertj.core.api.Assumptions.assumeThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Integration tests for MongoDB change stream event SQL source. */
 @RunWith(Parameterized.class)
@@ -579,6 +583,262 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
         List<String> actual = TestValuesTableFactory.getRawResults("meta_sink");
         Collections.sort(actual);
         assertEquals(expected, actual);
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
+    public void testMetadataOpTsColumn() throws Exception {
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("inventory");
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE mongodb_source ("
+                                + " _id STRING NOT NULL,"
+                                + " name STRING,"
+                                + " description STRING,"
+                                + " weight DECIMAL(10,3),"
+                                + " op_ts TIMESTAMP_LTZ(3) METADATA VIRTUAL,"
+                                + " PRIMARY KEY (_id) NOT ENFORCED"
+                                + ") WITH ("
+                                + " 'connector' = 'mongodb-cdc',"
+                                + " 'connection.options' = 'connectTimeoutMS=12000&socketTimeoutMS=13000',"
+                                + " 'hosts' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database' = '%s',"
+                                + " 'collection' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s'"
+                                + ")",
+                        CONTAINER.getHostAndPort(),
+                        FLINK_USER,
+                        FLINK_USER_PASSWORD,
+                        database,
+                        "products",
+                        parallelismSnapshot);
+
+        String sinkDDL =
+                "CREATE TABLE meta_sink ("
+                        + " _id STRING NOT NULL,"
+                        + " name STRING,"
+                        + " description STRING,"
+                        + " weight DECIMAL(10,3),"
+                        + " op_ts TIMESTAMP_LTZ(3),"
+                        + " PRIMARY KEY (_id) NOT ENFORCED"
+                        + ") WITH ("
+                        + " 'connector' = 'values',"
+                        + " 'sink-insert-only' = 'false'"
+                        + ")";
+        tEnv.executeSql(sourceDDL);
+        tEnv.executeSql(sinkDDL);
+
+        // async submit job
+        TableResult result = tEnv.executeSql("INSERT INTO meta_sink SELECT * FROM mongodb_source");
+
+        // wait for snapshot finished and start change stream
+        waitForSinkSize("meta_sink", 9);
+
+        MongoCollection<Document> products =
+                mongodbClient.getDatabase(database).getCollection("products");
+
+        products.updateOne(
+                Filters.eq("_id", new ObjectId("100000000000000000000106")),
+                Updates.set("description", "18oz carpenter hammer"));
+        products.insertOne(
+                productDocOf(
+                        "100000000000000000000110",
+                        "jacket",
+                        "water resistent white wind breaker",
+                        0.2));
+        products.deleteOne(Filters.eq("_id", new ObjectId("100000000000000000000110")));
+
+        waitForSinkSize("meta_sink", 12);
+
+        List<String> actual = TestValuesTableFactory.getRawResults("meta_sink");
+        String zeroTimestamp = "1970-01-01T00:00:00Z";
+        for (String row : actual) {
+            if (!row.contains("+I") || row.contains("100000000000000000000110")) {
+                assertFalse(row.contains(zeroTimestamp));
+            } else {
+                assertTrue(row.contains(zeroTimestamp));
+            }
+        }
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
+    public void testNestedColumns() throws Throwable {
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("nested_column_test");
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE mongodb_source ("
+                                + " _id STRING NOT NULL,"
+                                + " name STRING,"
+                                + " age INT,"
+                                + " `address` STRING,"
+                                + " `parents.mother` STRING,"
+                                + " `parents.father` STRING,"
+                                + " PRIMARY KEY (_id) NOT ENFORCED"
+                                + ") WITH ("
+                                + " 'connector' = 'mongodb-cdc',"
+                                + " 'connection.options' = 'connectTimeoutMS=12000&socketTimeoutMS=13000',"
+                                + " 'hosts' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database' = '%s',"
+                                + " 'collection' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = '%s',"
+                                + " 'scan.flatten-nested-columns.enabled' = 'true'"
+                                + ")",
+                        CONTAINER.getHostAndPort(),
+                        FLINK_USER,
+                        FLINK_USER_PASSWORD,
+                        database,
+                        "nested_columns",
+                        parallelismSnapshot);
+
+        String sinkDDL =
+                "CREATE TABLE sink ("
+                        + " _id STRING NOT NULL,"
+                        + " name STRING,"
+                        + " age INT,"
+                        + " `address` STRING,"
+                        + " `parents.mother` STRING,"
+                        + " `parents.father` STRING,"
+                        + " PRIMARY KEY (_id) NOT ENFORCED"
+                        + ") WITH ("
+                        + " 'connector' = 'values',"
+                        + " 'sink-insert-only' = 'false'"
+                        + ")";
+        tEnv.executeSql(sourceDDL);
+        tEnv.executeSql(sinkDDL);
+
+        TableResult result = tEnv.executeSql("INSERT INTO sink SELECT * FROM mongodb_source");
+
+        waitForSinkSize("sink", 9);
+
+        MongoCollection<Document> nestedColumns =
+                mongodbClient.getDatabase(database).getCollection("nested_columns");
+
+        Document document = new Document();
+        document.put("_id", new ObjectId("100000000000000000000110"));
+        document.put("name", "user_10");
+        document.put("age", 100);
+        document.put("address", "Hangzhou");
+        document.put(
+                "parents",
+                Document.parse("{'mother': 'user_20', 'father': 'user_21'}".replace('\'', '\"')));
+        nestedColumns.insertOne(document);
+
+        nestedColumns.updateOne(
+                Filters.eq("_id", new ObjectId("100000000000000000000101")),
+                Updates.set("age", 99));
+
+        nestedColumns.updateOne(
+                Filters.eq("_id", new ObjectId("100000000000000000000102")),
+                Updates.set("parents.father", "user_0"));
+
+        nestedColumns.updateOne(
+                Filters.eq("_id", new ObjectId("100000000000000000000109")),
+                Updates.combine(
+                        Updates.set("parents.mother", "user_100"),
+                        Updates.set("parents.father", "user_101")));
+
+        waitForSinkSize("sink", 13);
+
+        nestedColumns.deleteOne(Filters.eq("_id", new ObjectId("100000000000000000000103")));
+
+        waitForSinkSize("sink", 14);
+
+        List<String> expected =
+                Stream.of(
+                                "+I(100000000000000000000101,user_1,10,Shanghai,user_10,user_20)",
+                                "+I(100000000000000000000102,user_2,20,Shanghai,user_11,user_21)",
+                                "+I(100000000000000000000103,user_3,30,Shanghai,user_12,user_22)",
+                                "+I(100000000000000000000104,user_4,40,Shanghai,user_13,user_23)",
+                                "+I(100000000000000000000105,user_5,50,Shanghai,user_14,user_24)",
+                                "+I(100000000000000000000106,user_6,60,Shanghai,user_15,user_25)",
+                                "+I(100000000000000000000107,user_7,70,Shanghai,user_16,user_26)",
+                                "+I(100000000000000000000108,user_8,80,Shanghai,user_17,user_27)",
+                                "+I(100000000000000000000109,user_9,90,Shanghai,user_18,null)",
+                                "+I(100000000000000000000110,user_10,100,Hangzhou,user_20,user_21)",
+                                "+U(100000000000000000000101,user_1,99,Shanghai,user_10,user_20)",
+                                "+U(100000000000000000000102,user_2,20,Shanghai,user_11,user_0)",
+                                "+U(100000000000000000000109,user_9,90,Shanghai,user_100,user_101)",
+                                "-D(100000000000000000000103,user_3,30,Shanghai,user_12,user_22)")
+                        .sorted()
+                        .collect(Collectors.toList());
+
+        List<String> actual = TestValuesTableFactory.getRawResults("sink");
+        Collections.sort(actual);
+        assertEquals(expected, actual);
+        result.getJobClient().get().cancel().get();
+    }
+
+    @Test
+    public void testCtas() throws Exception {
+        assumeThat(!parallelismSnapshot).isFalse();
+        tEnv.registerCatalog("mycat", new TestValuesEvolvingCatalog("mycat", "mydb", false));
+        String database = CONTAINER.executeCommandFileInSeparateDatabase("inventory");
+
+        String sourceDDL =
+                String.format(
+                        "CREATE TABLE mongodb_source ("
+                                + " _id STRING NOT NULL,"
+                                + " name STRING,"
+                                + " description STRING,"
+                                + " weight DOUBLE,"
+                                + " PRIMARY KEY (_id) NOT ENFORCED"
+                                + ") WITH ("
+                                + " 'connector' = 'mongodb-cdc',"
+                                + " 'connection.options' = 'connectTimeoutMS=12000&socketTimeoutMS=13000',"
+                                + " 'hosts' = '%s',"
+                                + " 'username' = '%s',"
+                                + " 'password' = '%s',"
+                                + " 'database' = '%s',"
+                                + " 'collection' = '%s',"
+                                + " 'scan.incremental.snapshot.enabled' = 'true',"
+                                + " 'scan.full-changelog' = 'true'"
+                                + ")",
+                        CONTAINER.getHostAndPort(),
+                        FLINK_USER,
+                        FLINK_USER_PASSWORD,
+                        database,
+                        "products");
+        tEnv.executeSql(sourceDDL);
+
+        String sinkName = "test_sink";
+        String ctasSql =
+                String.format(
+                        "CREATE TABLE mycat.mydb.%s WITH ('sink-insert-only'='false')"
+                                + " AS TABLE mongodb_source "
+                                + "/*+ OPTIONS('scan.incremental.snapshot.enabled' = 'true') */",
+                        sinkName);
+
+        // async submit job
+        TableResult result = tEnv.executeSql(ctasSql);
+
+        // wait for snapshot finished and start change stream
+        waitForSinkSize(sinkName, 9);
+
+        List<String> expected =
+                Stream.of(
+                                "+I(100000000000000000000101,scooter,Small 2-wheel scooter,3.14)",
+                                "+I(100000000000000000000102,car battery,12V car battery,8.1)",
+                                "+I(100000000000000000000103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8)",
+                                "+I(100000000000000000000104,hammer,12oz carpenter''s hammer,0.75)",
+                                "+I(100000000000000000000105,hammer,12oz carpenter''s hammer,0.875)",
+                                "+I(100000000000000000000106,hammer,12oz carpenter''s hammer,1.0)",
+                                "+I(100000000000000000000107,rocks,box of assorted rocks,5.3)",
+                                "+I(100000000000000000000108,jacket,water resistent black wind breaker,0.1)",
+                                "+I(100000000000000000000109,spare tire,24 inch spare tire,22.2)")
+                        .sorted()
+                        .collect(Collectors.toList());
+
+        List<String> actual = TestValuesTableFactory.getRawResults(sinkName);
+        Collections.sort(actual);
+        assertEquals(expected, actual);
+
         result.getJobClient().get().cancel().get();
     }
 

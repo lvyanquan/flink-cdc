@@ -97,7 +97,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.fetchResults;
-import static org.apache.flink.cdc.connectors.mysql.testutils.MySqSourceTestUtils.getServerId;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** IT tests to cover various newly added tables during capture process in pipeline mode. */
@@ -149,7 +148,7 @@ public class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
         properties.put("database.port", String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
         properties.put("database.user", customDatabase.getUsername());
         properties.put("database.password", customDatabase.getPassword());
-        properties.put("database.serverTimezone", ZoneId.of("UTC").toString());
+        properties.put("database.serverTimezone", ZoneId.of(getSystemTimeZone()).toString());
         io.debezium.config.Configuration configuration =
                 io.debezium.config.Configuration.from(properties);
         return DebeziumUtils.createMySqlConnection(configuration, new Properties());
@@ -537,7 +536,7 @@ public class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
         options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(SERVER_TIME_ZONE.key(), "UTC");
+        options.put(SERVER_TIME_ZONE.key(), getSystemTimeZone());
         options.put(TABLES.key(), StringUtils.join(fullTableNames, ","));
         options.put(SERVER_ID.key(), getServerId(parallelism));
         if (enableScanNewlyAddedTable) {

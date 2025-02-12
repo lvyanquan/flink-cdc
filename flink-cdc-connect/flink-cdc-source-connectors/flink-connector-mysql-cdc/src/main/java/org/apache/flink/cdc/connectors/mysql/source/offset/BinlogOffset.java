@@ -28,6 +28,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -99,6 +100,30 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
     @VisibleForTesting
     public BinlogOffset(Map<String, String> offset) {
         this.offset = offset;
+    }
+
+    @VisibleForTesting
+    public BinlogOffset(
+            String filename,
+            long position,
+            long restartSkipEvents,
+            long restartSkipRows,
+            long binlogEpochSecs,
+            @Nullable String restartGtidSet,
+            @Nullable Integer serverId) {
+        Map<String, String> offsetMap = new HashMap<>();
+        offsetMap.put(BINLOG_FILENAME_OFFSET_KEY, filename);
+        offsetMap.put(BINLOG_POSITION_OFFSET_KEY, String.valueOf(position));
+        offsetMap.put(EVENTS_TO_SKIP_OFFSET_KEY, String.valueOf(restartSkipEvents));
+        offsetMap.put(ROWS_TO_SKIP_OFFSET_KEY, String.valueOf(restartSkipRows));
+        offsetMap.put(TIMESTAMP_KEY, String.valueOf(binlogEpochSecs));
+        if (restartGtidSet != null) {
+            offsetMap.put(GTID_SET_KEY, restartGtidSet);
+        }
+        if (serverId != null) {
+            offsetMap.put(SERVER_ID_KEY, String.valueOf(serverId));
+        }
+        this.offset = offsetMap;
     }
 
     // ------------------------------ Field getters -----------------------------

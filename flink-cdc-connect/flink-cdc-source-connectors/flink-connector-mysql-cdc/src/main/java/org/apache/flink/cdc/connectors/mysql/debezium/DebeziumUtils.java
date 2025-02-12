@@ -23,10 +23,10 @@ import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.utils.TableDiscoveryUtils;
 import org.apache.flink.util.FlinkRuntimeException;
 
+import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
-import com.github.shyiko.mysql.binlog.event.EventData;
-import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
-import com.github.shyiko.mysql.binlog.event.RotateEventData;
+import com.github.shyiko.mysql.binlog.event.Event;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
@@ -46,14 +46,16 @@ import io.debezium.util.SchemaNameAdjuster;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 
 /** Utilities related to Debezium. */
@@ -61,6 +63,7 @@ public class DebeziumUtils {
     private static final String QUOTED_CHARACTER = "`";
 
     private static final Logger LOG = LoggerFactory.getLogger(DebeziumUtils.class);
+    private static final long TIMEOUT_MS = 60000;
 
     /** Creates and opens a new {@link JdbcConnection} backing connection pool. */
     public static JdbcConnection openJdbcConnection(MySqlSourceConfig sourceConfig) {
@@ -244,49 +247,96 @@ public class DebeziumUtils {
 
     public static BinlogOffset findBinlogOffset(
             long targetMs, MySqlConnection connection, MySqlSourceConfig mySqlSourceConfig) {
-        MySqlConnection.MySqlConnectionConfiguration config = connection.connectionConfig();
-        BinaryLogClient client =
-                new BinaryLogClient(
-                        config.hostname(), config.port(), config.username(), config.password());
-        if (mySqlSourceConfig.getServerIdRange() != null) {
-            client.setServerId(mySqlSourceConfig.getServerIdRange().getStartServerId());
-        }
-        List<String> binlogFiles = new ArrayList<>();
-        JdbcConnection.ResultSetConsumer rsc =
-                rs -> {
-                    while (rs.next()) {
-                        String fileName = rs.getString(1);
-                        long fileSize = rs.getLong(2);
-                        if (fileSize > 0) {
-                            binlogFiles.add(fileName);
-                        }
-                    }
-                };
-
         try {
-            connection.query("SHOW BINARY LOGS", rsc);
-            LOG.info("Total search binlog: {}", binlogFiles);
-
-            if (binlogFiles.isEmpty()) {
-                return BinlogOffset.ofBinlogFilePosition("", 0);
+            MySqlConnection.MySqlConnectionConfiguration config = connection.connectionConfig();
+            BinaryLogClient client =
+                    new BinaryLogClient(
+                            config.hostname(), config.port(), config.username(), config.password());
+            client.setThreadFactory(
+                    new ThreadFactoryBuilder()
+                            .setNameFormat("timestamp-seeker-binlog-client")
+                            .build());
+            if (mySqlSourceConfig.getServerIdRange() != null) {
+                client.setServerId(mySqlSourceConfig.getServerIdRange().getStartServerId());
+            } else {
+                client.setServerId(randomServerId());
             }
 
-            String binlogName = searchBinlogName(client, targetMs, binlogFiles);
-            return BinlogOffset.ofBinlogFilePosition(binlogName, 0);
+            LOG.info("Seeking binlog offset with timestamp {} ms", targetMs);
+            try {
+                // Locate the binlog file
+                List<String> binlogFiles = connection.availableBinlogFiles();
+                String locatedBinlogFileName = null;
+                // Reverse the order to search from the latest binlog file
+                binlogFiles.sort(Collections.reverseOrder());
+                // Register a listener to capture the timestamp of the first event in binlog file
+                FirstTimestampListener listener = new FirstTimestampListener();
+                client.registerEventListener(listener);
+                for (String binlogFile : binlogFiles) {
+                    LOG.info("Seeker is checking binlog file: {}", binlogFile);
+                    CompletableFuture<Long> timestampMsFuture = listener.resetFuture();
+                    client.setBinlogFilename(binlogFile);
+                    client.setBinlogPosition(0);
+                    client.connect(TIMEOUT_MS);
+                    long firstTimestampMs = waitForFirstTimestampMs(timestampMsFuture, binlogFile);
+                    client.disconnect();
+                    if (firstTimestampMs < targetMs) {
+                        locatedBinlogFileName = binlogFile;
+                        LOG.info(
+                                "Seeker located the binlog file to \"{}\", whose starting timestamp in second is {}",
+                                locatedBinlogFileName,
+                                firstTimestampMs / 1000);
+                        break;
+                    }
+                    LOG.info(
+                            "The timestamp in second of the first event in binlog file \"{}\" is {}, "
+                                    + "which is later than the required timestamp in second {}. Continue searching...",
+                            binlogFile,
+                            firstTimestampMs,
+                            targetMs);
+                }
+                if (locatedBinlogFileName == null) {
+                    LOG.info(
+                            "All binlog events' timestamp are later than {}. Will use earliest offset to start.",
+                            targetMs);
+                    return BinlogOffset.ofEarliest();
+                }
+
+                // We directly use position 0 (the earliest position in the located binlog file) to
+                // keep
+                // the consistency of binlog events. It's hard to seek to the position exactly
+                // matching
+                // the timestamp considering metadata events like TABLE_MAP, GTID.
+                return BinlogOffset.ofBinlogFilePosition(locatedBinlogFileName, 0);
+            } finally {
+                client.disconnect();
+                client.unregisterEventListener(FirstTimestampListener.class);
+            }
         } catch (Exception e) {
-            throw new FlinkRuntimeException(e);
+            throw new RuntimeException(
+                    String.format("Unable to seek to timestamp %d", targetMs), e);
         }
     }
 
+    /** Copied from {@link MySqlConnectorConfig}'s randomServerId(). */
+    private static int randomServerId() {
+        int lowestServerId = 5400;
+        int highestServerId = 6400;
+        return lowestServerId + new Random().nextInt(highestServerId - lowestServerId);
+    }
+
     private static String searchBinlogName(
-            BinaryLogClient client, long targetMs, List<String> binlogFiles)
-            throws IOException, InterruptedException {
+            FirstTimestampListener listener,
+            BinaryLogClient client,
+            long targetMs,
+            List<String> binlogFiles)
+            throws Exception {
         int startIdx = 0;
         int endIdx = binlogFiles.size() - 1;
 
         while (startIdx <= endIdx) {
             int mid = startIdx + (endIdx - startIdx) / 2;
-            long midTs = getBinlogTimestamp(client, binlogFiles.get(mid));
+            long midTs = getBinlogTimestamp(listener, client, binlogFiles.get(mid));
             if (midTs < targetMs) {
                 startIdx = mid + 1;
             } else if (targetMs < midTs) {
@@ -299,41 +349,47 @@ public class DebeziumUtils {
         return endIdx < 0 ? binlogFiles.get(0) : binlogFiles.get(endIdx);
     }
 
-    private static long getBinlogTimestamp(BinaryLogClient client, String binlogFile)
-            throws IOException, InterruptedException {
-
-        ArrayBlockingQueue<Long> binlogTimestamps = new ArrayBlockingQueue<>(1);
-        BinaryLogClient.EventListener eventListener =
-                event -> {
-                    EventData data = event.getData();
-                    if (data instanceof RotateEventData) {
-                        // We skip RotateEventData because it does not contain the timestamp we are
-                        // interested in.
-                        return;
-                    }
-
-                    EventHeaderV4 header = event.getHeader();
-                    long timestamp = header.getTimestamp();
-                    if (timestamp > 0) {
-                        binlogTimestamps.offer(timestamp);
-                        try {
-                            client.disconnect();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                };
-
+    private static long getBinlogTimestamp(
+            FirstTimestampListener listener, BinaryLogClient client, String binlogFile)
+            throws Exception {
         try {
-            client.registerEventListener(eventListener);
+            LOG.info("Seeker is checking binlog file: {}", binlogFile);
+            CompletableFuture<Long> timestampMsFuture = listener.resetFuture();
             client.setBinlogFilename(binlogFile);
             client.setBinlogPosition(0);
-
-            LOG.info("begin parse binlog: {}", binlogFile);
-            client.connect();
+            client.connect(TIMEOUT_MS);
+            return waitForFirstTimestampMs(timestampMsFuture, binlogFile);
         } finally {
-            client.unregisterEventListener(eventListener);
+            client.disconnect();
         }
-        return binlogTimestamps.take();
+    }
+
+    private static long waitForFirstTimestampMs(CompletableFuture<Long> future, String binlogFile)
+            throws Exception {
+        try {
+            return future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new TimeoutException(
+                    String.format(
+                            "Timeout waiting for a valid timestamp in binlog file \"%s\"",
+                            binlogFile));
+        }
+    }
+
+    private static class FirstTimestampListener implements BinaryLogClient.EventListener {
+        private CompletableFuture<Long> timestampMsFuture = new CompletableFuture<>();
+
+        @Override
+        public void onEvent(Event event) {
+            long timestampMs = event.getHeader().getTimestamp();
+            if (!timestampMsFuture.isDone() && timestampMs > 0) {
+                timestampMsFuture.complete(timestampMs);
+            }
+        }
+
+        public CompletableFuture<Long> resetFuture() {
+            timestampMsFuture = new CompletableFuture<>();
+            return timestampMsFuture;
+        }
     }
 }

@@ -17,9 +17,10 @@
 
 package org.apache.flink.cdc.connectors.mongodb.table;
 
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope;
+import org.apache.flink.cdc.connectors.mongodb.source.utils.BsonUtils;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.AppendMetadataCollector;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
@@ -94,6 +95,9 @@ public class MongoDBConnectorDeserializationSchema
     /** Local Time zone. */
     private final ZoneId localTimeZone;
 
+    /** Flatten nested columns or not when parsing Bson documents. */
+    private final boolean flattenNestedColumns;
+
     /**
      * Runtime converter that converts {@link
      * com.mongodb.client.model.changestream.ChangeStreamDocument}s into {@link RowData} consisted
@@ -113,12 +117,14 @@ public class MongoDBConnectorDeserializationSchema
             RowType physicalDataType,
             MetadataConverter[] metadataConverters,
             TypeInformation<RowData> resultTypeInfo,
-            ZoneId localTimeZone) {
+            ZoneId localTimeZone,
+            boolean flattenNestedColumns) {
         this.hasMetadata = checkNotNull(metadataConverters).length > 0;
         this.appendMetadataCollector = new AppendMetadataCollector(metadataConverters);
         this.physicalConverter = createConverter(physicalDataType);
         this.resultTypeInfo = resultTypeInfo;
         this.localTimeZone = localTimeZone;
+        this.flattenNestedColumns = flattenNestedColumns;
     }
 
     @Override
@@ -227,37 +233,37 @@ public class MongoDBConnectorDeserializationSchema
     private DeserializationRuntimeConverter createNotNullConverter(LogicalType type) {
         switch (type.getTypeRoot()) {
             case NULL:
-                return (docObj) -> null;
+                return convertToNull();
             case BOOLEAN:
-                return this::convertToBoolean;
+                return convertToBoolean();
             case TINYINT:
-                return this::convertToTinyInt;
+                return convertToTinyInt();
             case SMALLINT:
-                return this::convertToSmallInt;
+                return convertToSmallInt();
             case INTEGER:
             case INTERVAL_YEAR_MONTH:
-                return this::convertToInt;
+                return convertToInt();
             case BIGINT:
             case INTERVAL_DAY_TIME:
-                return this::convertToLong;
+                return convertToLong();
             case DATE:
-                return this::convertToDate;
+                return convertToDate();
             case TIME_WITHOUT_TIME_ZONE:
-                return this::convertToTime;
+                return convertToTime();
             case TIMESTAMP_WITHOUT_TIME_ZONE:
-                return this::convertToTimestamp;
+                return convertToTimestamp();
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return this::convertToLocalTimeZoneTimestamp;
+                return convertToLocalTimeZoneTimestamp();
             case FLOAT:
-                return this::convertToFloat;
+                return convertToFloat();
             case DOUBLE:
-                return this::convertToDouble;
+                return convertToDouble();
             case CHAR:
             case VARCHAR:
-                return this::convertToString;
+                return convertToString();
             case BINARY:
             case VARBINARY:
-                return this::convertToBinary;
+                return convertToBinary();
             case DECIMAL:
                 return createDecimalConverter((DecimalType) type);
             case ROW:
@@ -273,190 +279,250 @@ public class MongoDBConnectorDeserializationSchema
         }
     }
 
-    private boolean convertToBoolean(BsonValue docObj) {
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue();
-        }
-        if (docObj.isInt32()) {
-            return docObj.asInt32().getValue() == 1;
-        }
-        if (docObj.isInt64()) {
-            return docObj.asInt64().getValue() == 1L;
-        }
-        if (docObj.isString()) {
-            return Boolean.parseBoolean(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to boolean from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
+    private DeserializationRuntimeConverter convertToNull() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-    private byte convertToTinyInt(BsonValue docObj) {
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? (byte) 1 : (byte) 0;
-        }
-        if (docObj.isInt32()) {
-            return (byte) docObj.asInt32().getValue();
-        }
-        if (docObj.isInt64()) {
-            return (byte) docObj.asInt64().getValue();
-        }
-        if (docObj.isString()) {
-            return Byte.parseByte(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to tinyint from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
-
-    private short convertToSmallInt(BsonValue docObj) {
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? (short) 1 : (short) 0;
-        }
-        if (docObj.isInt32()) {
-            return (short) docObj.asInt32().getValue();
-        }
-        if (docObj.isInt64()) {
-            return (short) docObj.asInt64().getValue();
-        }
-        if (docObj.isString()) {
-            return Short.parseShort(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to smallint from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
-
-    private int convertToInt(BsonValue docObj) {
-        if (docObj.isNumber()) {
-            return docObj.asNumber().intValue();
-        }
-        if (docObj.isDecimal128()) {
-            Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
-            if (decimal128Value.isFinite()) {
-                return decimal128Value.intValue();
-            } else if (decimal128Value.isNegative()) {
-                return Integer.MIN_VALUE;
-            } else {
-                return Integer.MAX_VALUE;
+            @Override
+            public Void convert(BsonValue docObj) throws Exception {
+                return null;
             }
-        }
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? 1 : 0;
-        }
-        if (docObj.isDateTime()) {
-            return Math.toIntExact(docObj.asDateTime().getValue() / 1000L);
-        }
-        if (docObj.isTimestamp()) {
-            return docObj.asTimestamp().getTime();
-        }
-        if (docObj.isString()) {
-            return Integer.parseInt(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to integer from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+        };
     }
 
-    private long convertToLong(BsonValue docObj) {
-        if (docObj.isNumber()) {
-            return docObj.asNumber().longValue();
-        }
-        if (docObj.isDecimal128()) {
-            Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
-            if (decimal128Value.isFinite()) {
-                return decimal128Value.longValue();
-            } else if (decimal128Value.isNegative()) {
-                return Long.MIN_VALUE;
-            } else {
-                return Long.MAX_VALUE;
+    private DeserializationRuntimeConverter convertToBoolean() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Boolean convert(BsonValue docObj) {
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue();
+                }
+                if (docObj.isInt32()) {
+                    return docObj.asInt32().getValue() == 1;
+                }
+                if (docObj.isInt64()) {
+                    return docObj.asInt64().getValue() == 1L;
+                }
+                if (docObj.isString()) {
+                    return Boolean.parseBoolean(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to boolean from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
             }
-        }
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? 1L : 0L;
-        }
-        if (docObj.isDateTime()) {
-            return docObj.asDateTime().getValue();
-        }
-        if (docObj.isTimestamp()) {
-            return docObj.asTimestamp().getTime() * 1000L;
-        }
-        if (docObj.isString()) {
-            return Long.parseLong(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to long from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+        };
     }
 
-    private double convertToDouble(BsonValue docObj) {
-        if (docObj.isNumber()) {
-            return docObj.asNumber().doubleValue();
-        }
-        if (docObj.isDecimal128()) {
-            Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
-            if (decimal128Value.isFinite()) {
-                return decimal128Value.doubleValue();
-            } else if (decimal128Value.isNegative()) {
-                return -Double.MAX_VALUE;
-            } else {
-                return Double.MAX_VALUE;
+    private DeserializationRuntimeConverter convertToTinyInt() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Byte convert(BsonValue docObj) {
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? (byte) 1 : (byte) 0;
+                }
+                if (docObj.isInt32()) {
+                    return (byte) docObj.asInt32().getValue();
+                }
+                if (docObj.isInt64()) {
+                    return (byte) docObj.asInt64().getValue();
+                }
+                if (docObj.isString()) {
+                    return Byte.parseByte(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to tinyint from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
             }
-        }
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? 1 : 0;
-        }
-        if (docObj.isString()) {
-            return Double.parseDouble(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to double from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+        };
     }
 
-    private float convertToFloat(BsonValue docObj) {
-        if (docObj.isInt32()) {
-            return docObj.asInt32().getValue();
-        }
-        if (docObj.isInt64()) {
-            return docObj.asInt64().getValue();
-        }
-        if (docObj.isDouble()) {
-            return ((Double) docObj.asDouble().getValue()).floatValue();
-        }
-        if (docObj.isDecimal128()) {
-            Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
-            if (decimal128Value.isFinite()) {
-                return decimal128Value.floatValue();
-            } else if (decimal128Value.isNegative()) {
-                return -Float.MAX_VALUE;
-            } else {
-                return Float.MAX_VALUE;
+    private DeserializationRuntimeConverter convertToSmallInt() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Short convert(BsonValue docObj) {
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? (short) 1 : (short) 0;
+                }
+                if (docObj.isInt32()) {
+                    return (short) docObj.asInt32().getValue();
+                }
+                if (docObj.isInt64()) {
+                    return (short) docObj.asInt64().getValue();
+                }
+                if (docObj.isString()) {
+                    return Short.parseShort(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to smallint from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
             }
-        }
-        if (docObj.isBoolean()) {
-            return docObj.asBoolean().getValue() ? 1f : 0f;
-        }
-        if (docObj.isString()) {
-            return Float.parseFloat(docObj.asString().getValue());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to float from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToInt() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Integer convert(BsonValue docObj) {
+                if (docObj.isNumber()) {
+                    return docObj.asNumber().intValue();
+                }
+                if (docObj.isDecimal128()) {
+                    Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
+                    if (decimal128Value.isFinite()) {
+                        return decimal128Value.intValue();
+                    } else if (decimal128Value.isNegative()) {
+                        return Integer.MIN_VALUE;
+                    } else {
+                        return Integer.MAX_VALUE;
+                    }
+                }
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? 1 : 0;
+                }
+                if (docObj.isDateTime()) {
+                    return Math.toIntExact(docObj.asDateTime().getValue() / 1000L);
+                }
+                if (docObj.isTimestamp()) {
+                    return docObj.asTimestamp().getTime();
+                }
+                if (docObj.isString()) {
+                    return Integer.parseInt(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to integer from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToLong() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Long convert(BsonValue docObj) {
+                if (docObj.isNumber()) {
+                    return docObj.asNumber().longValue();
+                }
+                if (docObj.isDecimal128()) {
+                    Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
+                    if (decimal128Value.isFinite()) {
+                        return decimal128Value.longValue();
+                    } else if (decimal128Value.isNegative()) {
+                        return Long.MIN_VALUE;
+                    } else {
+                        return Long.MAX_VALUE;
+                    }
+                }
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? 1L : 0L;
+                }
+                if (docObj.isDateTime()) {
+                    return docObj.asDateTime().getValue();
+                }
+                if (docObj.isTimestamp()) {
+                    return docObj.asTimestamp().getTime() * 1000L;
+                }
+                if (docObj.isString()) {
+                    return Long.parseLong(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to long from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToDouble() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Double convert(BsonValue docObj) {
+                if (docObj.isNumber()) {
+                    return docObj.asNumber().doubleValue();
+                }
+                if (docObj.isDecimal128()) {
+                    Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
+                    if (decimal128Value.isFinite()) {
+                        return decimal128Value.doubleValue();
+                    } else if (decimal128Value.isNegative()) {
+                        return -Double.MAX_VALUE;
+                    } else {
+                        return Double.MAX_VALUE;
+                    }
+                }
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? 1d : 0d;
+                }
+                if (docObj.isString()) {
+                    return Double.parseDouble(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to double from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToFloat() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Float convert(BsonValue docObj) {
+                if (docObj.isInt32()) {
+                    return (float) docObj.asInt32().getValue();
+                }
+                if (docObj.isInt64()) {
+                    return (float) docObj.asInt64().getValue();
+                }
+                if (docObj.isDouble()) {
+                    return ((Double) docObj.asDouble().getValue()).floatValue();
+                }
+                if (docObj.isDecimal128()) {
+                    Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
+                    if (decimal128Value.isFinite()) {
+                        return decimal128Value.floatValue();
+                    } else if (decimal128Value.isNegative()) {
+                        return -Float.MAX_VALUE;
+                    } else {
+                        return Float.MAX_VALUE;
+                    }
+                }
+                if (docObj.isBoolean()) {
+                    return docObj.asBoolean().getValue() ? 1f : 0f;
+                }
+                if (docObj.isString()) {
+                    return Float.parseFloat(docObj.asString().getValue());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to float from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
     }
 
     private LocalDate convertInstantToLocalDate(Instant instant) {
@@ -488,20 +554,27 @@ public class MongoDBConnectorDeserializationSchema
      *
      * @see org.apache.flink.table.types.logical.DateType
      */
-    private int convertToDate(BsonValue docObj) {
-        if (docObj.isDateTime()) {
-            Instant instant = convertToInstant(docObj.asDateTime());
-            return (int) convertInstantToLocalDate(instant).toEpochDay();
-        }
-        if (docObj.isTimestamp()) {
-            Instant instant = convertToInstant(docObj.asTimestamp());
-            return (int) convertInstantToLocalDate(instant).toEpochDay();
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to date from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+    private DeserializationRuntimeConverter convertToDate() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Integer convert(BsonValue docObj) {
+                if (docObj.isDateTime()) {
+                    Instant instant = convertToInstant(docObj.asDateTime());
+                    return (int) convertInstantToLocalDate(instant).toEpochDay();
+                }
+                if (docObj.isTimestamp()) {
+                    Instant instant = convertToInstant(docObj.asTimestamp());
+                    return (int) convertInstantToLocalDate(instant).toEpochDay();
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to date from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
     }
 
     /**
@@ -509,183 +582,227 @@ public class MongoDBConnectorDeserializationSchema
      *
      * @see org.apache.flink.table.types.logical.TimeType
      */
-    private int convertToTime(BsonValue docObj) {
-        if (docObj.isDateTime()) {
-            Instant instant = convertToInstant(docObj.asDateTime());
-            return convertInstantToLocalTime(instant).toSecondOfDay() * 1000;
-        }
-        if (docObj.isTimestamp()) {
-            Instant instant = convertToInstant(docObj.asTimestamp());
-            return convertInstantToLocalTime(instant).toSecondOfDay() * 1000;
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to time from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
+    private DeserializationRuntimeConverter convertToTime() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-    private TimestampData convertToTimestamp(BsonValue docObj) {
-        if (docObj.isDateTime()) {
-            return TimestampData.fromLocalDateTime(
-                    convertInstantToLocalDateTime(convertToInstant(docObj.asDateTime())));
-        }
-        if (docObj.isTimestamp()) {
-            return TimestampData.fromLocalDateTime(
-                    convertInstantToLocalDateTime(convertToInstant(docObj.asTimestamp())));
-        }
-
-        throw new IllegalArgumentException(
-                "Unable to convert to timestamp from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
-
-    private TimestampData convertToLocalTimeZoneTimestamp(BsonValue docObj) {
-        if (docObj.isDateTime()) {
-            return TimestampData.fromEpochMillis(docObj.asDateTime().getValue());
-        }
-        if (docObj.isTimestamp()) {
-            return TimestampData.fromEpochMillis(docObj.asTimestamp().getTime() * 1000L);
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to timestamp with local timezone from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
-    }
-
-    private byte[] convertToBinary(BsonValue docObj) {
-        if (docObj.isBinary()) {
-            return docObj.asBinary().getData();
-        }
-        throw new UnsupportedOperationException(
-                "Unsupported BYTES value type: " + docObj.getClass().getSimpleName());
-    }
-
-    private StringData convertToString(BsonValue docObj) {
-        if (docObj.isString()) {
-            return StringData.fromString(docObj.asString().getValue());
-        }
-        if (docObj.isDocument()) {
-            // convert document to json string
-            return StringData.fromString(docObj.asDocument().toJson());
-        }
-        if (docObj.isBinary()) {
-            BsonBinary bsonBinary = docObj.asBinary();
-            if (BsonBinarySubType.isUuid(bsonBinary.getType())) {
-                return StringData.fromString(bsonBinary.asUuid().toString());
+            @Override
+            public Integer convert(BsonValue docObj) {
+                if (docObj.isDateTime()) {
+                    Instant instant = convertToInstant(docObj.asDateTime());
+                    return convertInstantToLocalTime(instant).toSecondOfDay() * 1000;
+                }
+                if (docObj.isTimestamp()) {
+                    Instant instant = convertToInstant(docObj.asTimestamp());
+                    return convertInstantToLocalTime(instant).toSecondOfDay() * 1000;
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to time from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
             }
-            return StringData.fromString(HexUtils.toHex(bsonBinary.getData()));
-        }
-        if (docObj.isObjectId()) {
-            return StringData.fromString(docObj.asObjectId().getValue().toHexString());
-        }
-        if (docObj.isInt32()) {
-            return StringData.fromString(String.valueOf(docObj.asInt32().getValue()));
-        }
-        if (docObj.isInt64()) {
-            return StringData.fromString(String.valueOf(docObj.asInt64().getValue()));
-        }
-        if (docObj.isDouble()) {
-            return StringData.fromString(String.valueOf(docObj.asDouble().getValue()));
-        }
-        if (docObj.isDecimal128()) {
-            return StringData.fromString(docObj.asDecimal128().getValue().toString());
-        }
-        if (docObj.isBoolean()) {
-            return StringData.fromString(String.valueOf(docObj.asBoolean().getValue()));
-        }
-        if (docObj.isDateTime()) {
-            Instant instant = convertToInstant(docObj.asDateTime());
-            return StringData.fromString(
-                    convertInstantToZonedDateTime(instant).format(ISO_OFFSET_DATE_TIME));
-        }
-        if (docObj.isTimestamp()) {
-            Instant instant = convertToInstant(docObj.asTimestamp());
-            return StringData.fromString(
-                    convertInstantToZonedDateTime(instant).format(ISO_OFFSET_DATE_TIME));
-        }
-        if (docObj.isArray()) {
-            // convert bson array to json string
-            Writer writer = new StringWriter();
-            JsonWriter jsonArrayWriter =
-                    new JsonWriter(writer) {
-                        @Override
-                        public void writeStartArray() {
-                            doWriteStartArray();
-                            setState(State.VALUE);
-                        }
+        };
+    }
 
-                        @Override
-                        public void writeEndArray() {
-                            doWriteEndArray();
-                            setState(getNextState());
-                        }
-                    };
+    private DeserializationRuntimeConverter convertToTimestamp() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-            new BsonArrayCodec()
-                    .encode(jsonArrayWriter, docObj.asArray(), EncoderContext.builder().build());
-            return StringData.fromString(writer.toString());
-        }
-        if (docObj.isRegularExpression()) {
-            BsonRegularExpression regex = docObj.asRegularExpression();
-            return StringData.fromString(
-                    String.format("/%s/%s", regex.getPattern(), regex.getOptions()));
-        }
-        if (docObj.isJavaScript()) {
-            return StringData.fromString(docObj.asJavaScript().getCode());
-        }
-        if (docObj.isJavaScriptWithScope()) {
-            return StringData.fromString(docObj.asJavaScriptWithScope().getCode());
-        }
-        if (docObj.isSymbol()) {
-            return StringData.fromString(docObj.asSymbol().getSymbol());
-        }
-        if (docObj.isDBPointer()) {
-            return StringData.fromString(docObj.asDBPointer().getId().toHexString());
-        }
-        if (docObj instanceof BsonMinKey || docObj instanceof BsonMaxKey) {
-            return StringData.fromString(docObj.getBsonType().name());
-        }
-        throw new IllegalArgumentException(
-                "Unable to convert to string from unexpected value '"
-                        + docObj
-                        + "' of type "
-                        + docObj.getBsonType());
+            @Override
+            public TimestampData convert(BsonValue docObj) {
+                if (docObj.isDateTime()) {
+                    return TimestampData.fromLocalDateTime(
+                            convertInstantToLocalDateTime(convertToInstant(docObj.asDateTime())));
+                }
+                if (docObj.isTimestamp()) {
+                    return TimestampData.fromLocalDateTime(
+                            convertInstantToLocalDateTime(convertToInstant(docObj.asTimestamp())));
+                }
+
+                throw new IllegalArgumentException(
+                        "Unable to convert to timestamp from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToLocalTimeZoneTimestamp() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public TimestampData convert(BsonValue docObj) {
+                if (docObj.isDateTime()) {
+                    return TimestampData.fromEpochMillis(docObj.asDateTime().getValue());
+                }
+                if (docObj.isTimestamp()) {
+                    return TimestampData.fromEpochMillis(docObj.asTimestamp().getTime() * 1000L);
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to timestamp with local timezone from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToBinary() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public byte[] convert(BsonValue docObj) {
+                if (docObj.isBinary()) {
+                    return docObj.asBinary().getData();
+                }
+                throw new UnsupportedOperationException(
+                        "Unsupported BYTES value type: " + docObj.getClass().getSimpleName());
+            }
+        };
+    }
+
+    private DeserializationRuntimeConverter convertToString() {
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public StringData convert(BsonValue docObj) {
+                if (docObj.isString()) {
+                    return StringData.fromString(docObj.asString().getValue());
+                }
+                if (docObj.isDocument()) {
+                    // convert document to json string
+                    return StringData.fromString(docObj.asDocument().toJson());
+                }
+                if (docObj.isBinary()) {
+                    BsonBinary bsonBinary = docObj.asBinary();
+                    if (BsonBinarySubType.isUuid(bsonBinary.getType())) {
+                        return StringData.fromString(bsonBinary.asUuid().toString());
+                    }
+                    return StringData.fromString(HexUtils.toHex(bsonBinary.getData()));
+                }
+                if (docObj.isObjectId()) {
+                    return StringData.fromString(docObj.asObjectId().getValue().toHexString());
+                }
+                if (docObj.isInt32()) {
+                    return StringData.fromString(String.valueOf(docObj.asInt32().getValue()));
+                }
+                if (docObj.isInt64()) {
+                    return StringData.fromString(String.valueOf(docObj.asInt64().getValue()));
+                }
+                if (docObj.isDouble()) {
+                    return StringData.fromString(String.valueOf(docObj.asDouble().getValue()));
+                }
+                if (docObj.isDecimal128()) {
+                    return StringData.fromString(docObj.asDecimal128().getValue().toString());
+                }
+                if (docObj.isBoolean()) {
+                    return StringData.fromString(String.valueOf(docObj.asBoolean().getValue()));
+                }
+                if (docObj.isDateTime()) {
+                    Instant instant = convertToInstant(docObj.asDateTime());
+                    return StringData.fromString(
+                            convertInstantToZonedDateTime(instant).format(ISO_OFFSET_DATE_TIME));
+                }
+                if (docObj.isTimestamp()) {
+                    Instant instant = convertToInstant(docObj.asTimestamp());
+                    return StringData.fromString(
+                            convertInstantToZonedDateTime(instant).format(ISO_OFFSET_DATE_TIME));
+                }
+                if (docObj.isArray()) {
+                    // convert bson array to json string
+                    Writer writer = new StringWriter();
+                    JsonWriter jsonArrayWriter =
+                            new JsonWriter(writer) {
+                                @Override
+                                public void writeStartArray() {
+                                    doWriteStartArray();
+                                    setState(State.VALUE);
+                                }
+
+                                @Override
+                                public void writeEndArray() {
+                                    doWriteEndArray();
+                                    setState(getNextState());
+                                }
+                            };
+
+                    new BsonArrayCodec()
+                            .encode(
+                                    jsonArrayWriter,
+                                    docObj.asArray(),
+                                    EncoderContext.builder().build());
+                    return StringData.fromString(writer.toString());
+                }
+                if (docObj.isRegularExpression()) {
+                    BsonRegularExpression regex = docObj.asRegularExpression();
+                    return StringData.fromString(
+                            String.format("/%s/%s", regex.getPattern(), regex.getOptions()));
+                }
+                if (docObj.isJavaScript()) {
+                    return StringData.fromString(docObj.asJavaScript().getCode());
+                }
+                if (docObj.isJavaScriptWithScope()) {
+                    return StringData.fromString(docObj.asJavaScriptWithScope().getCode());
+                }
+                if (docObj.isSymbol()) {
+                    return StringData.fromString(docObj.asSymbol().getSymbol());
+                }
+                if (docObj.isDBPointer()) {
+                    return StringData.fromString(docObj.asDBPointer().getId().toHexString());
+                }
+                if (docObj instanceof BsonMinKey || docObj instanceof BsonMaxKey) {
+                    return StringData.fromString(docObj.getBsonType().name());
+                }
+                throw new IllegalArgumentException(
+                        "Unable to convert to string from unexpected value '"
+                                + docObj
+                                + "' of type "
+                                + docObj.getBsonType());
+            }
+        };
     }
 
     private DeserializationRuntimeConverter createDecimalConverter(DecimalType decimalType) {
         final int precision = decimalType.getPrecision();
         final int scale = decimalType.getScale();
-        return (docObj) -> {
-            BigDecimal bigDecimal;
-            if (docObj.isString()) {
-                bigDecimal = new BigDecimal(docObj.asString().getValue());
-            } else if (docObj.isDecimal128()) {
-                Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
-                if (decimal128Value.isFinite()) {
-                    bigDecimal = docObj.asDecimal128().decimal128Value().bigDecimalValue();
-                } else if (decimal128Value.isNegative()) {
-                    bigDecimal = BigDecimal.valueOf(-Double.MAX_VALUE);
+
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public DecimalData convert(BsonValue docObj) {
+                BigDecimal bigDecimal;
+                if (docObj.isString()) {
+                    bigDecimal = new BigDecimal(docObj.asString().getValue());
+                } else if (docObj.isDecimal128()) {
+                    Decimal128 decimal128Value = docObj.asDecimal128().decimal128Value();
+                    if (decimal128Value.isFinite()) {
+                        bigDecimal = docObj.asDecimal128().decimal128Value().bigDecimalValue();
+                    } else if (decimal128Value.isNegative()) {
+                        bigDecimal = BigDecimal.valueOf(-Double.MAX_VALUE);
+                    } else {
+                        bigDecimal = BigDecimal.valueOf(Double.MAX_VALUE);
+                    }
+                } else if (docObj.isDouble()) {
+                    bigDecimal = BigDecimal.valueOf(docObj.asDouble().doubleValue());
+                } else if (docObj.isInt32()) {
+                    bigDecimal = BigDecimal.valueOf(docObj.asInt32().getValue());
+                } else if (docObj.isInt64()) {
+                    bigDecimal = BigDecimal.valueOf(docObj.asInt64().getValue());
                 } else {
-                    bigDecimal = BigDecimal.valueOf(Double.MAX_VALUE);
+                    throw new IllegalArgumentException(
+                            "Unable to convert to decimal from unexpected value '"
+                                    + docObj
+                                    + "' of type "
+                                    + docObj.getBsonType());
                 }
-            } else if (docObj.isDouble()) {
-                bigDecimal = BigDecimal.valueOf(docObj.asDouble().doubleValue());
-            } else if (docObj.isInt32()) {
-                bigDecimal = BigDecimal.valueOf(docObj.asInt32().getValue());
-            } else if (docObj.isInt64()) {
-                bigDecimal = BigDecimal.valueOf(docObj.asInt64().getValue());
-            } else {
-                throw new IllegalArgumentException(
-                        "Unable to convert to decimal from unexpected value '"
-                                + docObj
-                                + "' of type "
-                                + docObj.getBsonType());
+                return DecimalData.fromBigDecimal(bigDecimal, precision, scale);
             }
-            return DecimalData.fromBigDecimal(bigDecimal, precision, scale);
         };
     }
 
@@ -697,25 +814,35 @@ public class MongoDBConnectorDeserializationSchema
                         .toArray(DeserializationRuntimeConverter[]::new);
         final String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
 
-        return (docObj) -> {
-            if (!docObj.isDocument()) {
-                throw new IllegalArgumentException(
-                        "Unable to convert to rowType from unexpected value '"
-                                + docObj
-                                + "' of type "
-                                + docObj.getBsonType());
-            }
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-            BsonDocument document = docObj.asDocument();
-            int arity = fieldNames.length;
-            GenericRowData row = new GenericRowData(arity);
-            for (int i = 0; i < arity; i++) {
-                String fieldName = fieldNames[i];
-                BsonValue fieldValue = document.get(fieldName);
-                Object convertedField = convertField(fieldConverters[i], fieldValue);
-                row.setField(i, convertedField);
+            @Override
+            public GenericRowData convert(BsonValue docObj) throws Exception {
+                if (!docObj.isDocument()) {
+                    throw new IllegalArgumentException(
+                            "Unable to convert to rowType from unexpected value '"
+                                    + docObj
+                                    + "' of type "
+                                    + docObj.getBsonType());
+                }
+
+                BsonDocument document = docObj.asDocument();
+                int arity = fieldNames.length;
+                GenericRowData row = new GenericRowData(arity);
+                for (int i = 0; i < arity; i++) {
+                    String fieldName = fieldNames[i];
+                    BsonValue fieldValue;
+                    if (flattenNestedColumns && fieldName.contains(".")) {
+                        fieldValue = BsonUtils.getNestedFieldValue(document, fieldName);
+                    } else {
+                        fieldValue = document.get(fieldName);
+                    }
+                    Object convertedField = convertField(fieldConverters[i], fieldValue);
+                    row.setField(i, convertedField);
+                }
+                return row;
             }
-            return row;
         };
     }
 
@@ -725,21 +852,26 @@ public class MongoDBConnectorDeserializationSchema
         final DeserializationRuntimeConverter elementConverter =
                 createConverter(arrayType.getElementType());
 
-        return (docObj) -> {
-            if (!docObj.isArray()) {
-                throw new IllegalArgumentException(
-                        "Unable to convert to arrayType from unexpected value '"
-                                + docObj
-                                + "' of type "
-                                + docObj.getBsonType());
-            }
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-            List<BsonValue> in = docObj.asArray();
-            final Object[] elementArray = (Object[]) Array.newInstance(elementClass, in.size());
-            for (int i = 0; i < in.size(); i++) {
-                elementArray[i] = elementConverter.convert(in.get(i));
+            @Override
+            public GenericArrayData convert(BsonValue docObj) throws Exception {
+                if (!docObj.isArray()) {
+                    throw new IllegalArgumentException(
+                            "Unable to convert to arrayType from unexpected value '"
+                                    + docObj
+                                    + "' of type "
+                                    + docObj.getBsonType());
+                }
+
+                List<BsonValue> in = docObj.asArray();
+                final Object[] elementArray = (Object[]) Array.newInstance(elementClass, in.size());
+                for (int i = 0; i < in.size(); i++) {
+                    elementArray[i] = elementConverter.convert(in.get(i));
+                }
+                return new GenericArrayData(elementArray);
             }
-            return new GenericArrayData(elementArray);
         };
     }
 
@@ -750,23 +882,28 @@ public class MongoDBConnectorDeserializationSchema
         LogicalType valueType = mapType.getValueType();
         DeserializationRuntimeConverter valueConverter = createConverter(valueType);
 
-        return (docObj) -> {
-            if (!docObj.isDocument()) {
-                throw new IllegalArgumentException(
-                        "Unable to convert to rowType from unexpected value '"
-                                + docObj
-                                + "' of type "
-                                + docObj.getBsonType());
-            }
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
 
-            BsonDocument document = docObj.asDocument();
-            Map<StringData, Object> map = new HashMap<>();
-            for (String key : document.keySet()) {
-                map.put(
-                        StringData.fromString(key),
-                        convertField(valueConverter, document.get(key)));
+            @Override
+            public GenericMapData convert(BsonValue docObj) throws Exception {
+                if (!docObj.isDocument()) {
+                    throw new IllegalArgumentException(
+                            "Unable to convert to rowType from unexpected value '"
+                                    + docObj
+                                    + "' of type "
+                                    + docObj.getBsonType());
+                }
+
+                BsonDocument document = docObj.asDocument();
+                Map<StringData, Object> map = new HashMap<>();
+                for (String key : document.keySet()) {
+                    map.put(
+                            StringData.fromString(key),
+                            convertField(valueConverter, document.get(key)));
+                }
+                return new GenericMapData(map);
             }
-            return new GenericMapData(map);
         };
     }
 
@@ -781,14 +918,19 @@ public class MongoDBConnectorDeserializationSchema
 
     private DeserializationRuntimeConverter wrapIntoNullableConverter(
             DeserializationRuntimeConverter converter) {
-        return (docObj) -> {
-            if (docObj == null || docObj.isNull() || docObj instanceof BsonUndefined) {
-                return null;
+        return new DeserializationRuntimeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object convert(BsonValue docObj) throws Exception {
+                if (docObj == null || docObj.isNull() || docObj instanceof BsonUndefined) {
+                    return null;
+                }
+                if (docObj.isDecimal128() && docObj.asDecimal128().getValue().isNaN()) {
+                    return null;
+                }
+                return converter.convert(docObj);
             }
-            if (docObj.isDecimal128() && docObj.asDecimal128().getValue().isNaN()) {
-                return null;
-            }
-            return converter.convert(docObj);
         };
     }
 }

@@ -19,6 +19,8 @@ package org.apache.flink.cdc.connectors.mysql.rds;
 
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.StringUtils;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -84,5 +86,20 @@ public class AliyunRdsUtils {
         } catch (Exception e) {
             throw new RuntimeException("Failed to create RDS switching context", e);
         }
+    }
+
+    /**
+     * Generate the next binlog file name. For example, currentBinlogFileName is `mysql-bin.000129`,
+     * will return `mysql-bin.000130`.
+     */
+    public static String generateNextBinlogFileName(String currentBinlogFileName) {
+        Preconditions.checkState(
+                !StringUtils.isNullOrWhitespaceOnly(currentBinlogFileName),
+                "currentBinlogFileName is null or empty");
+        String[] prefixAndIndex = currentBinlogFileName.split("\\.");
+        Preconditions.checkState(
+                prefixAndIndex.length == 2, currentBinlogFileName + " is illegal binlog file name");
+        String nextIndex = String.format("%06d", Long.parseLong(prefixAndIndex[1]) + 1);
+        return String.format("%s.%s", prefixAndIndex[0], nextIndex);
     }
 }

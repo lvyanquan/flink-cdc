@@ -30,6 +30,10 @@ import io.debezium.data.Envelope;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /** Defines the supported metadata columns for {@link MySqlTableSource}. */
 public enum MySqlReadableMetadata {
     /** Name of the table that contain the row. */
@@ -87,8 +91,8 @@ public enum MySqlReadableMetadata {
      * It indicates the row kind of the changelog. '+I' means INSERT message, '-D' means DELETE
      * message, '-U' means UPDATE_BEFORE message and '+U' means UPDATE_AFTER message
      */
-    ROW_KIND(
-            "row_kind",
+    OP_TYPE(
+            "op_type",
             DataTypes.STRING().notNull(),
             new RowDataMetadataConverter() {
                 private static final long serialVersionUID = 1L;
@@ -127,5 +131,21 @@ public enum MySqlReadableMetadata {
 
     public MetadataConverter getConverter() {
         return converter;
+    }
+
+    /** Return a {@link MySqlReadableMetadata} by the given key, or throw an exception. */
+    public static MySqlReadableMetadata getMysqlReadableMetadata(String metadataKey) {
+        return Stream.of(MySqlReadableMetadata.values())
+                .filter(m -> m.getKey().equals(metadataKey))
+                .findFirst()
+                .orElseThrow(
+                        () ->
+                                new IllegalStateException(
+                                        String.format(
+                                                "%s can not be found in the supported mysql metadata [%s].",
+                                                metadataKey,
+                                                Arrays.stream(MySqlReadableMetadata.values())
+                                                        .map(MySqlReadableMetadata::getKey)
+                                                        .collect(Collectors.joining(",")))));
     }
 }

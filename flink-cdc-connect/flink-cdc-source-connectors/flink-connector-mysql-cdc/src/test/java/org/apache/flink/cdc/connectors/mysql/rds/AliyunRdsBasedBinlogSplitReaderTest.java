@@ -35,14 +35,16 @@ import com.github.shyiko.mysql.binlog.event.Event;
 import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 import io.debezium.connector.mysql.MySqlPartition;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.mysql.source.utils.TableDiscoveryUtils.discoverSchemaForCapturedTables;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,27 +52,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Unit test for {@link BinlogSplitReader} with RDS MySQL instance. */
 class AliyunRdsBasedBinlogSplitReaderTest {
     private static final int SUBTASK_ID = 0;
+
     @RegisterExtension private static final AliyunRdsExtension RDS = new AliyunRdsExtension();
 
-    @Test
-    void testReadFromArchivedOffsetWithSpecificTimestamp() throws Exception {
+    @RegisterExtension
+    private static final AliyunRdsExtension RDS_PARALLEL_ENABLED = new AliyunRdsExtension(true);
+
+    static Stream<AliyunRdsExtension> testAliyunRdsExtensionProvider() {
+        return Stream.of(RDS, RDS_PARALLEL_ENABLED);
+    }
+
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testReadFromArchivedOffsetWithSpecificTimestamp(AliyunRdsExtension aliyunRdsExtension)
+            throws Exception {
         // Start reading from the earliest archived offset in 1 day
         long stopTimestampMs = System.currentTimeMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
         BinlogOffset earliestArchivedOffset =
                 getFirstEventOffsetInArchiveWithSpecificTimestamp(
-                        startTimestampMs, stopTimestampMs);
+                        aliyunRdsExtension, startTimestampMs, stopTimestampMs);
+
         // Prepare reader
-        BinlogSplitReader reader = new BinlogSplitReader(createStatefulTaskContext(), SUBTASK_ID);
-        reader.submitSplit(createSplit(earliestArchivedOffset));
+        BinlogSplitReader reader =
+                new BinlogSplitReader(createStatefulTaskContext(aliyunRdsExtension), SUBTASK_ID);
+        reader.submitSplit(createSplit(aliyunRdsExtension, earliestArchivedOffset));
+
         // Check if the binlog offset is monotonically increasing.
         // Unfortunately we can't validate record contents exactly, as we can't accurately archive
         // RDS binlog files at a specific offset :-(
+
         // Note that "currentBinlogOffset" returns the offset of the NEXT event. We need to create
         // some binlog events to push the offset forward in order to make sure the loop can finish.
         BinlogOffset latestOnlineOffset =
-                DebeziumUtils.currentBinlogOffset(RDS.getMySqlConnection());
-        RDS.clearCustomerTable();
+                DebeziumUtils.currentBinlogOffset(aliyunRdsExtension.getMySqlConnection());
+        aliyunRdsExtension.clearCustomerTable();
+        aliyunRdsExtension.insertIntoCustomerTable();
 
         BinlogOffset lastOffset = null;
         while (lastOffset == null || compareBinlogFileOffset(lastOffset, latestOnlineOffset) < 0) {
@@ -78,54 +95,114 @@ class AliyunRdsBasedBinlogSplitReaderTest {
             while (iterator != null && iterator.hasNext()) {
                 SourceRecords records = iterator.next();
                 for (SourceRecord record : records.getSourceRecordList()) {
-                    BinlogOffset currentOffset = RecordUtils.getBinlogPosition(record);
-                    if (lastOffset != null) {
-                        assertThat(compareBinlogFileOffset(currentOffset, lastOffset))
-                                .isGreaterThanOrEqualTo(0);
+                    if (RecordUtils.isDataChangeRecord(record)) {
+                        BinlogOffset currentOffset = RecordUtils.getBinlogPosition(record);
+                        if (lastOffset != null) {
+                            assertThat(compareBinlogFileOffset(currentOffset, lastOffset))
+                                    .isGreaterThanOrEqualTo(0);
+                        }
+                        lastOffset = currentOffset;
                     }
-                    lastOffset = currentOffset;
                 }
             }
         }
     }
 
-    @Test
-    void testReadFromArchivedOffsetWithSpecificFile() throws Exception {
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testReadFromArchivedOffsetWithSpecificTimestampOfLastArchivedFile(
+            AliyunRdsExtension aliyunRdsExtension) throws Exception {
         // Start reading from the earliest archived offset in 1 day
         long stopTimestampMs = System.currentTimeMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
         BinlogOffset earliestArchivedOffset =
-                getFirstEventOffsetInArchiveWithSpecificFile(startTimestampMs, stopTimestampMs);
+                getLastEventOffsetInArchiveWithSpecificTimestamp(
+                        aliyunRdsExtension, startTimestampMs, stopTimestampMs);
+
         // Prepare reader
-        BinlogSplitReader reader = new BinlogSplitReader(createStatefulTaskContext(), SUBTASK_ID);
-        reader.submitSplit(createSplit(earliestArchivedOffset));
+        BinlogSplitReader reader =
+                new BinlogSplitReader(createStatefulTaskContext(aliyunRdsExtension), SUBTASK_ID);
+        reader.submitSplit(createSplit(aliyunRdsExtension, earliestArchivedOffset));
+
         // Check if the binlog offset is monotonically increasing.
         // Unfortunately we can't validate record contents exactly, as we can't accurately archive
         // RDS binlog files at a specific offset :-(
+
         // Note that "currentBinlogOffset" returns the offset of the NEXT event. We need to create
         // some binlog events to push the offset forward in order to make sure the loop can finish.
         BinlogOffset latestOnlineOffset =
-                DebeziumUtils.currentBinlogOffset(RDS.getMySqlConnection());
-        RDS.clearCustomerTable();
+                DebeziumUtils.currentBinlogOffset(aliyunRdsExtension.getMySqlConnection());
+        aliyunRdsExtension.clearCustomerTable();
+        aliyunRdsExtension.insertIntoCustomerTable();
+
         BinlogOffset lastOffset = null;
         while (lastOffset == null || compareBinlogFileOffset(lastOffset, latestOnlineOffset) < 0) {
             Iterator<SourceRecords> iterator = reader.pollSplitRecords();
             while (iterator != null && iterator.hasNext()) {
                 SourceRecords records = iterator.next();
                 for (SourceRecord record : records.getSourceRecordList()) {
-                    BinlogOffset currentOffset = RecordUtils.getBinlogPosition(record);
-                    if (lastOffset != null) {
-                        assertThat(compareBinlogFileOffset(currentOffset, lastOffset))
-                                .isGreaterThanOrEqualTo(0);
+                    if (RecordUtils.isDataChangeRecord(record)) {
+                        BinlogOffset currentOffset = RecordUtils.getBinlogPosition(record);
+                        if (lastOffset != null) {
+                            assertThat(compareBinlogFileOffset(currentOffset, lastOffset))
+                                    .isGreaterThanOrEqualTo(0);
+                        }
+                        lastOffset = currentOffset;
                     }
-                    lastOffset = currentOffset;
                 }
             }
         }
     }
 
-    private MySqlBinlogSplit createSplit(BinlogOffset startingOffset) {
-        MySqlSourceConfig sourceConfig = RDS.getSourceConfigFactory().createConfig(SUBTASK_ID);
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testReadFromArchivedOffsetWithSpecificFile(AliyunRdsExtension aliyunRdsExtension)
+            throws Exception {
+        // Start reading from the earliest archived offset in 1 day
+        long stopTimestampMs = System.currentTimeMillis();
+        long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
+        BinlogOffset earliestArchivedOffset =
+                getFirstEventOffsetInArchiveWithSpecificFile(
+                        aliyunRdsExtension, startTimestampMs, stopTimestampMs);
+
+        // Prepare reader
+        BinlogSplitReader reader =
+                new BinlogSplitReader(createStatefulTaskContext(aliyunRdsExtension), SUBTASK_ID);
+        reader.submitSplit(createSplit(aliyunRdsExtension, earliestArchivedOffset));
+
+        // Check if the binlog offset is monotonically increasing.
+        // Unfortunately we can't validate record contents exactly, as we can't accurately archive
+        // RDS binlog files at a specific offset :-(
+
+        // Note that "currentBinlogOffset" returns the offset of the NEXT event. We need to create
+        // some binlog events to push the offset forward in order to make sure the loop can finish.
+        BinlogOffset latestOnlineOffset =
+                DebeziumUtils.currentBinlogOffset(aliyunRdsExtension.getMySqlConnection());
+        aliyunRdsExtension.clearCustomerTable();
+
+        BinlogOffset lastOffset = null;
+        while (lastOffset == null || compareBinlogFileOffset(lastOffset, latestOnlineOffset) < 0) {
+            Iterator<SourceRecords> iterator = reader.pollSplitRecords();
+            while (iterator != null && iterator.hasNext()) {
+                SourceRecords records = iterator.next();
+                for (SourceRecord record : records.getSourceRecordList()) {
+                    if (RecordUtils.isDataChangeRecord(record)) {
+                        BinlogOffset currentOffset = RecordUtils.getBinlogPosition(record);
+                        if (lastOffset != null) {
+                            assertThat(compareBinlogFileOffset(currentOffset, lastOffset))
+                                    .isGreaterThanOrEqualTo(0);
+                        }
+                        lastOffset = currentOffset;
+                    }
+                }
+            }
+        }
+    }
+
+    private MySqlBinlogSplit createSplit(
+            AliyunRdsExtension aliyunRdsExtension, BinlogOffset startingOffset) {
+        MySqlSourceConfig sourceConfig =
+                aliyunRdsExtension.getSourceConfigFactory().createConfig(SUBTASK_ID);
         return new MySqlBinlogSplit(
                 "foo-split",
                 startingOffset,
@@ -133,15 +210,16 @@ class AliyunRdsBasedBinlogSplitReaderTest {
                 Collections.emptyList(),
                 discoverSchemaForCapturedTables(
                         new MySqlPartition(sourceConfig.getMySqlConnectorConfig().getLogicalName()),
-                        RDS.getSourceConfigFactory().createConfig(SUBTASK_ID),
-                        RDS.getMySqlConnection()),
+                        sourceConfig,
+                        aliyunRdsExtension.getMySqlConnection()),
                 0);
     }
 
     private BinlogOffset getFirstEventOffsetInArchiveWithSpecificTimestamp(
-            long startTimestampMs, long stopTimestampMs) throws Exception {
+            AliyunRdsExtension aliyunRdsExtension, long startTimestampMs, long stopTimestampMs)
+            throws Exception {
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(startTimestampMs, stopTimestampMs)) {
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
             LocalBinlogFile firstFile = fetcher.next();
             assertThat(firstFile).isNotNull();
             try (BinaryLogFileReader binlogFileReader = createBinlogFileReader(firstFile)) {
@@ -151,10 +229,32 @@ class AliyunRdsBasedBinlogSplitReaderTest {
         }
     }
 
-    private BinlogOffset getFirstEventOffsetInArchiveWithSpecificFile(
-            long startTimestampMs, long stopTimestampMs) throws Exception {
+    private BinlogOffset getLastEventOffsetInArchiveWithSpecificTimestamp(
+            AliyunRdsExtension aliyunRdsExtension, long startTimestampMs, long stopTimestampMs)
+            throws Exception {
+        BinlogOffset lastEventOffset = null;
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(startTimestampMs, stopTimestampMs)) {
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
+            while (fetcher.hasNext()) {
+                LocalBinlogFile localBinlogFile = fetcher.next();
+                assertThat(localBinlogFile).isNotNull();
+                try (BinaryLogFileReader binlogFileReader =
+                        createBinlogFileReader(localBinlogFile)) {
+                    Event firstEvent = binlogFileReader.readEvent();
+                    lastEventOffset =
+                            BinlogOffset.ofTimestampSec(
+                                    firstEvent.getHeader().getTimestamp() / 1000);
+                }
+            }
+        }
+        return lastEventOffset;
+    }
+
+    private BinlogOffset getFirstEventOffsetInArchiveWithSpecificFile(
+            AliyunRdsExtension aliyunRdsExtension, long startTimestampMs, long stopTimestampMs)
+            throws Exception {
+        try (AliyunRdsBinlogFileFetcher fetcher =
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
             LocalBinlogFile firstFile = fetcher.next();
             assertThat(firstFile).isNotNull();
             try (BinaryLogFileReader binlogFileReader = createBinlogFileReader(firstFile)) {
@@ -169,20 +269,24 @@ class AliyunRdsBasedBinlogSplitReaderTest {
         }
     }
 
-    private StatefulTaskContext createStatefulTaskContext() {
-        MySqlSourceConfig sourceConfig = RDS.getSourceConfigFactory().createConfig(SUBTASK_ID);
+    private StatefulTaskContext createStatefulTaskContext(AliyunRdsExtension aliyunRdsExtension) {
+        MySqlSourceConfig sourceConfig =
+                aliyunRdsExtension.getSourceConfigFactory().createConfig(SUBTASK_ID);
         return new StatefulTaskContext(
                 sourceConfig,
                 DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration()),
-                RDS.getMySqlConnection(),
+                aliyunRdsExtension.getMySqlConnection(),
                 new MySqlSourceReaderMetrics(
-                        UnregisteredMetricsGroup.createSourceReaderMetricGroup()));
+                        UnregisteredMetricsGroup.createSourceReaderMetricGroup(), false));
     }
 
-    private AliyunRdsBinlogFileFetcher createFetcher(long startTimestampMs, long stopTimestampMs) {
+    private AliyunRdsBinlogFileFetcher createFetcher(
+            AliyunRdsExtension aliyunRdsExtension, long startTimestampMs, long stopTimestampMs) {
         AliyunRdsBinlogFileFetcher fetcher =
                 new AliyunRdsBinlogFileFetcher(
-                        RDS.getRdsConfigBuilder().build(), startTimestampMs, stopTimestampMs);
+                        aliyunRdsExtension.getRdsConfigBuilder().build(),
+                        startTimestampMs,
+                        stopTimestampMs);
         fetcher.persistDownloadedFiles();
         fetcher.initialize(BinlogOffset.ofBinlogFilePosition("mysql-bin.000001", 4));
         return fetcher;
@@ -197,9 +301,11 @@ class AliyunRdsBasedBinlogSplitReaderTest {
         if (a.getFilename().compareToIgnoreCase(b.getFilename()) != 0) {
             return a.getFilename().compareToIgnoreCase(b.getFilename());
         }
+
         if (a.getPosition() != b.getPosition()) {
             return Long.compare(a.getPosition(), b.getPosition());
         }
+
         return 0;
     }
 }

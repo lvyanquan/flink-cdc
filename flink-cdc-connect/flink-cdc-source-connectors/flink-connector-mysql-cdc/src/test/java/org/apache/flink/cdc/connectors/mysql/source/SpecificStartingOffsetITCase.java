@@ -384,6 +384,8 @@ public class SpecificStartingOffsetITCase {
                         "INSERT INTO %s VALUES (23313, 'Mouse', 'Seattle', '123456987');",
                         customers.getTableId()));
 
+        flushLogs();
+
         // Build Flink job
         StreamExecutionEnvironment env = getExecutionEnvironment();
         MySqlSource<RowData> source = getSourceBuilder().startupOptions(startupOptions).build();

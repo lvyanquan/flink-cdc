@@ -18,6 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.source.reader;
 
 import org.apache.flink.api.connector.source.SourceOutput;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlEvolvingSourceDeserializeSchema;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplitState;
@@ -89,10 +90,10 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
             TableChanges changes = TABLE_CHANGE_SERIALIZER.deserialize(tableChanges, true);
             for (TableChanges.TableChange tableChange : changes) {
                 splitState.asBinlogSplitState().recordSchema(tableChange.getId(), tableChange);
+                applyTableChange(tableChange);
             }
             if (includeSchemaChanges) {
-                BinlogOffset position = RecordUtils.getBinlogPosition(element);
-                splitState.asBinlogSplitState().setStartingOffset(position);
+                updateStartingOffsetForSplit(splitState, element);
                 emitElement(element, output);
             }
         } else if (RecordUtils.isDataChangeRecord(element)) {
@@ -118,6 +119,13 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
         outputCollector.output = output;
         outputCollector.currentMessageTimestamp = RecordUtils.getMessageTimestamp(element);
         debeziumDeserializationSchema.deserialize(element, outputCollector);
+    }
+
+    public void applyTableChange(TableChanges.TableChange tableChange) {
+        if (debeziumDeserializationSchema instanceof MySqlEvolvingSourceDeserializeSchema) {
+            ((MySqlEvolvingSourceDeserializeSchema) debeziumDeserializationSchema)
+                    .applyTableChange(tableChange);
+        }
     }
 
     private static class OutputCollector<T> implements Collector<T> {

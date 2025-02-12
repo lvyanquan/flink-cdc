@@ -31,6 +31,7 @@ import org.apache.flink.cdc.connectors.mysql.source.events.FinishedSnapshotSplit
 import org.apache.flink.cdc.connectors.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
 import org.apache.flink.cdc.connectors.mysql.source.events.LatestFinishedSplitsNumberEvent;
 import org.apache.flink.cdc.connectors.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
+import org.apache.flink.cdc.connectors.mysql.source.events.TriggerSplitRequestEvent;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
@@ -43,7 +44,6 @@ import org.apache.flink.cdc.connectors.mysql.source.split.SourceRecords;
 import org.apache.flink.cdc.connectors.mysql.source.utils.ChunkUtils;
 import org.apache.flink.cdc.connectors.mysql.source.utils.TableDiscoveryUtils;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
@@ -82,13 +82,14 @@ public class MySqlSourceReader<T>
     private final Map<String, MySqlBinlogSplit> uncompletedBinlogSplits;
     private final int subtaskId;
     private final MySqlSourceReaderContext mySqlSourceReaderContext;
-    private final MySqlPartition partition;
     private volatile MySqlBinlogSplit suspendedBinlogSplit;
+    private final MySqlRecordEmitter<T> recordEmitter;
+    private final MySqlPartition partition;
 
     public MySqlSourceReader(
             FutureCompletingBlockingQueue<RecordsWithSplitIds<SourceRecords>> elementQueue,
             Supplier<MySqlSplitReader> splitReaderSupplier,
-            RecordEmitter<SourceRecords, T, MySqlSplitState> recordEmitter,
+            MySqlRecordEmitter<T> recordEmitter,
             Configuration config,
             MySqlSourceReaderContext context,
             MySqlSourceConfig sourceConfig) {
@@ -98,6 +99,7 @@ public class MySqlSourceReader<T>
                 recordEmitter,
                 config,
                 context.getSourceReaderContext());
+        this.recordEmitter = recordEmitter;
         this.sourceConfig = sourceConfig;
         this.finishedUnackedSplits = new HashMap<>();
         this.uncompletedBinlogSplits = new HashMap<>();
@@ -118,6 +120,9 @@ public class MySqlSourceReader<T>
 
     @Override
     protected MySqlSplitState initializedState(MySqlSplit split) {
+        for (TableChanges.TableChange tableChange : split.getTableSchemas().values()) {
+            recordEmitter.applyTableChange(tableChange);
+        }
         if (split.isSnapshotSplit()) {
             return new MySqlSnapshotSplitState(split.asSnapshotSplit());
         } else {
@@ -349,6 +354,11 @@ public class MySqlSourceReader<T>
             handleBinlogSplitUpdateRequest();
         } else if (sourceEvent instanceof LatestFinishedSplitsNumberEvent) {
             updateBinlogSplit((LatestFinishedSplitsNumberEvent) sourceEvent);
+        } else if (sourceEvent instanceof TriggerSplitRequestEvent) {
+            LOG.info(
+                    "Source reader {} receives trigger split request event after set isInsertOnly success.",
+                    subtaskId);
+            context.sendSplitRequest();
         } else {
             super.handleSourceEvents(sourceEvent);
         }

@@ -21,6 +21,7 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 
 import io.debezium.relational.Column;
+import io.debezium.relational.Table;
 
 /** Utilities for converting from MySQL types to Flink types. */
 public class MySqlTypeUtils {
@@ -107,8 +108,8 @@ public class MySqlTypeUtils {
     private static final String UNKNOWN = "UNKNOWN";
 
     /** Returns a corresponding Flink data type from a debezium {@link Column}. */
-    public static DataType fromDbzColumn(Column column) {
-        DataType dataType = convertFromColumn(column);
+    public static DataType fromDbzColumn(Column column, boolean treatTinyint1AsBool) {
+        DataType dataType = convertFromColumn(column, treatTinyint1AsBool);
         if (column.isOptional()) {
             return dataType;
         } else {
@@ -116,11 +117,23 @@ public class MySqlTypeUtils {
         }
     }
 
+    /** Returns a corresponding Flink data type from a debezium {@link Table}. */
+    public static DataType fromDbzTable(Table table, boolean treatTinyint1AsBool) {
+        return DataTypes.ROW(
+                table.columns().stream()
+                        .map(
+                                col ->
+                                        DataTypes.FIELD(
+                                                col.name(),
+                                                fromDbzColumn(col, treatTinyint1AsBool)))
+                        .toArray(DataTypes.Field[]::new));
+    }
+
     /**
      * Returns a corresponding Flink data type from a debezium {@link Column} with nullable always
      * be true.
      */
-    private static DataType convertFromColumn(Column column) {
+    private static DataType convertFromColumn(Column column, boolean treatTinyint1AsBool) {
         String typeName = column.typeName();
         switch (typeName) {
             case BIT:
@@ -135,7 +148,10 @@ public class MySqlTypeUtils {
                 // user should not use tinyint(1) to store number although jdbc url parameter
                 // tinyInt1isBit=false can help change the return value, it's not a general way
                 // btw: mybatis and mysql-connector-java map tinyint(1) to boolean by default
-                return column.length() == 1 ? DataTypes.BOOLEAN() : DataTypes.TINYINT();
+                if (column.length() == 1) {
+                    return treatTinyint1AsBool ? DataTypes.BOOLEAN() : DataTypes.TINYINT();
+                }
+                return DataTypes.TINYINT();
             case TINYINT_UNSIGNED:
             case TINYINT_UNSIGNED_ZEROFILL:
             case SMALLINT:
@@ -189,14 +205,16 @@ public class MySqlTypeUtils {
                 return column.length() >= 0 ? DataTypes.TIME(column.length()) : DataTypes.TIME();
             case DATE:
                 return DataTypes.DATE();
+                /**
+                 * In community version, DATETIME maps to TIMESTAMP and TIMESTAMP maps to
+                 * TIMESTAMP_LTZ. In vvr version, both DATETIME and TIMESTAMP map to TIMESTAMP for
+                 * compatibility in vvr 8.x or lower.
+                 */
             case DATETIME:
-                return column.length() >= 0
-                        ? DataTypes.TIMESTAMP(column.length())
-                        : DataTypes.TIMESTAMP(0);
             case TIMESTAMP:
                 return column.length() >= 0
-                        ? DataTypes.TIMESTAMP_LTZ(column.length())
-                        : DataTypes.TIMESTAMP_LTZ(0);
+                        ? DataTypes.TIMESTAMP(column.length())
+                        : DataTypes.TIMESTAMP();
             case CHAR:
                 return DataTypes.CHAR(column.length());
             case VARCHAR:

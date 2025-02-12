@@ -52,6 +52,11 @@ public class BinlogOffsetUtils {
             case EARLIEST:
                 return BinlogOffset.ofBinlogFilePosition("", 0);
             case TIMESTAMP:
+                if (offset.getTimestampSec() > Long.MAX_VALUE / 1000) {
+                    throw new IllegalArgumentException(
+                            "The timestamp is out of range, the max timestamp in second is "
+                                    + Long.MAX_VALUE / 1000);
+                }
                 return DebeziumUtils.findBinlogOffset(
                         offset.getTimestampSec() * 1000, connection, mySqlSourceConfig);
             case LATEST:

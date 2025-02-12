@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.mongodb.source.utils;
 
 import org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope;
 
+import com.mongodb.client.model.changestream.OperationType;
 import com.mongodb.kafka.connect.source.schema.BsonValueToSchemaAndValue;
 import io.debezium.data.Envelope;
 import io.debezium.relational.TableId;
@@ -203,5 +204,21 @@ public class MongoRecordUtils {
 
     public static Map<String, String> createWatermarkPartitionMap(String partition) {
         return singletonMap(NAMESPACE_FIELD, partition);
+    }
+
+    public static OperationType operationTypeFor(SourceRecord record) {
+        Struct value = (Struct) record.value();
+        return OperationType.fromString(value.getString(MongoDBEnvelope.OPERATION_TYPE_FIELD));
+    }
+
+    public static BsonDocument extractBsonDocument(
+            Struct value, Schema valueSchema, String fieldName) {
+        if (valueSchema.field(fieldName) != null) {
+            String docString = value.getString(fieldName);
+            if (docString != null) {
+                return BsonDocument.parse(docString);
+            }
+        }
+        return null;
     }
 }

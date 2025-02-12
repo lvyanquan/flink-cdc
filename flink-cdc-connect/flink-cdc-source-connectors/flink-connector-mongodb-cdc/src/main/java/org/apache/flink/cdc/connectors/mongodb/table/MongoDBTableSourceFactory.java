@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.mongodb.table;
 
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
 import org.apache.flink.cdc.connectors.base.utils.OptionUtils;
+import org.apache.flink.cdc.connectors.mongodb.source.assigners.splitters.AssignStrategy;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -51,10 +52,13 @@ import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourc
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_AWAIT_TIME_MILLIS;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_MAX_BATCH_SIZE;
+import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
+import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_FLATTEN_NESTED_COLUMNS_ENABLED;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SAMPLES;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE_MB;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_NO_CURSOR_TIMEOUT;
+import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_PRIMITIVE_AS_STRING;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCHEME;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.USERNAME;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
@@ -115,10 +119,21 @@ public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
                 config.getOptional(FULL_DOCUMENT_PRE_POST_IMAGE).orElse(false);
 
         boolean noCursorTimeout = config.getOptional(SCAN_NO_CURSOR_TIMEOUT).orElse(true);
+        boolean flattenNestedColumns =
+                config.getOptional(SCAN_FLATTEN_NESTED_COLUMNS_ENABLED).orElse(false);
+        boolean primitiveAsString = config.getOptional(SCAN_PRIMITIVE_AS_STRING).orElse(false);
         ResolvedSchema physicalSchema =
                 getPhysicalSchema(context.getCatalogTable().getResolvedSchema());
         checkArgument(physicalSchema.getPrimaryKey().isPresent(), "Primary key must be present");
         checkPrimaryKey(physicalSchema.getPrimaryKey().get(), "Primary key must be _id field");
+        AssignStrategy assignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
+        /*
+        Users can create the Mongo cdc source and Mongo lookup source with the same identifier 'mongodb' in flink-connector-mongodb.
+        Mongo cdc source request primary key must be '_id', Mongo lookup source has no limit on this.
+        But `createDynamicTableSource` will fail for the tables without primary key or primary key is not '_id'.
+        We skip the primary key validation for cdc source here.
+        The validation is moved to the SourceProvider/SourceFunctionProvider when merging sources.
+         */
 
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
 
@@ -146,7 +161,11 @@ public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
                 enableFullDocumentPrePostImage,
                 noCursorTimeout,
                 skipSnapshotBackfill,
-                scanNewlyAddedTableEnabled);
+                scanNewlyAddedTableEnabled,
+                flattenNestedColumns,
+                primitiveAsString,
+                context.getObjectIdentifier(),
+                assignStrategy);
     }
 
     private void checkPrimaryKey(UniqueConstraint pk, String message) {
@@ -227,7 +246,12 @@ public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
         options.add(FULL_DOCUMENT_PRE_POST_IMAGE);
         options.add(SCAN_NO_CURSOR_TIMEOUT);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
-        options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
+        // ScanNewlyAddedTable isn't stable for now. We don't expose this option until VVR-62844936
+        // got closed.
+        // options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
+        options.add(SCAN_FLATTEN_NESTED_COLUMNS_ENABLED);
+        options.add(SCAN_PRIMITIVE_AS_STRING);
+        options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
         return options;
     }
 }

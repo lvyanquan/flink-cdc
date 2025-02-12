@@ -67,12 +67,14 @@ public class TestTable {
                                     getRowType(),
                                     new MetadataConverter[0],
                                     InternalTypeInfo.of(getRowType()),
-                                    ZoneId.of("UTC"))
+                                    ZoneId.of("UTC"),
+                                    false)
                             : new MongoDBConnectorDeserializationSchema(
                                     getRowType(),
                                     new MetadataConverter[0],
                                     InternalTypeInfo.of(getRowType()),
-                                    ZoneId.of("UTC"));
+                                    ZoneId.of("UTC"),
+                                    false);
         }
         return deserializer;
     }

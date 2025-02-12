@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.DATABASE_GROUP_KEY;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.DEFAULT_GROUP_VALUE;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.NAMESPACE_GROUP_KEY;
 import static org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceReaderMetrics.SCHEMA_GROUP_KEY;
@@ -53,11 +54,15 @@ public class MySqlSourceEnumeratorMetrics {
     // Value: TableMetrics related to the table
     private final Map<TableId, TableMetrics> tableMetricsMap = new HashMap<>();
 
-    public MySqlSourceEnumeratorMetrics(SplitEnumeratorMetricGroup metricGroup) {
+    private final boolean isCdcYamlSource;
+
+    public MySqlSourceEnumeratorMetrics(
+            SplitEnumeratorMetricGroup metricGroup, boolean isCdcYamlSource) {
         this.metricGroup = metricGroup;
         metricGroup.gauge(IS_SNAPSHOTTING, () -> isSnapshotting);
         metricGroup.gauge(IS_BINLOG_READING, () -> isBinlogReading);
         metricGroup.gauge(NUM_TABLES_REMAINING, () -> numTablesRemaining);
+        this.isCdcYamlSource = isCdcYamlSource;
     }
 
     public void enterSnapshotPhase() {
@@ -95,7 +100,8 @@ public class MySqlSourceEnumeratorMetrics {
 
     public TableMetrics getTableMetrics(TableId tableId) {
         return tableMetricsMap.computeIfAbsent(
-                tableId, key -> new TableMetrics(key.catalog(), key.table(), metricGroup));
+                tableId,
+                key -> new TableMetrics(key.catalog(), key.table(), metricGroup, isCdcYamlSource));
     }
 
     // ----------------------------------- Helper classes --------------------------------
@@ -110,12 +116,24 @@ public class MySqlSourceEnumeratorMetrics {
         private AtomicInteger numSnapshotSplitsProcessed = new AtomicInteger(0);
         private AtomicInteger numSnapshotSplitsRemaining = new AtomicInteger(0);
 
-        public TableMetrics(String databaseName, String tableName, MetricGroup parentGroup) {
-            MetricGroup metricGroup =
-                    parentGroup
-                            .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
-                            .addGroup(SCHEMA_GROUP_KEY, databaseName)
-                            .addGroup(TABLE_GROUP_KEY, tableName);
+        public TableMetrics(
+                String databaseName,
+                String tableName,
+                MetricGroup parentGroup,
+                boolean isCdcYamlSource) {
+            MetricGroup metricGroup;
+            if (isCdcYamlSource) {
+                metricGroup =
+                        parentGroup
+                                .addGroup(NAMESPACE_GROUP_KEY, DEFAULT_GROUP_VALUE)
+                                .addGroup(SCHEMA_GROUP_KEY, databaseName)
+                                .addGroup(TABLE_GROUP_KEY, tableName);
+            } else {
+                metricGroup =
+                        parentGroup
+                                .addGroup(DATABASE_GROUP_KEY, databaseName)
+                                .addGroup(TABLE_GROUP_KEY, tableName);
+            }
             metricGroup.gauge(
                     NUM_SNAPSHOT_SPLITS_PROCESSED, () -> numSnapshotSplitsProcessed.intValue());
             metricGroup.gauge(

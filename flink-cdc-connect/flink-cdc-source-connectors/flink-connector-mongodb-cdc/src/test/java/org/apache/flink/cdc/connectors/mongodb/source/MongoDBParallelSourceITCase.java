@@ -464,6 +464,12 @@ public class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
                     // Workaround: insert a dummy event in another collection to forcefully push
                     // opLog forward.
                     database.getCollection("customers_1").insertOne(new Document());
+
+                    try {
+                        Thread.sleep(500L);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 };
 
         switch (hookType) {

@@ -26,16 +26,26 @@ import com.github.shyiko.mysql.binlog.event.Event;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Files;
 import java.time.Duration;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Unit test for {@link AliyunRdsBinlogFileFetcher}. */
 class AliyunRdsBinlogFileFetcherTest {
 
-    @RegisterExtension static final AliyunRdsExtension RDS = new AliyunRdsExtension();
+    @RegisterExtension private static final AliyunRdsExtension RDS = new AliyunRdsExtension();
+
+    @RegisterExtension
+    private static final AliyunRdsExtension RDS_PARALLEL_ENABLED = new AliyunRdsExtension(true);
+
+    static Stream<AliyunRdsExtension> testAliyunRdsExtensionProvider() {
+        return Stream.of(RDS, RDS_PARALLEL_ENABLED);
+    }
 
     @Test
     void testGetAllRdsBinlogFiles() throws Exception {
@@ -49,13 +59,48 @@ class AliyunRdsBinlogFileFetcherTest {
         }
     }
 
-    @Test
-    void testFetchingBinlogFiles() throws Exception {
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testFetchingBinlogFilesWithAutoRollUp(AliyunRdsExtension aliyunRdsExtension)
+            throws Exception {
+        // Get archived binlog files between T-48h and T-24h
+        long stopTimestampMs = System.currentTimeMillis() - Duration.ofDays(1).toMillis();
+        long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
+        FirstAndLastEvent firstAndLastEvent = null;
+        LocalBinlogFile localBinlogFile = null;
+        try (AliyunRdsBinlogFileFetcher fetcher =
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
+            while (fetcher.hasNext()) {
+                LocalBinlogFile nextLocalBinlogFile = fetcher.next();
+                if (localBinlogFile != null) {
+                    // No repeated binlog file was read.
+                    Assertions.assertNotEquals(
+                            localBinlogFile.getFilename(), nextLocalBinlogFile.getFilename());
+                }
+                assertThat(nextLocalBinlogFile).isNotNull();
+                localBinlogFile = nextLocalBinlogFile;
+                try (BinaryLogFileReader reader = createBinlogFileReader(nextLocalBinlogFile)) {
+                    firstAndLastEvent = readFirstAndLastEvent(reader);
+                }
+            }
+        }
+        assert firstAndLastEvent != null;
+        // During the process of reading OSS binlog, new binlog are uploaded
+        // to OSS.
+        long verifiedTimestampMs = stopTimestampMs - Duration.ofHours(6).toMillis();
+        Assertions.assertTrue(
+                firstAndLastEvent.last.getHeader().getTimestamp() > verifiedTimestampMs);
+    }
+
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testFetchingBinlogFiles(AliyunRdsExtension aliyunRdsExtension) throws Exception {
         // Get archived binlog files between T-48h and T-24h
         long stopTimestampMs = System.currentTimeMillis() - Duration.ofDays(1).toMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(RDS, startTimestampMs, stopTimestampMs)) {
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
+            fetcher.disableAutoRollUp();
             int numRdsBinlogFiles = fetcher.getRdsBinlogFileQueue().size();
             int numLocalBinlogFiles = 0;
             LocalBinlogFile lastFile = null;
@@ -87,23 +132,28 @@ class AliyunRdsBinlogFileFetcherTest {
         }
     }
 
-    @Test
-    void testNoBinlogFiles() throws Exception {
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testNoBinlogFiles(AliyunRdsExtension aliyunRdsExtension) throws Exception {
         // Use the same value for both start and stop timestamp
         long timestamp = System.currentTimeMillis();
-        try (AliyunRdsBinlogFileFetcher fetcher = createFetcher(RDS, timestamp, timestamp)) {
+        try (AliyunRdsBinlogFileFetcher fetcher =
+                createFetcher(aliyunRdsExtension, timestamp, timestamp)) {
             assertThat(fetcher.getRdsBinlogFileQueue()).isEmpty();
             assertThat(fetcher.hasNext()).isFalse();
         }
     }
 
-    @Test
-    void testDeleteBinlogFileAfterServing() throws Exception {
+    @ParameterizedTest
+    @MethodSource({"testAliyunRdsExtensionProvider"})
+    void testDeleteBinlogFileAfterServing(AliyunRdsExtension aliyunRdsExtension) throws Exception {
         // Get archived binlog files between T-48h and T-24h
         long stopTimestampMs = System.currentTimeMillis() - Duration.ofDays(1).toMillis();
         long startTimestampMs = stopTimestampMs - Duration.ofDays(1).toMillis();
+
         try (AliyunRdsBinlogFileFetcher fetcher =
-                createFetcher(RDS, startTimestampMs, stopTimestampMs)) {
+                createFetcher(aliyunRdsExtension, startTimestampMs, stopTimestampMs)) {
+            fetcher.disableAutoRollUp();
             LocalBinlogFile lastFile = null;
             while (fetcher.hasNext()) {
                 LocalBinlogFile file = fetcher.next();

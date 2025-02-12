@@ -277,6 +277,10 @@ public class MySqlSourceConfig implements Serializable {
         return rdsConfig;
     }
 
+    public boolean isTreatTinyintAsBoolean() {
+        return Boolean.parseBoolean(getJdbcProperties().getProperty("tinyInt1isBit", "true"));
+    }
+
     public AssignStrategy getScanChunkAssignStrategy() {
         return scanChunkAssignStrategy;
     }

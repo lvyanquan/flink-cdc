@@ -18,19 +18,30 @@
 package org.apache.flink.cdc.connectors.mongodb.table;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
+import org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope;
 import org.apache.flink.cdc.connectors.mongodb.source.MongoDBSource;
 import org.apache.flink.cdc.connectors.mongodb.source.MongoDBSourceBuilder;
+import org.apache.flink.cdc.connectors.mongodb.source.assigners.splitters.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.EvolvingSourceProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
 import org.apache.flink.table.connector.source.SourceProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
+import org.apache.flink.table.connector.source.abilities.SupportsSchemaEvolutionReading;
+import org.apache.flink.table.connector.source.abilities.SupportsTableSourceMerge;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.SourceRecord;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -42,23 +53,31 @@ import javax.annotation.Nullable;
 
 import java.time.ZoneId;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.mongodb.MongoNamespace.checkCollectionNameValidity;
 import static com.mongodb.MongoNamespace.checkDatabaseNameValidity;
 import static org.apache.flink.cdc.connectors.mongodb.source.utils.CollectionDiscoveryUtils.inferIsRegularExpression;
+import static org.apache.flink.cdc.connectors.mongodb.source.utils.SchemaUtils.getMetadataConverters;
+import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * A {@link DynamicTableSource} that describes how to create a MongoDB change stream events source
  * from a logical description.
  */
-public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetadata {
+public class MongoDBTableSource
+        implements ScanTableSource,
+                SupportsReadingMetadata,
+                SupportsSchemaEvolutionReading,
+                SupportsTableSourceMerge {
 
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBTableSource.class);
 
@@ -86,6 +105,11 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
     private final boolean noCursorTimeout;
     private final boolean skipSnapshotBackfill;
     private final boolean scanNewlyAddedTableEnabled;
+    private final boolean flattenNestedColumns;
+    private final boolean primitiveAsString;
+    private final ObjectIdentifier sourceTablePath;
+
+    private final AssignStrategy scanChunkAssignStrategy;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -96,6 +120,11 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
 
     /** Metadata that is appended at the end of a physical source row. */
     protected List<String> metadataKeys;
+
+    /** Flag to indicate whether the source is evolving source. */
+    protected boolean isEvolvingSource;
+
+    protected Set<MongoDBTableSpec> capturedTables;
 
     public MongoDBTableSource(
             ResolvedSchema physicalSchema,
@@ -121,7 +150,11 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
             boolean enableFullDocPrePostImage,
             boolean noCursorTimeout,
             boolean skipSnapshotBackfill,
-            boolean scanNewlyAddedTableEnabled) {
+            boolean scanNewlyAddedTableEnabled,
+            boolean flattenNestedColumns,
+            boolean primitiveAsString,
+            ObjectIdentifier sourceTablePath,
+            AssignStrategy scanChunkAssignStrategy) {
         this.physicalSchema = physicalSchema;
         this.scheme = checkNotNull(scheme);
         this.hosts = checkNotNull(hosts);
@@ -148,6 +181,15 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
         this.noCursorTimeout = noCursorTimeout;
         this.skipSnapshotBackfill = skipSnapshotBackfill;
         this.scanNewlyAddedTableEnabled = scanNewlyAddedTableEnabled;
+        this.flattenNestedColumns = flattenNestedColumns;
+        this.primitiveAsString = primitiveAsString;
+        this.isEvolvingSource = false;
+        this.sourceTablePath = sourceTablePath;
+        this.capturedTables = new HashSet<>();
+        capturedTables.add(
+                new MongoDBTableSpec(
+                        sourceTablePath.toObjectPath(), producedDataType, database, collection));
+        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
     }
 
     @Override
@@ -163,6 +205,10 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext scanContext) {
+        if (!enableParallelRead && isEvolvingSource) {
+            throw new IllegalArgumentException(
+                    "Mongo CDC as evolving source only works for the parallel source.");
+        }
         RowType physicalDataType =
                 (RowType) physicalSchema.toPhysicalRowDataType().getLogicalType();
         MetadataConverter[] metadataConverters = getMetadataConverters();
@@ -171,9 +217,17 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
         DebeziumDeserializationSchema<RowData> deserializer =
                 enableFullDocPrePostImage
                         ? new MongoDBConnectorFullChangelogDeserializationSchema(
-                                physicalDataType, metadataConverters, typeInfo, localTimeZone)
+                                physicalDataType,
+                                metadataConverters,
+                                typeInfo,
+                                localTimeZone,
+                                flattenNestedColumns)
                         : new MongoDBConnectorDeserializationSchema(
-                                physicalDataType, metadataConverters, typeInfo, localTimeZone);
+                                physicalDataType,
+                                metadataConverters,
+                                typeInfo,
+                                localTimeZone,
+                                flattenNestedColumns);
 
         String databaseList = null;
         String collectionList = null;
@@ -197,17 +251,21 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
         }
 
         if (enableParallelRead) {
-            MongoDBSourceBuilder<RowData> builder =
-                    MongoDBSource.<RowData>builder()
-                            .scheme(scheme)
-                            .hosts(hosts)
-                            .closeIdleReaders(closeIdlerReaders)
-                            .scanFullChangelog(enableFullDocPrePostImage)
-                            .startupOptions(startupOptions)
-                            .skipSnapshotBackfill(skipSnapshotBackfill)
-                            .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
-                            .deserializer(deserializer)
-                            .disableCursorTimeout(noCursorTimeout);
+            final MongoDBSourceBuilder<?> builder =
+                    isEvolvingSource
+                            ? MongoDBSource
+                                    .<SourceRecord>builder() // TODO: provide custom fullChangeLog
+                            // deserializers here, too
+                            : MongoDBSource.<RowData>builder().deserializer(deserializer);
+            builder.scheme(scheme)
+                    .hosts(hosts)
+                    .closeIdleReaders(closeIdlerReaders)
+                    .scanFullChangelog(enableFullDocPrePostImage)
+                    .startupOptions(startupOptions)
+                    .skipSnapshotBackfill(skipSnapshotBackfill)
+                    .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                    .disableCursorTimeout(noCursorTimeout)
+                    .scanChunkAssignStrategy(scanChunkAssignStrategy);
 
             Optional.ofNullable(databaseList).ifPresent(builder::databaseList);
             Optional.ofNullable(collectionList).ifPresent(builder::collectionList);
@@ -222,7 +280,26 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
             Optional.ofNullable(splitMetaGroupSize).ifPresent(builder::splitMetaGroupSize);
             Optional.ofNullable(splitSizeMB).ifPresent(builder::splitSizeMB);
             Optional.ofNullable(samplesPerChunk).ifPresent(builder::samplesPerChunk);
-            return SourceProvider.of(builder.build());
+
+            if (isEvolvingSource) {
+                final MongoDBEvolvingSourceDeserializeSchema evolvingSourceDeserializeSchema =
+                        new MongoDBEvolvingSourceDeserializeSchema(
+                                capturedTables,
+                                localTimeZone,
+                                scanContext.getEvolvingSourceTypeInfo(),
+                                flattenNestedColumns,
+                                primitiveAsString,
+                                enableFullDocPrePostImage);
+
+                return EvolvingSourceProvider.of(
+                        ((MongoDBSourceBuilder<SourceRecord>) builder)
+                                .deserializer(evolvingSourceDeserializeSchema)
+                                .build());
+            }
+
+            return getParallelSourceProviderWithCheckPK(
+                    ((MongoDBSourceBuilder<RowData>) builder).deserializer(deserializer).build(),
+                    physicalSchema);
         } else {
             org.apache.flink.cdc.connectors.mongodb.MongoDBSource.Builder<RowData> builder =
                     org.apache.flink.cdc.connectors.mongodb.MongoDBSource.<RowData>builder()
@@ -278,6 +355,45 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
     public void applyReadableMetadata(List<String> metadataKeys, DataType producedDataType) {
         this.metadataKeys = metadataKeys;
         this.producedDataType = producedDataType;
+
+        // append metadata to the captured tables, this method happens before applyTableSource
+        Set<MongoDBTableSpec> tablesWithMetaData = new HashSet<>();
+        for (MongoDBTableSpec tableSpec : capturedTables) {
+            tableSpec.setMetadataKeys(metadataKeys);
+            tablesWithMetaData.add(tableSpec);
+        }
+        this.capturedTables = tablesWithMetaData;
+    }
+
+    @Override
+    public void applySchemaEvolution() {
+        this.isEvolvingSource = true;
+    }
+
+    @Override
+    public boolean applyTableSource(ScanTableSource anotherScanTableSource) {
+        if (anotherScanTableSource instanceof MongoDBTableSource) {
+            MongoDBTableSource anotherMongoDBTableSource =
+                    (MongoDBTableSource) anotherScanTableSource;
+            if (!enableParallelRead || !anotherMongoDBTableSource.enableParallelRead) {
+                return false;
+            }
+            if (!isEvolvingSource) {
+                // MongoDB CDC does not support sql source merge now
+                return false;
+            }
+            if (Objects.equals(scheme, anotherMongoDBTableSource.scheme)
+                    && Objects.equals(hosts, anotherMongoDBTableSource.hosts)
+                    && Objects.equals(
+                            connectionOptions, anotherMongoDBTableSource.connectionOptions)
+                    && Objects.equals(username, anotherMongoDBTableSource.username)
+                    && Objects.equals(password, anotherMongoDBTableSource.password)
+                    && Objects.equals(startupOptions, anotherMongoDBTableSource.startupOptions)) {
+                capturedTables.addAll(anotherMongoDBTableSource.capturedTables);
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -307,9 +423,15 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
                         enableFullDocPrePostImage,
                         noCursorTimeout,
                         skipSnapshotBackfill,
-                        scanNewlyAddedTableEnabled);
+                        scanNewlyAddedTableEnabled,
+                        flattenNestedColumns,
+                        primitiveAsString,
+                        sourceTablePath,
+                        scanChunkAssignStrategy);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
+        source.isEvolvingSource = isEvolvingSource;
+        source.capturedTables = capturedTables;
         return source;
     }
 
@@ -347,7 +469,12 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
                 && Objects.equals(enableFullDocPrePostImage, that.enableFullDocPrePostImage)
                 && Objects.equals(noCursorTimeout, that.noCursorTimeout)
                 && Objects.equals(skipSnapshotBackfill, that.skipSnapshotBackfill)
-                && Objects.equals(scanNewlyAddedTableEnabled, that.scanNewlyAddedTableEnabled);
+                && Objects.equals(scanNewlyAddedTableEnabled, that.scanNewlyAddedTableEnabled)
+                && Objects.equals(flattenNestedColumns, that.flattenNestedColumns)
+                && Objects.equals(primitiveAsString, that.primitiveAsString)
+                && Objects.equals(isEvolvingSource, that.isEvolvingSource)
+                && Objects.equals(sourceTablePath, that.sourceTablePath)
+                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy);
     }
 
     @Override
@@ -378,11 +505,58 @@ public class MongoDBTableSource implements ScanTableSource, SupportsReadingMetad
                 enableFullDocPrePostImage,
                 noCursorTimeout,
                 skipSnapshotBackfill,
-                scanNewlyAddedTableEnabled);
+                scanNewlyAddedTableEnabled,
+                flattenNestedColumns,
+                primitiveAsString,
+                isEvolvingSource,
+                sourceTablePath,
+                scanChunkAssignStrategy);
     }
 
     @Override
     public String asSummaryString() {
         return "MongoDB-CDC";
+    }
+
+    private SourceProvider getParallelSourceProviderWithCheckPK(
+            final Source<RowData, ?, ?> source, final ResolvedSchema physicalSchema) {
+        return new SourceProvider() {
+            @Override
+            public Source<RowData, ?, ?> createSource() {
+                checkPrimaryKey(physicalSchema);
+                return source;
+            }
+
+            @Override
+            public boolean isBounded() {
+                return Boundedness.BOUNDED.equals(source.getBoundedness());
+            }
+        };
+    }
+
+    private SourceFunctionProvider getSourceFunctionProviderWithCheckPK(
+            final SourceFunction<RowData> sourceFunction, final ResolvedSchema physicalSchema) {
+        return new SourceFunctionProvider() {
+            @Override
+            public SourceFunction<RowData> createSourceFunction() {
+                checkPrimaryKey(physicalSchema);
+                return sourceFunction;
+            }
+
+            @Override
+            public boolean isBounded() {
+                return false;
+            }
+        };
+    }
+
+    private void checkPrimaryKey(ResolvedSchema physicalSchema) {
+        checkArgument(physicalSchema.getPrimaryKey().isPresent(), "Primary key must be present");
+
+        UniqueConstraint pk = physicalSchema.getPrimaryKey().get();
+        checkArgument(
+                pk.getColumns().size() == 1
+                        && MongoDBEnvelope.ID_FIELD.equals(pk.getColumns().get(0)),
+                "Primary key must be _id field");
     }
 }

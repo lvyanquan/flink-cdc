@@ -36,6 +36,7 @@ import com.github.shyiko.mysql.binlog.network.DefaultSSLSocketFactory;
 import com.github.shyiko.mysql.binlog.network.SSLMode;
 import com.github.shyiko.mysql.binlog.network.SSLSocketFactory;
 import com.github.shyiko.mysql.binlog.network.ServerException;
+import com.lmax.disruptor.ExceptionHandler;
 import com.lmax.disruptor.YieldingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -101,24 +102,28 @@ import static io.debezium.util.Strings.isNullOrEmpty;
  * Copied from Debezium project(1.9.8.Final) to fix
  * https://github.com/ververica/flink-cdc-connectors/issues/1944.
  *
- * <p>Line 260-262: Skip null events in event deserializer to compatible with {@link
+ * <p>Line 263-265: Skip null events in event deserializer to compatible with {@link
  * com.github.shyiko.mysql.binlog.BinaryLogFileReader} which reads local binlog files.
  *
- * <p>Line 553-571 : Add PREVIOUS_GTIDS event handler to use the PREVIOUS_GTID event at the
+ * <p>Line 271 ~ 273: Clean cache on rotate event to prevent it from growing indefinitely. We should
+ * remove this class after we bumped a higher debezium version where the
+ * https://issues.redhat.com/browse/DBZ-5126 has been fixed.
+ *
+ * <p>Line 729-747 : Add PREVIOUS_GTIDS event handler to use the PREVIOUS_GTID event at the
  * beginning of the binlog file to update internal GTID set.
  *
- * <p>Line 1461-1467 : Adjust GTID merging logic to support recovering from job which previously
+ * <p>Line 1641-1657 : Adjust GTID merging logic to support recovering from job which previously
  * specifying starting offset on start.
  *
  * <p>Line 1521 : Add more error details for some exceptions.
  *
- * <p>Line 1485 : Add more error details for some exceptions.
+ * <p>Line 1711 : Add more error details for some exceptions.
  *
  * <p>Line 342-380 : Choose whether to use the new EventDataDeserializers based on configuration.
  *
  * <p>Line 443-449 : Add logs for recording the time of processing binlog.
  *
- * <p>Line 980-984 : Skip processing Event that EventData is null, witch is filtered by tableId.
+ * <p>Line 1132-1136 : Skip processing Event that EventData is null, witch is filtered by tableId.
  */
 public class MySqlStreamingChangeEventSource
         implements StreamingChangeEventSource<MySqlPartition, MySqlOffsetContext> {
@@ -159,6 +164,9 @@ public class MySqlStreamingChangeEventSource
 
     /** record the last timestamp of meeting new binlog. */
     private long lastTimestampOfMeetingNewBinlog;
+
+    // Record exception that occur during parallel processing.
+    private IOException disruptorException;
 
     /** Describe binlog position. */
     public static class BinlogPosition {
@@ -269,7 +277,7 @@ public class MySqlStreamingChangeEventSource
                 configuration.getLong(MySqlConnectorConfig.KEEP_ALIVE_INTERVAL_MS);
         Preconditions.checkArgument(
                 keepAliveInterval >= 10_000,
-                "setting connect.keep.alive.interval.ms greater than 10000 (ms) is dangerous, When there are a large number of binlogs to be pulled, this can lead to frequent connection creation.");
+                "setting connect.keep.alive.interval.ms less than 10000 (ms) is dangerous, When there are a large number of binlogs to be pulled, this can lead to frequent connection creation.");
         client.setKeepAliveInterval(keepAliveInterval);
         // Considering heartbeatInterval should be less than keepAliveInterval, we use the
         // heartbeatIntervalFactor
@@ -300,6 +308,9 @@ public class MySqlStreamingChangeEventSource
                      */
                     public Event nextEventInParallel(ByteArrayInputStream inputStream)
                             throws IOException {
+                        if (disruptorException != null) {
+                            throw disruptorException;
+                        }
                         if (inputStream.peek() == -1) {
                             return null;
                         }
@@ -340,9 +351,10 @@ public class MySqlStreamingChangeEventSource
                                 // wait for all event in ringBuffer to be processed as rotate event
                                 // will clear
                                 // TableMapEventData.
-                                long lastSequenceNumber = disruptor.getRingBuffer().getCursor();
-                                while (disruptor.getRingBuffer().getMinimumGatingSequence()
-                                        < lastSequenceNumber) {
+                                while (!disruptor
+                                        .getRingBuffer()
+                                        .hasAvailableCapacity(
+                                                disruptor.getRingBuffer().getBufferSize())) {
                                     try {
                                         Thread.sleep(10);
                                     } catch (InterruptedException e) {
@@ -380,7 +392,7 @@ public class MySqlStreamingChangeEventSource
                     public Event nextEvent(ByteArrayInputStream inputStream) throws IOException {
                         try {
                             Event event;
-                            if (disruptor != null) {
+                            if (deserializeInParallel && disruptor != null) {
                                 event = nextEventInParallel(inputStream);
                             } else {
                                 // keep the behavior as before.
@@ -499,7 +511,7 @@ public class MySqlStreamingChangeEventSource
                             + handlerSize
                             + " handlers, "
                             + bufferSize
-                            + " bufferSize.");
+                            + " bufferSize(handler size * ringbuffer size).");
             disruptor =
                     new Disruptor<>(
                             Event::new,
@@ -512,7 +524,36 @@ public class MySqlStreamingChangeEventSource
                 handlers[i] = new BinlogEventHandler(eventDeserializer);
             }
             disruptor.handleEventsWithWorkerPool(handlers).then(new BinlogEventConsumer(client));
+            // failover when exception happened.
+            disruptor.setDefaultExceptionHandler(
+                    new ExceptionHandler<Event>() {
+                        @Override
+                        public void handleEventException(Throwable ex, long sequence, Event event) {
+                            disruptorException =
+                                    new IOException(
+                                            "Exception occurs during deserializing binlog events process",
+                                            ex);
+                        }
+
+                        @Override
+                        public void handleOnStartException(Throwable ex) {
+                            disruptorException =
+                                    new IOException(
+                                            "Exception occurs during deserializing binlog events process on start",
+                                            ex);
+                        }
+
+                        @Override
+                        public void handleOnShutdownException(Throwable ex) {
+                            disruptorException =
+                                    new IOException(
+                                            "Exception occurs during deserializing binlog events process on shot down",
+                                            ex);
+                        }
+                    });
+
             client.setProcessInParallel(true);
+            eventDeserializer.setDeserializeInParallel(true);
         } else {
             disruptor = null;
         }

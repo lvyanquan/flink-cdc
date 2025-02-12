@@ -529,7 +529,7 @@ public class MySqlMetadataAccessorITCase extends MySqlSourceTestBase {
                 .fetchSize(2)
                 .username(database.getUsername())
                 .password(database.getPassword())
-                .serverTimeZone(ZoneId.of("UTC").toString())
+                .serverTimeZone(ZoneId.of(getSystemTimeZone()).toString())
                 .createConfig(0);
     }
 }

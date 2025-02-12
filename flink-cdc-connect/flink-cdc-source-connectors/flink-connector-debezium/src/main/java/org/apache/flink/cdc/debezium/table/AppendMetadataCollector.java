@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
+import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import org.apache.kafka.connect.source.SourceRecord;
@@ -29,16 +30,24 @@ import java.io.Serializable;
 
 /** Emits a row with physical fields and metadata fields. */
 @Internal
-public final class AppendMetadataCollector implements Collector<RowData>, Serializable {
+public class AppendMetadataCollector implements Collector<RowData>, Serializable {
     private static final long serialVersionUID = 1L;
 
     private final MetadataConverter[] metadataConverters;
 
     public transient SourceRecord inputRecord;
     public transient Collector<RowData> outputCollector;
+    // If true, all changelog will be treated as +I (insert).
+    private final boolean readChangelogAsAppend;
 
     public AppendMetadataCollector(MetadataConverter[] metadataConverters) {
+        this(metadataConverters, false);
+    }
+
+    public AppendMetadataCollector(
+            MetadataConverter[] metadataConverters, boolean readChangelogAsAppend) {
         this.metadataConverters = metadataConverters;
+        this.readChangelogAsAppend = readChangelogAsAppend;
     }
 
     @Override
@@ -55,8 +64,20 @@ public final class AppendMetadataCollector implements Collector<RowData>, Serial
 
             metaRow.setField(i, meta);
         }
+        if (readChangelogAsAppend) {
+            physicalRow.setRowKind(RowKind.INSERT);
+        }
         RowData outRow = new JoinedRowData(physicalRow.getRowKind(), physicalRow, metaRow);
         outputCollector.collect(outRow);
+    }
+
+    protected RowData extractData(MetadataConverter[] converters) {
+        GenericRowData extraColumns = new GenericRowData(converters.length);
+        for (int i = 0; i < converters.length; i++) {
+            Object meta = converters[i].read(inputRecord);
+            extraColumns.setField(i, meta);
+        }
+        return extraColumns;
     }
 
     @Override

@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -195,7 +194,7 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         LOG.info("Closing enumerator...");
         splitAssigner.close();
     }

@@ -20,6 +20,7 @@ package org.apache.flink.cdc.debezium.table;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.utils.TemporalConversions;
+import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -67,6 +68,8 @@ public final class RowDataDebeziumDeserializeSchema
     /** Custom validator to validate the row value. */
     public interface ValueValidator extends Serializable {
         void validate(RowData rowData, RowKind rowKind) throws Exception;
+
+        ValueValidator NON_VALIDATE = (rowData, rowKind) -> {};
     }
 
     /** TypeInformation of the produced {@link RowData}. * */
@@ -77,9 +80,6 @@ public final class RowDataDebeziumDeserializeSchema
      * physical column values.
      */
     private final DeserializationRuntimeConverter physicalConverter;
-
-    /** Whether the deserializer needs to handle metadata columns. */
-    private final boolean hasMetadata;
 
     /**
      * A wrapped output collector which is used to append metadata columns after physical columns.
@@ -99,14 +99,17 @@ public final class RowDataDebeziumDeserializeSchema
 
     RowDataDebeziumDeserializeSchema(
             RowType physicalDataType,
+            MetadataConverter[] systemDataConverters,
             MetadataConverter[] metadataConverters,
             TypeInformation<RowData> resultTypeInfo,
             ValueValidator validator,
             ZoneId serverTimeZone,
             DeserializationRuntimeConverterFactory userDefinedConverterFactory,
-            DebeziumChangelogMode changelogMode) {
-        this.hasMetadata = checkNotNull(metadataConverters).length > 0;
-        this.appendMetadataCollector = new AppendMetadataCollector(metadataConverters);
+            DebeziumChangelogMode changelogMode,
+            boolean readChangelogAsAppend) {
+        this.appendMetadataCollector =
+                new AppendSystemColumnAndMetadataCollector(
+                        systemDataConverters, metadataConverters, readChangelogAsAppend);
         this.physicalConverter =
                 createConverter(
                         checkNotNull(physicalDataType),
@@ -122,28 +125,33 @@ public final class RowDataDebeziumDeserializeSchema
         Envelope.Operation op = Envelope.operationFor(record);
         Struct value = (Struct) record.value();
         Schema valueSchema = record.valueSchema();
-        if (op == Envelope.Operation.CREATE || op == Envelope.Operation.READ) {
-            GenericRowData insert = extractAfterRow(value, valueSchema);
-            validator.validate(insert, RowKind.INSERT);
-            insert.setRowKind(RowKind.INSERT);
-            emit(record, insert, out);
-        } else if (op == Envelope.Operation.DELETE) {
-            GenericRowData delete = extractBeforeRow(value, valueSchema);
-            validator.validate(delete, RowKind.DELETE);
-            delete.setRowKind(RowKind.DELETE);
-            emit(record, delete, out);
-        } else {
-            if (changelogMode == DebeziumChangelogMode.ALL) {
-                GenericRowData before = extractBeforeRow(value, valueSchema);
-                validator.validate(before, RowKind.UPDATE_BEFORE);
-                before.setRowKind(RowKind.UPDATE_BEFORE);
-                emit(record, before, out);
-            }
+        try {
+            if (op == Envelope.Operation.CREATE || op == Envelope.Operation.READ) {
+                GenericRowData insert = extractAfterRow(value, valueSchema);
+                validator.validate(insert, RowKind.INSERT);
+                insert.setRowKind(RowKind.INSERT);
+                emit(record, insert, out);
+            } else if (op == Envelope.Operation.DELETE) {
+                GenericRowData delete = extractBeforeRow(value, valueSchema);
+                validator.validate(delete, RowKind.DELETE);
+                delete.setRowKind(RowKind.DELETE);
+                emit(record, delete, out);
+            } else {
+                if (changelogMode == DebeziumChangelogMode.ALL) {
+                    GenericRowData before = extractBeforeRow(value, valueSchema);
+                    validator.validate(before, RowKind.UPDATE_BEFORE);
+                    before.setRowKind(RowKind.UPDATE_BEFORE);
+                    emit(record, before, out);
+                }
 
-            GenericRowData after = extractAfterRow(value, valueSchema);
-            validator.validate(after, RowKind.UPDATE_AFTER);
-            after.setRowKind(RowKind.UPDATE_AFTER);
-            emit(record, after, out);
+                GenericRowData after = extractAfterRow(value, valueSchema);
+                validator.validate(after, RowKind.UPDATE_AFTER);
+                after.setRowKind(RowKind.UPDATE_AFTER);
+                emit(record, after, out);
+            }
+        } catch (Exception e) {
+            throw new TableException(
+                    String.format("Failed to deserialize the input record: %s.", record), e);
         }
     }
 
@@ -160,11 +168,6 @@ public final class RowDataDebeziumDeserializeSchema
     }
 
     private void emit(SourceRecord inRecord, RowData physicalRow, Collector<RowData> collector) {
-        if (!hasMetadata) {
-            collector.collect(physicalRow);
-            return;
-        }
-
         appendMetadataCollector.inputRecord = inRecord;
         appendMetadataCollector.outputCollector = collector;
         appendMetadataCollector.collect(physicalRow);
@@ -183,6 +186,7 @@ public final class RowDataDebeziumDeserializeSchema
     public static class Builder {
         private RowType physicalRowType;
         private TypeInformation<RowData> resultTypeInfo;
+        private MetadataConverter[] systemDataConverters = new MetadataConverter[0];
         private MetadataConverter[] metadataConverters = new MetadataConverter[0];
         private ValueValidator validator = (rowData, rowKind) -> {};
         private ZoneId serverTimeZone = ZoneId.of("UTC");
@@ -190,8 +194,15 @@ public final class RowDataDebeziumDeserializeSchema
                 DeserializationRuntimeConverterFactory.DEFAULT;
         private DebeziumChangelogMode changelogMode = DebeziumChangelogMode.ALL;
 
+        private boolean readChangelogAsAppend = false;
+
         public Builder setPhysicalRowType(RowType physicalRowType) {
             this.physicalRowType = physicalRowType;
+            return this;
+        }
+
+        public Builder setSystemColumnConverters(MetadataConverter[] systemDataConverters) {
+            this.systemDataConverters = systemDataConverters;
             return this;
         }
 
@@ -226,15 +237,22 @@ public final class RowDataDebeziumDeserializeSchema
             return this;
         }
 
+        public Builder setReadChangelogAsAppend(boolean readChangelogAsAppend) {
+            this.readChangelogAsAppend = readChangelogAsAppend;
+            return this;
+        }
+
         public RowDataDebeziumDeserializeSchema build() {
             return new RowDataDebeziumDeserializeSchema(
                     physicalRowType,
+                    systemDataConverters,
                     metadataConverters,
                     resultTypeInfo,
                     validator,
                     serverTimeZone,
                     userDefinedConverterFactory,
-                    changelogMode);
+                    changelogMode,
+                    readChangelogAsAppend);
         }
     }
 

@@ -53,7 +53,6 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogSplitReadTask.class);
     private final MySqlBinlogSplit binlogSplit;
-    private final EventDispatcherImpl<TableId> eventDispatcher;
     private final SignalEventDispatcher signalEventDispatcher;
     private final ErrorHandler errorHandler;
     private final Predicate<Event> eventFilter;
@@ -76,7 +75,6 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
             boolean isBackfilling) {
         super(connectorConfig, connection, dispatcher, errorHandler, clock, taskContext, metrics);
         this.binlogSplit = binlogSplit;
-        this.eventDispatcher = dispatcher;
         this.errorHandler = errorHandler;
         this.signalEventDispatcher = signalEventDispatcher;
         this.eventFilter = eventFilter;
@@ -106,7 +104,7 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
         if (!eventFilter.test(event)) {
             return;
         }
-        super.handleEvent(partition, offsetContext, event);
+
         // check do we need to stop for read binlog for snapshot split.
         if (isBoundedRead()) {
             final BinlogOffset currentBinlogOffset =
@@ -125,9 +123,14 @@ public class MySqlBinlogSplitReadTask extends MySqlStreamingChangeEventSource {
                             new DebeziumException("Error processing binlog signal event", e));
                 }
                 // tell reader the binlog task finished
-                ((StoppableChangeEventSourceContext) context).stopChangeEventSource();
+                if (context instanceof StoppableChangeEventSourceContext) {
+                    ((StoppableChangeEventSourceContext) context).stopChangeEventSource();
+                }
+                LOG.debug("The backfill binlog read for split {} finished.", binlogSplit);
+                return;
             }
         }
+        super.handleEvent(partition, offsetContext, event);
     }
 
     private boolean isBoundedRead() {

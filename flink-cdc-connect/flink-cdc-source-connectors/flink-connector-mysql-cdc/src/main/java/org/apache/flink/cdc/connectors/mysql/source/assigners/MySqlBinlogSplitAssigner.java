@@ -21,7 +21,6 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.BinlogPendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.state.PendingSplitsState;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
-import org.apache.flink.cdc.connectors.mysql.source.connection.JdbcConnectionPools;
 import org.apache.flink.cdc.connectors.mysql.source.metrics.MySqlSourceEnumeratorMetrics;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
 import org.apache.flink.cdc.connectors.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -29,7 +28,6 @@ import org.apache.flink.cdc.connectors.mysql.source.split.MySqlBinlogSplit;
 import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 import org.apache.flink.util.CollectionUtil;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,32 +46,39 @@ public class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
     private boolean isBinlogSplitAssigned;
 
     private final SplitEnumeratorContext<MySqlSplit> enumeratorContext;
+    private final boolean isCdcYamlSource;
     private MySqlSourceEnumeratorMetrics enumeratorMetrics;
 
     public MySqlBinlogSplitAssigner(
-            MySqlSourceConfig sourceConfig, SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
-        this(sourceConfig, false, enumeratorContext);
+            MySqlSourceConfig sourceConfig,
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
+        this(sourceConfig, false, enumeratorContext, isCdcYamlSource);
     }
 
     public MySqlBinlogSplitAssigner(
             MySqlSourceConfig sourceConfig,
             BinlogPendingSplitsState checkpoint,
-            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
-        this(sourceConfig, checkpoint.isBinlogSplitAssigned(), enumeratorContext);
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
+        this(sourceConfig, checkpoint.isBinlogSplitAssigned(), enumeratorContext, isCdcYamlSource);
     }
 
     private MySqlBinlogSplitAssigner(
             MySqlSourceConfig sourceConfig,
             boolean isBinlogSplitAssigned,
-            SplitEnumeratorContext<MySqlSplit> enumeratorContext) {
+            SplitEnumeratorContext<MySqlSplit> enumeratorContext,
+            boolean isCdcYamlSource) {
         this.sourceConfig = sourceConfig;
         this.isBinlogSplitAssigned = isBinlogSplitAssigned;
         this.enumeratorContext = enumeratorContext;
+        this.isCdcYamlSource = isCdcYamlSource;
     }
 
     @Override
     public void open() {
-        this.enumeratorMetrics = new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup());
+        this.enumeratorMetrics =
+                new MySqlSourceEnumeratorMetrics(enumeratorContext.metricGroup(), isCdcYamlSource);
         if (isBinlogSplitAssigned) {
             enumeratorMetrics.enterBinlogReading();
         } else {
@@ -136,6 +141,10 @@ public class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
         return isBinlogSplitAssigned;
     }
 
+    public boolean isStreamSplitAssigned() {
+        return isBinlogSplitAssigned;
+    }
+
     @Override
     public void startAssignNewlyAddedTables() {}
 
@@ -143,10 +152,7 @@ public class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
     public void onBinlogSplitUpdated() {}
 
     @Override
-    public void close() throws IOException {
-        // clear jdbc connection pools
-        JdbcConnectionPools.getInstance().clear();
-    }
+    public void close() {}
 
     // ------------------------------------------------------------------------------------------
 
