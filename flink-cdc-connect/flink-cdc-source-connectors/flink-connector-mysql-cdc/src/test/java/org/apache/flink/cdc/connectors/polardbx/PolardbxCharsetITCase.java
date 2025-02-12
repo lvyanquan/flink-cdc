@@ -225,7 +225,8 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                                 "INSERT INTO sink SELECT table_id,table_name FROM %s", testName));
         waitForSinkSize("sink", snapshotExpected.length);
         assertEqualsInAnyOrder(
-                Arrays.asList(snapshotExpected), TestValuesTableFactory.getResults("sink"));
+                Arrays.asList(snapshotExpected),
+                TestValuesTableFactory.getResultsAsStrings("sink"));
 
         // test binlog phase
         try (Connection connection = getJdbcConnection();
@@ -239,9 +240,10 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
         LOG.info(
                 "Polar charset test {}: {}",
                 testName,
-                String.join(",", TestValuesTableFactory.getRawResults("sink")));
+                String.join(",", TestValuesTableFactory.getRawResultsAsStrings("sink")));
         assertEqualsInAnyOrder(
-                Arrays.asList(binlogExpected), TestValuesTableFactory.getRawResults("sink"));
+                Arrays.asList(binlogExpected),
+                TestValuesTableFactory.getRawResultsAsStrings("sink"));
         result.getJobClient().ifPresent(JobClient::cancel);
     }
 }

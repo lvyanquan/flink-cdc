@@ -219,7 +219,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                     "spare tire,22.200"
                 };
 
-        List<String> actual = TestValuesTableFactory.getResults("sink");
+        List<String> actual = TestValuesTableFactory.getResultsAsStrings("sink");
         assertThat(actual, containsInAnyOrder(expected));
 
         result.getJobClient().get().cancel().get();
@@ -298,7 +298,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
         String[] expected = new String[] {"jacket,0.200", "scooter,5.180"};
 
-        List<String> actual = TestValuesTableFactory.getResults("sink");
+        List<String> actual = TestValuesTableFactory.getResultsAsStrings("sink");
         assertThat(actual, containsInAnyOrder(expected));
 
         result.getJobClient().get().cancel().get();
@@ -461,7 +461,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                         "+U(5d505646cf6d4fe581014ab2,hello,0bd1e27e-2829-4b47-8e21-dfef93da44e1,2078693f4c61ce3073b01be69ab76428,17:54:14,2019-08-11,1960-08-11,2019-08-11T17:54:14.692,2019-08-11T17:54:14.692Z,2019-08-11T17:47:44,2019-08-11T17:47:44Z,true,11,10.5,10,510,hello,50,{inner_map={key=234}},[hello, world],[1.0, 1.1, null],[hello0,51, hello1,53],MIN_KEY,MAX_KEY,/^H/i,null,null,[1, 2, 3],function() { x++; },ref_doc,5d505646cf6d4fe581014ab3)",
                         "-U(5d505646cf6d4fe581014ab2,hello,0bd1e27e-2829-4b47-8e21-dfef93da44e1,2078693f4c61ce3073b01be69ab76428,17:54:14,2019-08-11,1960-08-11,2019-08-11T17:54:14.692,2019-08-11T17:54:14.692Z,2019-08-11T17:47:44,2019-08-11T17:47:44Z,true,11,10.5,10,510,hello,50,{inner_map={key=234}},[hello, world],[1.0, 1.1, null],[hello0,51, hello1,53],MIN_KEY,MAX_KEY,/^H/i,null,null,[1, 2, 3],function() { x++; },ref_doc,5d505646cf6d4fe581014ab3)",
                         "+U(5d505646cf6d4fe581014ab2,hello,0bd1e27e-2829-4b47-8e21-dfef93da44e1,2078693f4c61ce3073b01be69ab76428,18:36:04,2021-09-03,1960-08-11,2021-09-03T18:36:04.123,2021-09-03T18:36:04.123Z,2021-09-03T18:36:04,2021-09-03T18:36:04Z,true,11,10.5,10,510,hello,50,{inner_map={key=234}},[hello, world],[1.0, 1.1, null],[hello0,51, hello1,53],MIN_KEY,MAX_KEY,/^H/i,null,null,[1, 2, 3],function() { x++; },ref_doc,5d505646cf6d4fe581014ab3)");
-        List<String> actual = TestValuesTableFactory.getRawResults("sink");
+        List<String> actual = TestValuesTableFactory.getRawResultsAsStrings("sink");
         assertEquals(expected, actual);
 
         result.getJobClient().get().cancel().get();
@@ -580,7 +580,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                         .sorted()
                         .collect(Collectors.toList());
 
-        List<String> actual = TestValuesTableFactory.getRawResults("meta_sink");
+        List<String> actual = TestValuesTableFactory.getRawResultsAsStrings("meta_sink");
         Collections.sort(actual);
         assertEquals(expected, actual);
         result.getJobClient().get().cancel().get();
@@ -653,7 +653,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
 
         waitForSinkSize("meta_sink", 12);
 
-        List<String> actual = TestValuesTableFactory.getRawResults("meta_sink");
+        List<String> actual = TestValuesTableFactory.getRawResultsAsStrings("meta_sink");
         String zeroTimestamp = "1970-01-01T00:00:00Z";
         for (String row : actual) {
             if (!row.contains("+I") || row.contains("100000000000000000000110")) {
@@ -769,7 +769,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                         .sorted()
                         .collect(Collectors.toList());
 
-        List<String> actual = TestValuesTableFactory.getRawResults("sink");
+        List<String> actual = TestValuesTableFactory.getRawResultsAsStrings("sink");
         Collections.sort(actual);
         assertEquals(expected, actual);
         result.getJobClient().get().cancel().get();
@@ -835,7 +835,7 @@ public class MongoDBConnectorITCase extends MongoDBSourceTestBase {
                         .sorted()
                         .collect(Collectors.toList());
 
-        List<String> actual = TestValuesTableFactory.getRawResults(sinkName);
+        List<String> actual = TestValuesTableFactory.getRawResultsAsStrings(sinkName);
         Collections.sort(actual);
         assertEquals(expected, actual);
 

@@ -50,6 +50,9 @@ public class CanalJsonFormatOptions {
     public static final ConfigOption<Boolean> INFER_SCHEMA_PRIMITIVE_AS_STRING =
             JsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING;
 
+    public static final ConfigOption<Boolean> ENCODE_IGNORE_NULL_FIELDS =
+            JsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS;
+
     public static final ConfigOption<String> DATABASE_INCLUDE =
             key("database.include")
                     .stringType()

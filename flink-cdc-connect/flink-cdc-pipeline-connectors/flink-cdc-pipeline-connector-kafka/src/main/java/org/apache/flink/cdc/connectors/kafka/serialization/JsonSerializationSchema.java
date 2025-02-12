@@ -63,6 +63,8 @@ public class JsonSerializationSchema implements SerializationSchema<Event> {
 
     private final boolean writeNullProperties;
 
+    private final boolean ignoreNullFields;
+
     private final ZoneId zoneId;
 
     private InitializationContext context;
@@ -73,7 +75,8 @@ public class JsonSerializationSchema implements SerializationSchema<Event> {
             String mapNullKeyLiteral,
             ZoneId zoneId,
             boolean encodeDecimalAsPlainNumber,
-            boolean writeNullProperties) {
+            boolean writeNullProperties,
+            boolean ignoreNullFields) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
@@ -81,6 +84,7 @@ public class JsonSerializationSchema implements SerializationSchema<Event> {
         this.writeNullProperties = writeNullProperties;
         this.zoneId = zoneId;
         jsonSerializers = new HashMap<>();
+        this.ignoreNullFields = ignoreNullFields;
     }
 
     @Override
@@ -142,6 +146,7 @@ public class JsonSerializationSchema implements SerializationSchema<Event> {
                         mapNullKeyMode.name()),
                 mapNullKeyLiteral,
                 encodeDecimalAsPlainNumber,
-                writeNullProperties);
+                writeNullProperties,
+                ignoreNullFields);
     }
 }

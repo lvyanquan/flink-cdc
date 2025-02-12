@@ -80,6 +80,11 @@ public class YamlServiceTest {
         static {
             ClassLoader.registerAsParallelCapable();
         }
+
+        @Override
+        public MutableURLClassLoader copy() {
+            return null;
+        }
     }
 
     private static class MockArtifactFetcher implements ArtifactFetcher {

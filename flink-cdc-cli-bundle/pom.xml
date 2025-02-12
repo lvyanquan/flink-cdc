@@ -123,7 +123,7 @@ limitations under the License.
                                 </relocation>
                                 <relocation>
                                     <pattern>com.google</pattern>
-                                    <shadedPattern>org.apache.flink.shaded.guava30.com.google</shadedPattern>
+                                    <shadedPattern>org.apache.flink.shaded.guava31.com.google</shadedPattern>
                                 </relocation>
 
                             </relocations>

@@ -29,12 +29,13 @@ import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
-import org.apache.flink.testutils.CustomEqualityMatcher;
 import org.apache.flink.testutils.DeeplyEqualsChecker;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.TestLoggerExtension;
 
 import org.apache.commons.lang3.SerializationException;
+import org.hamcrest.BaseMatcher;
+import org.hamcrest.Description;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -495,7 +496,20 @@ public abstract class SerializerTestBase<T> {
     // --------------------------------------------------------------------------------------------
 
     private void deepEquals(String message, T should, T is) {
-        assertThat(message, is, CustomEqualityMatcher.deeplyEquals(should).withChecker(checker));
+        assertThat(
+                message,
+                is,
+                new BaseMatcher<T>() {
+                    @Override
+                    public void describeTo(Description description) {
+                        description.appendValue(should);
+                    }
+
+                    @Override
+                    public boolean matches(Object o) {
+                        return checker.deepEquals(o, should);
+                    }
+                });
     }
 
     // --------------------------------------------------------------------------------------------
@@ -593,7 +607,17 @@ public abstract class SerializerTestBase<T> {
                         assertThat(
                                 "Serialization/Deserialization cycle resulted in an object that are not equal to the original.",
                                 copySerdeTestItem,
-                                CustomEqualityMatcher.deeplyEquals(testItem).withChecker(checker));
+                                new BaseMatcher<T>() {
+                                    @Override
+                                    public void describeTo(Description description) {
+                                        description.appendValue(testItem);
+                                    }
+
+                                    @Override
+                                    public boolean matches(Object o) {
+                                        return checker.deepEquals(o, testItem);
+                                    }
+                                });
 
                         // try to enforce some upper bound to the test time
                         if (System.nanoTime() >= endTimeNanos) {

@@ -131,13 +131,16 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
 
         final boolean writeNullProperties =
                 formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
+        final boolean ignoreNullFields =
+                formatOptions.get(JsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS);
         return new KeyJsonSerializationSchema(
                 timestampFormat,
                 mapNullKeyMode,
                 mapNullKeyLiteral,
                 encodeDecimalAsPlainNumber,
                 writeNullProperties,
-                zoneId);
+                zoneId,
+                ignoreNullFields);
     }
 
     @VisibleForTesting
@@ -150,12 +153,14 @@ public class UpsertKafkaDataSinkFactory implements DataSinkFactory {
         boolean encodeDecimalAsPlainNumber =
                 formatOptions.get(JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
         boolean writeNullProperties = formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
+        boolean ignoreNullFields = formatOptions.get(JsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS);
         return new UpsertKafkaJsonSerializationSchema(
                 timestampFormat,
                 mapNullKeyMode,
                 mapNullKeyLiteral,
                 encodeDecimalAsPlainNumber,
                 writeNullProperties,
-                zoneId);
+                zoneId,
+                ignoreNullFields);
     }
 }

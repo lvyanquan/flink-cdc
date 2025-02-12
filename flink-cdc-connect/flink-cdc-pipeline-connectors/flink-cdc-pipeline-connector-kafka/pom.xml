@@ -29,7 +29,7 @@ limitations under the License.
     <artifactId>flink-cdc-pipeline-connector-kafka</artifactId>
 
     <properties>
-        <flink.janino.version>3.0.11</flink.janino.version>
+        <flink.janino.version>3.1.10</flink.janino.version>
     </properties>
 
     <dependencies>

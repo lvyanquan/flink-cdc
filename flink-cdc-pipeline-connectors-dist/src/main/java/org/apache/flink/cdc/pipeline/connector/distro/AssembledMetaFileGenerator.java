@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.flink.shaded.guava30.com.google.common.base.Preconditions.checkArgument;
+import static org.apache.flink.shaded.guava31.com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Class for generating <code>flink-cdc-pipeline-connector-meta.yaml</code> under the build target.

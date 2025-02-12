@@ -286,7 +286,7 @@ public class MySqlEvolvingParallelSourceITCase extends MySqlSourceTestBase {
     private static void validateExpectedRows(
             String sinkTableName, List<String> expectedMaterializedResults) throws Exception {
         Collections.sort(expectedMaterializedResults);
-        List<String> actual = TestValuesTableFactory.getResults(sinkTableName);
+        List<String> actual = TestValuesTableFactory.getResultsAsStrings(sinkTableName);
         Deadline expireTime = Deadline.fromNow(Duration.ofSeconds(60));
         while (expireTime.hasTimeLeft()) {
             Collections.sort(actual);
@@ -294,11 +294,11 @@ public class MySqlEvolvingParallelSourceITCase extends MySqlSourceTestBase {
                 return;
             }
             Thread.sleep(100);
-            actual = TestValuesTableFactory.getResults(sinkTableName);
+            actual = TestValuesTableFactory.getResultsAsStrings(sinkTableName);
         }
 
         // make the last try
-        actual = TestValuesTableFactory.getResults(sinkTableName);
+        actual = TestValuesTableFactory.getResultsAsStrings(sinkTableName);
         Collections.sort(actual);
         assertEquals(expectedMaterializedResults, actual);
     }

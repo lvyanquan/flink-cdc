@@ -55,7 +55,13 @@ public class KeyJsonSerializationSchemaTest {
                         .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, false);
         SerializationSchema<Event> serializationSchema =
                 new KeyJsonSerializationSchema(
-                        TimestampFormat.SQL, LITERAL, "test", true, true, ZoneId.systemDefault());
+                        TimestampFormat.SQL,
+                        LITERAL,
+                        "test",
+                        true,
+                        true,
+                        ZoneId.systemDefault(),
+                        false);
 
         serializationSchema.open(new MockInitializationContext());
         // create table

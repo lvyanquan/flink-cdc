@@ -60,6 +60,7 @@ public class ChangeLogJsonFormatFactory {
         String mapNullKeyLiteral;
         boolean encodeDecimalAsPlainNumber;
         boolean writeNullProperties;
+        boolean ignoreNullFields;
 
         switch (type) {
             case DEBEZIUM_JSON:
@@ -73,13 +74,16 @@ public class ChangeLogJsonFormatFactory {
                                     DebeziumJsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
                     writeNullProperties =
                             formatOptions.get(DebeziumJsonFormatOptions.WRITE_NULL_PROPERTIES);
+                    ignoreNullFields =
+                            formatOptions.get(DebeziumJsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS);
                     return new DebeziumJsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
                             writeNullProperties,
-                            zoneId);
+                            zoneId,
+                            ignoreNullFields);
                 }
             case CANAL_JSON:
                 {
@@ -92,13 +96,16 @@ public class ChangeLogJsonFormatFactory {
                                     CanalJsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
                     writeNullProperties =
                             formatOptions.get(CanalJsonFormatOptions.WRITE_NULL_PROPERTIES);
+                    ignoreNullFields =
+                            formatOptions.get(CanalJsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS);
                     return new CanalJsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
                             writeNullProperties,
-                            zoneId);
+                            zoneId,
+                            ignoreNullFields);
                 }
             default:
                 {

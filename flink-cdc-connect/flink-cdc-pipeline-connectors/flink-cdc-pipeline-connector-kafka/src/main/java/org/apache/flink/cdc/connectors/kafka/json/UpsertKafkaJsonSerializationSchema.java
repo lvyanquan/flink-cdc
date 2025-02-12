@@ -58,6 +58,7 @@ public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<E
     private final boolean encodeDecimalAsPlainNumber;
 
     private final boolean writeNullProperties;
+    private final boolean ignoreNullFields;
     private final ZoneId zoneId;
 
     /**
@@ -73,7 +74,8 @@ public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<E
             String mapNullKeyLiteral,
             boolean encodeDecimalAsPlainNumber,
             boolean writeNullProperties,
-            ZoneId zoneId) {
+            ZoneId zoneId,
+            boolean ignoreNullFields) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
@@ -81,6 +83,7 @@ public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<E
         this.writeNullProperties = writeNullProperties;
         this.zoneId = zoneId;
         this.jsonSerializers = new HashMap<>();
+        this.ignoreNullFields = ignoreNullFields;
     }
 
     @Override
@@ -112,7 +115,8 @@ public class UpsertKafkaJsonSerializationSchema implements SerializationSchema<E
                                     mapNullKeyMode.name()),
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
-                            writeNullProperties);
+                            writeNullProperties,
+                            ignoreNullFields);
             try {
                 jsonSerializer.open(context);
             } catch (Exception e) {

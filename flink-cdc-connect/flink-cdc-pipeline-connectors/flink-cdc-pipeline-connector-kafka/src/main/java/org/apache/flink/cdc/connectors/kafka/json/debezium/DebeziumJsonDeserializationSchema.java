@@ -24,7 +24,7 @@ import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAw
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.JsonToRowDataConverters;
+import org.apache.flink.formats.json.JsonToRowDataInSourceRecordConverters;
 import org.apache.flink.formats.json.JsonToSourceRecordConverter;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -109,7 +109,8 @@ public abstract class DebeziumJsonDeserializationSchema
                         // the object path is never used
                         OBJECT_PATH_PLACEHOLDER,
                         new RowType(Collections.emptyList()),
-                        new JsonToRowDataConverters(false, false, timestampFormat, zoneId),
+                        new JsonToRowDataInSourceRecordConverters(
+                                false, false, timestampFormat, zoneId),
                         false,
                         false,
                         primitiveAsString);

@@ -17,9 +17,12 @@
 
 package org.apache.flink.cdc.connectors.values.sink;
 
+import org.apache.flink.api.common.JobInfo;
+import org.apache.flink.api.common.TaskInfo;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.operators.ProcessingTimeService;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
@@ -37,8 +40,8 @@ import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.metrics.groups.InternalSinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.streaming.api.functions.sink.SinkContextUtil;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
@@ -258,7 +261,8 @@ class ValuesDataSinkAsPrintSinkTest {
 
         @Override
         public SinkWriterMetricGroup metricGroup() {
-            return InternalSinkWriterMetricGroup.mock(new UnregisteredMetricsGroup());
+            return InternalSinkWriterMetricGroup.wrap(
+                    UnregisteredMetricGroups.createUnregisteredOperatorMetricGroup());
         }
 
         @Override
@@ -272,9 +276,29 @@ class ValuesDataSinkAsPrintSinkTest {
         }
 
         @Override
+        public JobInfo getJobInfo() {
+            return null;
+        }
+
+        @Override
+        public TaskInfo getTaskInfo() {
+            return null;
+        }
+
+        @Override
         public SerializationSchema.InitializationContext
                 asSerializationSchemaInitializationContext() {
             return this;
+        }
+
+        @Override
+        public boolean isObjectReuseEnabled() {
+            return false;
+        }
+
+        @Override
+        public <IN> TypeSerializer<IN> createInputSerializer() {
+            return null;
         }
     }
 
@@ -287,10 +311,22 @@ class ValuesDataSinkAsPrintSinkTest {
                 Object... descriptionArgs) {}
 
         @Override
+        public void execute(
+                MailOptions mailOptions,
+                ThrowingRunnable<? extends Exception> throwingRunnable,
+                String s,
+                Object... objects) {}
+
+        @Override
         public void yield() throws InterruptedException, FlinkRuntimeException {}
 
         @Override
         public boolean tryYield() throws FlinkRuntimeException {
+            return false;
+        }
+
+        @Override
+        public boolean shouldInterrupt() {
             return false;
         }
     }

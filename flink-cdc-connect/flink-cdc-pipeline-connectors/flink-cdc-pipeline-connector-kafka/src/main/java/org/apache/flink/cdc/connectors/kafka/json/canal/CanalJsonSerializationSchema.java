@@ -79,6 +79,8 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
 
     private final boolean writeNullProperties;
 
+    private final boolean ignoreNullFields;
+
     /** key for extracting operation timestamp in {@link DataChangeEvent#meta()}. */
     public static final String OPERATION_TIMESTAMP_KEY = "op_ts";
 
@@ -88,7 +90,8 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
             String mapNullKeyLiteral,
             boolean encodeDecimalAsPlainNumber,
             boolean writeNullProperties,
-            ZoneId zoneId) {
+            ZoneId zoneId,
+            boolean ignoreNullFields) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
@@ -96,6 +99,7 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
         this.zoneId = zoneId;
         jsonSerializers = new HashMap<>();
         this.writeNullProperties = writeNullProperties;
+        this.ignoreNullFields = ignoreNullFields;
     }
 
     @Override
@@ -128,7 +132,8 @@ public class CanalJsonSerializationSchema implements SerializationSchema<Event> 
                                     mapNullKeyMode.name()),
                             mapNullKeyLiteral,
                             encodeDecimalAsPlainNumber,
-                            writeNullProperties);
+                            writeNullProperties,
+                            ignoreNullFields);
             try {
                 jsonSerializer.open(context);
             } catch (Exception e) {

@@ -81,7 +81,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 stoppingOffsetsInitializer,
                 boundedness,
                 deserializationSchema,
-                props);
+                props,
+                null);
         this.schemaInferenceStrategy = schemaInferenceStrategy;
         this.recordSchemaParser = recordSchemaParser;
         this.maxFetchRecords = maxFetchRecords;

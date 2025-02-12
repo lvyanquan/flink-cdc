@@ -25,7 +25,7 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.JsonToRowDataConverters;
+import org.apache.flink.formats.json.JsonToRowDataInSourceRecordConverters;
 import org.apache.flink.formats.json.JsonToSourceRecordConverter;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
@@ -101,7 +101,8 @@ public class CanalJsonSchemaParser implements RecordSchemaParser {
                         // the object path is never used
                         OBJECT_PATH_PLACEHOLDER,
                         new RowType(Collections.emptyList()),
-                        new JsonToRowDataConverters(false, false, timestampFormat, zoneId),
+                        new JsonToRowDataInSourceRecordConverters(
+                                false, false, timestampFormat, zoneId),
                         false,
                         false,
                         primitiveAsString);

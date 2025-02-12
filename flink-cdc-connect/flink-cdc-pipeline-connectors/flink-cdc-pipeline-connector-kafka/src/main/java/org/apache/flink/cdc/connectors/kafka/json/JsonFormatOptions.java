@@ -76,6 +76,13 @@ public class JsonFormatOptions {
                     .defaultValue(true)
                     .withDescription("Whether to write null properties when serializing");
 
+    public static final ConfigOption<Boolean> ENCODE_IGNORE_NULL_FIELDS =
+            key("encode.ignore-null-fields")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Optional flag to specify whether to ignore null fields when encoding, false by default.");
+
     // --------------------------------------------------------------------------------------------
     // Enums
     // --------------------------------------------------------------------------------------------

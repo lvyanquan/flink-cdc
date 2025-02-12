@@ -53,13 +53,16 @@ public class KeySerializationFactory {
                             formatOptions.get(JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER);
                     final boolean writeNullProperties =
                             formatOptions.get(JsonFormatOptions.WRITE_NULL_PROPERTIES);
+                    final boolean ignoreNullFields =
+                            formatOptions.get(JsonFormatOptions.ENCODE_IGNORE_NULL_FIELDS);
                     return new JsonSerializationSchema(
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
                             zoneId,
                             encodeDecimalAsPlainNumber,
-                            writeNullProperties);
+                            writeNullProperties,
+                            ignoreNullFields);
                 }
             case CSV:
                 {

@@ -202,6 +202,13 @@ limitations under the License.
             <version>${commons-lang3.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.13</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>

@@ -26,7 +26,7 @@ import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonToRowDataConverters;
+import org.apache.flink.formats.json.JsonToRowDataInSourceRecordConverters;
 import org.apache.flink.formats.json.JsonToSourceRecordConverter;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.GenericRowData;
@@ -66,7 +66,8 @@ public class SourceRecordToRecordDataConverterTest {
             new JsonToSourceRecordConverter(
                     tablePath,
                     new RowType(Collections.emptyList()),
-                    new JsonToRowDataConverters(false, false, timestampFormat, ZoneOffset.UTC),
+                    new JsonToRowDataInSourceRecordConverters(
+                            false, false, timestampFormat, ZoneOffset.UTC),
                     false,
                     false,
                     false);

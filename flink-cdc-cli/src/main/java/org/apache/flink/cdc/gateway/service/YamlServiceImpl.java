@@ -80,6 +80,17 @@ public class YamlServiceImpl implements YamlService {
         pipelineExecution.execute();
     }
 
+    @Override
+    public String convertCxasToCdcYaml(
+            String s,
+            Configuration configuration,
+            MutableURLClassLoader mutableURLClassLoader,
+            ArtifactFetcher artifactFetcher,
+            ArtifactFinder artifactFinder)
+            throws Exception {
+        return "";
+    }
+
     @VisibleForTesting
     public static PipelineExecution composeExecution(
             String yamlContent,

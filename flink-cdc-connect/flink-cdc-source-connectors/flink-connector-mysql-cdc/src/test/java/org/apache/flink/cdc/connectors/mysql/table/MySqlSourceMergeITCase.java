@@ -23,7 +23,7 @@ import org.apache.flink.table.api.StatementSet;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
 
 import org.junit.After;
 import org.junit.Rule;
@@ -260,8 +260,8 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                         .map(s -> String.format(s, customerDatabase.getDatabaseName()))
                         .collect(Collectors.toList());
 
-        List<String> sink1Result = TestValuesTableFactory.getRawResults("sink1");
-        List<String> sink2Result = TestValuesTableFactory.getRawResults("sink2");
+        List<String> sink1Result = TestValuesTableFactory.getRawResultsAsStrings("sink1");
+        List<String> sink2Result = TestValuesTableFactory.getRawResultsAsStrings("sink2");
 
         assertEqualsInAnyOrder(expectedSink1, sink1Result);
         assertEqualsInAnyOrder(expectedSink2, sink2Result);
@@ -452,8 +452,8 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                         .map(s -> String.format(s, customerDatabase.getDatabaseName()))
                         .collect(Collectors.toList());
 
-        List<String> sink1Result = TestValuesTableFactory.getRawResults("sink1");
-        List<String> sink2Result = TestValuesTableFactory.getRawResults("sink2");
+        List<String> sink1Result = TestValuesTableFactory.getRawResultsAsStrings("sink1");
+        List<String> sink2Result = TestValuesTableFactory.getRawResultsAsStrings("sink2");
 
         assertEqualsInAnyOrder(expectedSink1, sink1Result);
         assertEqualsInAnyOrder(expectedSink2, sink2Result);
@@ -471,7 +471,7 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
     private static int sinkSize(String sinkName) {
         synchronized (TestValuesTableFactory.class) {
             try {
-                return TestValuesTableFactory.getRawResults(sinkName).size();
+                return TestValuesTableFactory.getRawResultsAsStrings(sinkName).size();
             } catch (IllegalArgumentException e) {
                 // job is not started yet
                 return 0;

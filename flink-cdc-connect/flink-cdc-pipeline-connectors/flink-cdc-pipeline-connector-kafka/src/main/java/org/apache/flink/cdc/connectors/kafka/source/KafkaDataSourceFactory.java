@@ -64,9 +64,9 @@ import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOption
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.TOPIC_PATTERN;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.VALUE_FORMAT;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getBoundedOptions;
-import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getSourceTopicPattern;
-import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getSourceTopics;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getStartupOptions;
+import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getTopicPattern;
+import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getTopics;
 
 /** A {@link DataSourceFactory} to create {@link KafkaDataSource}. */
 public class KafkaDataSourceFactory implements DataSourceFactory {
@@ -147,8 +147,8 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                 recordSchemaParser,
                 maxFetchRecords,
                 isParallelMetadataSource(formatConfig, jsonSerializationType),
-                getSourceTopics(configuration),
-                getSourceTopicPattern(configuration),
+                getTopics(configuration),
+                getTopicPattern(configuration),
                 kafkaProperties,
                 startupOptions.startupMode,
                 startupOptions.specificOffsets,
