@@ -29,6 +29,7 @@ import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.schema.Schema;
+import org.apache.flink.cdc.common.sink.FlinkSinkFunctionProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.types.RowType;
@@ -37,11 +38,15 @@ import org.apache.flink.cdc.connectors.starrocks.sink.utils.StarRocksSinkTestBas
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -50,12 +55,21 @@ import java.util.List;
 import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.JDBC_URL;
 import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.LOAD_URL;
 import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.PASSWORD;
+import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.SINK_VERSION;
 import static org.apache.flink.cdc.connectors.starrocks.sink.StarRocksDataSinkOptions.USERNAME;
 
 /** IT tests for {@link StarRocksDataSink}. */
+@RunWith(Parameterized.class)
 public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
+
+    @Parameterized.Parameters(name = "Sink version: {0}")
+    public static Object[] sinkVersions() {
+        return new Object[][] {new Object[] {"V1"}, new Object[] {"V2"}};
+    }
+
+    @Parameterized.Parameter public String sinkVersion;
 
     @BeforeClass
     public static void before() {
@@ -198,15 +212,26 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
 
         Configuration config =
                 new Configuration()
+                        .set(SINK_VERSION, sinkVersion)
                         .set(LOAD_URL, STARROCKS_CONTAINER.getLoadUrl())
                         .set(JDBC_URL, STARROCKS_CONTAINER.getJdbcUrl())
                         .set(USERNAME, StarRocksContainer.STARROCKS_USERNAME)
                         .set(PASSWORD, StarRocksContainer.STARROCKS_PASSWORD);
 
-        Sink<Event> starRocksSink =
-                ((FlinkSinkProvider) createStarRocksDataSink(config).getEventSinkProvider())
-                        .getSink();
-        stream.sinkTo(starRocksSink);
+        if (sinkVersion.equals("V1")) {
+            SinkFunction<Event> starRocksSinkFunction =
+                    ((FlinkSinkFunctionProvider)
+                                    createStarRocksDataSink(config).getEventSinkProvider())
+                            .getSinkFunction();
+            stream.addSink(starRocksSinkFunction);
+        } else if (sinkVersion.equals("V2")) {
+            Sink<Event> starRocksSink =
+                    ((FlinkSinkProvider) createStarRocksDataSink(config).getEventSinkProvider())
+                            .getSink();
+            stream.sinkTo(starRocksSink);
+        } else {
+            Assert.fail("Unknown sink version: " + sinkVersion);
+        }
 
         env.execute("Values to StarRocks Sink");
 

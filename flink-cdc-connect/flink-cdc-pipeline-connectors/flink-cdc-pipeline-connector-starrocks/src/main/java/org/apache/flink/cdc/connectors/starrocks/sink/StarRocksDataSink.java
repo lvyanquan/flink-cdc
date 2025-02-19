@@ -21,11 +21,13 @@ import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
+import org.apache.flink.cdc.common.sink.FlinkSinkFunctionProvider;
 import org.apache.flink.cdc.common.sink.FlinkSinkProvider;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 
 import com.starrocks.connector.flink.table.sink.SinkFunctionFactory;
 import com.starrocks.connector.flink.table.sink.StarRocksSinkOptions;
+import com.starrocks.connector.flink.table.sink.StarRocksSinkSemantic;
 import com.starrocks.connector.flink.table.sink.v2.StarRocksSink;
 
 import java.io.Serializable;
@@ -63,10 +65,20 @@ public class StarRocksDataSink implements DataSink, Serializable {
 
     @Override
     public EventSinkProvider getEventSinkProvider() {
-        StarRocksSink<Event> starRocksSink =
-                SinkFunctionFactory.createSink(
-                        sinkOptions, new EventRecordSerializationSchema(zoneId));
-        return FlinkSinkProvider.of(starRocksSink);
+        switch (detectVersion(sinkOptions)) {
+            case V1:
+                StarRocksDynamicEventSink starRocksSinkFunction =
+                        new StarRocksDynamicEventSink(sinkOptions, zoneId);
+                return FlinkSinkFunctionProvider.of(starRocksSinkFunction);
+            case V2:
+                StarRocksSink<Event> starRocksSink =
+                        SinkFunctionFactory.createSink(
+                                sinkOptions, new EventRecordSerializationSchema(zoneId));
+                return FlinkSinkProvider.of(starRocksSink);
+            default:
+                throw new UnsupportedOperationException(
+                        "Unsupported StarRock sink version: " + sinkOptions.getSinkVersion());
+        }
     }
 
     @Override
@@ -82,5 +94,33 @@ public class StarRocksDataSink implements DataSink, Serializable {
     @VisibleForTesting
     public ZoneId getZoneId() {
         return zoneId;
+    }
+
+    @VisibleForTesting
+    static SinkVersion detectVersion(StarRocksSinkOptions sinkOptions) {
+        switch (sinkOptions.getSinkVersion().toUpperCase()) {
+            case "V1":
+                return SinkVersion.V1;
+            case "V2":
+                return SinkVersion.V2;
+            case "AUTO":
+                if (StarRocksSinkSemantic.AT_LEAST_ONCE.equals(sinkOptions.getSemantic())) {
+                    return SinkVersion.V2;
+                }
+
+                if (sinkOptions.isSupportTransactionStreamLoad()) {
+                    return SinkVersion.V2;
+                } else {
+                    return SinkVersion.V1;
+                }
+            default:
+                throw new IllegalArgumentException(
+                        "Unexpected sink version: " + sinkOptions.getSinkVersion());
+        }
+    }
+
+    enum SinkVersion {
+        V1,
+        V2
     }
 }
