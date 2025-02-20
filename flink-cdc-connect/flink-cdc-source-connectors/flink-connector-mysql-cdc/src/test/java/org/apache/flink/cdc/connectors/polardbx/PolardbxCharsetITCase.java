@@ -192,7 +192,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                 Statement statement = connection.createStatement()) {
             statement.execute(
                     String.format(
-                            "/*TDDL:FORBID_EXECUTE_DML_ALL=FALSE*/UPDATE %s.%s SET table_id = table_id + 10;",
+                            "UPDATE %s.%s SET table_id = table_id + 10 WHERE table_id > 0 AND table_id < 10;",
                             DATABASE, testName));
         }
         assertEqualsInAnyOrder(
