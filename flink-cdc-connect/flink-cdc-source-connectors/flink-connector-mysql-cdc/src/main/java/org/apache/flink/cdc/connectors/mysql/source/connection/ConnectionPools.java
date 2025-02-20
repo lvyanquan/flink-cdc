@@ -32,4 +32,7 @@ public interface ConnectionPools {
      */
     HikariDataSource getOrCreateConnectionPool(
             ConnectionPoolId poolId, MySqlSourceConfig sourceConfig);
+
+    /** Close a connection pool. */
+    void closeConnectionPoolId(ConnectionPoolId poolId);
 }

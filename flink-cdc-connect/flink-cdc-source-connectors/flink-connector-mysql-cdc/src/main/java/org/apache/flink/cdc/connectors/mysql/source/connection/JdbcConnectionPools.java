@@ -56,6 +56,15 @@ public class JdbcConnectionPools implements ConnectionPools {
         }
     }
 
+    @Override
+    public void closeConnectionPoolId(ConnectionPoolId poolId) {
+        synchronized (pools) {
+            if (pools.containsKey(poolId)) {
+                pools.remove(poolId).close();
+            }
+        }
+    }
+
     private class InnerHikariDataSource extends HikariDataSource {
         private final ConnectionPoolId poolId;
         private final MySqlSourceConfig sourceConfig;
