@@ -72,13 +72,13 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
 
     private final boolean encodeDecimalAsPlainNumber;
 
+    private final boolean ignoreNullFields;
+
     private final ZoneId zoneId;
 
     private InitializationContext context;
 
     private final boolean writeNullProperties;
-
-    private final boolean ignoreNullFields;
 
     /** key for extracting operation timestamp in {@link DataChangeEvent#meta()}. */
     public static final String OPERATION_TIMESTAMP_KEY = "op_ts";
@@ -87,18 +87,18 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<Even
             TimestampFormat timestampFormat,
             JsonFormatOptions.MapNullKeyMode mapNullKeyMode,
             String mapNullKeyLiteral,
-            boolean encodeDecimalAsPlainNumber,
-            boolean writeNullProperties,
             ZoneId zoneId,
-            boolean ignoreNullFields) {
+            boolean encodeDecimalAsPlainNumber,
+            boolean ignoreNullFields,
+            boolean writeNullProperties) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;
         this.encodeDecimalAsPlainNumber = encodeDecimalAsPlainNumber;
         this.zoneId = zoneId;
         jsonSerializers = new HashMap<>();
-        this.writeNullProperties = writeNullProperties;
         this.ignoreNullFields = ignoreNullFields;
+        this.writeNullProperties = writeNullProperties;
     }
 
     @Override

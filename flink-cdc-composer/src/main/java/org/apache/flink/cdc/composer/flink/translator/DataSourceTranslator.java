@@ -108,7 +108,7 @@ public class DataSourceTranslator {
     }
 
     public DataSource createDataSource(
-            SourceDef sourceDef, StreamExecutionEnvironment env, Configuration pipelineConfig) {
+            SourceDef sourceDef, Configuration pipelineConfig, StreamExecutionEnvironment env) {
         // Search the data source factory
         DataSourceFactory sourceFactory = findSourceFactory(sourceDef.getType(), env);
         DataSource dataSource =

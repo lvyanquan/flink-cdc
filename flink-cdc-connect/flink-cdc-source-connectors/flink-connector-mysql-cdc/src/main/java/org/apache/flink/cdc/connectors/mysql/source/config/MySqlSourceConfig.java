@@ -68,6 +68,8 @@ public class MySqlSourceConfig implements Serializable {
     private final Properties jdbcProperties;
     private final Map<ObjectPath, String> chunkKeyColumns;
     private final boolean skipSnapshotBackfill;
+    private final boolean parseOnLineSchemaChanges;
+    public static boolean useLegacyJsonFormat = true;
 
     // --------------------------------------------------------------------------------------------
     // Debezium Configurations
@@ -75,6 +77,7 @@ public class MySqlSourceConfig implements Serializable {
     private final Properties dbzProperties;
     private final Configuration dbzConfiguration;
     private final MySqlConnectorConfig dbzMySqlConfig;
+    private final boolean treatTinyInt1AsBoolean;
 
     // --------------------------------------------------------------------------------------------
     // RDS Configurations
@@ -109,6 +112,9 @@ public class MySqlSourceConfig implements Serializable {
             Properties jdbcProperties,
             Map<ObjectPath, String> chunkKeyColumns,
             boolean skipSnapshotBackfill,
+            boolean parseOnLineSchemaChanges,
+            boolean treatTinyInt1AsBoolean,
+            boolean useLegacyJsonFormat,
             @Nullable AliyunRdsConfig rdsConfig,
             AssignStrategy scanChunkAssignStrategy) {
         this.hostname = checkNotNull(hostname);
@@ -138,6 +144,9 @@ public class MySqlSourceConfig implements Serializable {
         this.jdbcProperties = jdbcProperties;
         this.chunkKeyColumns = chunkKeyColumns;
         this.skipSnapshotBackfill = skipSnapshotBackfill;
+        this.parseOnLineSchemaChanges = parseOnLineSchemaChanges;
+        this.treatTinyInt1AsBoolean = treatTinyInt1AsBoolean;
+        this.useLegacyJsonFormat = useLegacyJsonFormat;
         this.rdsConfig = rdsConfig;
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
     }
@@ -223,6 +232,10 @@ public class MySqlSourceConfig implements Serializable {
         return closeIdleReaders;
     }
 
+    public boolean isParseOnLineSchemaChanges() {
+        return parseOnLineSchemaChanges;
+    }
+
     public Properties getDbzProperties() {
         return dbzProperties;
     }
@@ -268,6 +281,10 @@ public class MySqlSourceConfig implements Serializable {
         return skipSnapshotBackfill;
     }
 
+    public boolean isTreatTinyInt1AsBoolean() {
+        return treatTinyInt1AsBoolean;
+    }
+
     public boolean isReadRdsArchivedBinlogEnabled() {
         return rdsConfig != null;
     }
@@ -275,10 +292,6 @@ public class MySqlSourceConfig implements Serializable {
     @Nullable
     public AliyunRdsConfig getRdsConfig() {
         return rdsConfig;
-    }
-
-    public boolean isTreatTinyintAsBoolean() {
-        return Boolean.parseBoolean(getJdbcProperties().getProperty("tinyInt1isBit", "true"));
     }
 
     public AssignStrategy getScanChunkAssignStrategy() {

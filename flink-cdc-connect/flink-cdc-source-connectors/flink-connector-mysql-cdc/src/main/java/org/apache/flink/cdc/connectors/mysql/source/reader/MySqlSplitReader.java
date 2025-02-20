@@ -56,6 +56,7 @@ public class MySqlSplitReader implements SplitReader<SourceRecords, MySqlSplit> 
     private final MySqlSourceConfig sourceConfig;
     private final int subtaskId;
     private final MySqlSourceReaderContext context;
+
     private final SnapshotPhaseHooks snapshotHooks;
     private final MySqlSourceReaderMetrics sourceReaderMetrics;
 

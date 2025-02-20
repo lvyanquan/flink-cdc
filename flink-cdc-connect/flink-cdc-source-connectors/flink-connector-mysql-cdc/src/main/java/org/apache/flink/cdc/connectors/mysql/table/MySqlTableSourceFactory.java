@@ -134,9 +134,13 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
 
         boolean enableParallelRead =
                 config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
-        boolean closeIdleReaders = config.get(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        boolean closeIdleReaders =
+                config.get(MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         boolean skipSnapshotBackFill =
                 config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+        boolean parseOnLineSchemaChanges =
+                config.get(MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES);
+        boolean useLegacyJsonFormat = config.get(MySqlSourceOptions.USE_LEGACY_JSON_FORMAT);
         boolean readChangelogAsAppend = config.get(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
         boolean scanParallelDeserializeChangelog =
                 config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
@@ -210,6 +214,8 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                 isShardingTable,
                 chunkKeyColumn,
                 skipSnapshotBackFill,
+                parseOnLineSchemaChanges,
+                useLegacyJsonFormat,
                 rdsConfig,
                 scanOnlyDeserializeCapturedTablesChangelog,
                 readChangelogAsAppend,
@@ -257,10 +263,12 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
         options.add(MySqlSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         options.add(MySqlSourceOptions.CONNECT_MAX_RETRIES);
         options.add(MySqlSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED);
-        options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        options.add(MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         options.add(MySqlSourceOptions.HEARTBEAT_INTERVAL);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+        options.add(MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES);
+        options.add(MySqlSourceOptions.USE_LEGACY_JSON_FORMAT);
         options.add(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
         options.add(SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);

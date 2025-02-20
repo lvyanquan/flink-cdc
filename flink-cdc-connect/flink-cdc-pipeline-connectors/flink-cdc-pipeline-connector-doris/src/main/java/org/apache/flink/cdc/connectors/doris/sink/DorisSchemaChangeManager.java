@@ -50,8 +50,8 @@ public class DorisSchemaChangeManager extends SchemaChangeManager {
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    public DorisSchemaChangeManager(DorisOptions dorisOptions) {
-        super(dorisOptions);
+    public DorisSchemaChangeManager(DorisOptions dorisOptions, String charsetEncoding) {
+        super(dorisOptions, charsetEncoding);
     }
 
     public boolean truncateTable(String databaseName, String tableName)

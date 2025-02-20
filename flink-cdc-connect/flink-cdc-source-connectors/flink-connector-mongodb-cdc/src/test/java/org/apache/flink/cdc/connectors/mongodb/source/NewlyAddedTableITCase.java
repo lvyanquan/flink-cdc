@@ -42,6 +42,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.Timeout;
+import org.junit.runners.Parameterized;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -56,6 +57,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static org.apache.flink.cdc.connectors.mongodb.utils.MongoDBContainer.FLINK_USER;
@@ -72,6 +74,15 @@ public class NewlyAddedTableITCase extends MongoDBSourceTestBase {
     private String customerDatabase;
     protected static final int DEFAULT_PARALLELISM = 4;
 
+    public NewlyAddedTableITCase(String mongoVersion) {
+        super(mongoVersion);
+    }
+
+    @Parameterized.Parameters(name = "mongoVersion: {0}")
+    public static Object[] parameters() {
+        return Stream.of(getMongoVersions()).map(e -> new Object[] {e}).toArray();
+    }
+
     private final ScheduledExecutorService mockChangelogExecutor =
             Executors.newScheduledThreadPool(1);
 
@@ -82,7 +93,7 @@ public class NewlyAddedTableITCase extends MongoDBSourceTestBase {
         // prepare initial data for given collection
         String collectionName = "produce_changelog";
         // enable system-level fulldoc pre & post image feature
-        CONTAINER.executeCommand(
+        mongoContainer.executeCommand(
                 "use admin; db.runCommand({ setClusterParameter: { changeStreamOptions: { preAndPostImages: { expireAfterSeconds: 'off' } } } })");
 
         // mock continuous changelog during the newly added collections capturing process
@@ -849,7 +860,7 @@ public class NewlyAddedTableITCase extends MongoDBSourceTestBase {
             // make initial data for given collection.
             String cityName = collectionName.split("_")[1];
             // B - enable collection-level fulldoc pre & post image for change capture collection
-            CONTAINER.executeCommandInDatabase(
+            mongoContainer.executeCommandInDatabase(
                     String.format(
                             "db.createCollection('%s'); db.runCommand({ collMod: '%s', changeStreamPreAndPostImages: { enabled: true } })",
                             collectionName, collectionName),
@@ -986,7 +997,7 @@ public class NewlyAddedTableITCase extends MongoDBSourceTestBase {
                         + " 'scan.newly-added-table.enabled' = 'true'"
                         + " %s"
                         + ")",
-                CONTAINER.getHostAndPort(),
+                mongoContainer.getHostAndPort(),
                 FLINK_USER,
                 FLINK_USER_PASSWORD,
                 customerDatabase,

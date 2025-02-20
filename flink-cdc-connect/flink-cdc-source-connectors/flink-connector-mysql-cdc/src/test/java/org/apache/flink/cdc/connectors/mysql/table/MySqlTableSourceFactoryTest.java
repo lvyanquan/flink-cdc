@@ -57,10 +57,12 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CONNECT_MAX_RETRIES;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CONNECT_TIMEOUT;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.HEARTBEAT_INTERVAL;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.USE_LEGACY_JSON_FORMAT;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -138,6 +140,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -192,6 +196,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         "testCol",
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -242,6 +248,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -290,6 +298,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -315,6 +325,7 @@ public class MySqlTableSourceFactoryTest {
         options.put("scan.incremental.snapshot.chunk.key-column", "testCol");
         options.put("scan.incremental.close-idle-reader.enabled", "true");
         options.put("scan.incremental.snapshot.backfill.skip", "true");
+        options.put("use.legacy.json.format", "true");
         options.put("scan.only.deserialize.captured.tables.changelog.enabled", "true");
         options.put("scan.read-changelog-as-append-only.enabled", "true");
         options.put("scan.parallel-deserialize-changelog.enabled", "true");
@@ -358,6 +369,8 @@ public class MySqlTableSourceFactoryTest {
                         SOURCE_TABLE_IDENTIFIER,
                         false,
                         "testCol",
+                        true,
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         true,
                         null,
                         true,
@@ -421,6 +434,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -467,6 +482,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -514,6 +531,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -562,6 +581,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -608,6 +629,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -659,6 +682,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
+                        USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
                         false,
                         false,
@@ -790,6 +815,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         null,
                         false,
+                        false,
+                        true,
                         expectedConfig,
                         false,
                         false,
@@ -1033,6 +1060,55 @@ public class MySqlTableSourceFactoryTest {
                             + "rds.region-id";
             assertTrue(ExceptionUtils.findThrowableWithMessage(t, msg).isPresent());
         }
+    }
+
+    @Test
+    public void testEnablingExperimentalOptions() {
+        Map<String, String> properties = getAllOptions();
+        properties.put("scan.parse.online.schema.changes.enabled", "true");
+        properties.put("use.legacy.json.format", "true");
+
+        // validation for source
+        DynamicTableSource actualSource = createTableSource(properties);
+        MySqlTableSource expectedSource =
+                new MySqlTableSource(
+                        SCHEMA,
+                        3306,
+                        MY_LOCALHOST,
+                        MY_DATABASE,
+                        MY_TABLE,
+                        MY_USERNAME,
+                        MY_PASSWORD,
+                        ZoneId.systemDefault(),
+                        PROPERTIES,
+                        null,
+                        false,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
+                        CHUNK_META_GROUP_SIZE.defaultValue(),
+                        SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
+                        CONNECT_TIMEOUT.defaultValue(),
+                        CONNECT_MAX_RETRIES.defaultValue(),
+                        CONNECTION_POOL_SIZE.defaultValue(),
+                        CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND.defaultValue(),
+                        CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND.defaultValue(),
+                        StartupOptions.initial(),
+                        false,
+                        false,
+                        new Properties(),
+                        HEARTBEAT_INTERVAL.defaultValue(),
+                        SOURCE_TABLE_IDENTIFIER,
+                        false,
+                        null,
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP.defaultValue(),
+                        true,
+                        true,
+                        null,
+                        false,
+                        false,
+                        false,
+                        AssignStrategy.DESCENDING_ORDER,
+                        2);
+        assertEquals(expectedSource, actualSource);
     }
 
     private Map<String, String> getAllOptions() {

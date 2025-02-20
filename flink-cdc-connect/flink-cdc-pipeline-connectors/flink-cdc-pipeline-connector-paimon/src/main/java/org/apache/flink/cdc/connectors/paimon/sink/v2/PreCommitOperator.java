@@ -17,10 +17,8 @@
 
 package org.apache.flink.cdc.connectors.paimon.sink.v2;
 
-import org.apache.flink.api.common.state.OperatorStateStore;
 import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage;
@@ -30,14 +28,13 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.flink.FlinkCatalogFactory;
+import org.apache.paimon.flink.sink.Committer;
 import org.apache.paimon.flink.sink.MultiTableCommittable;
 import org.apache.paimon.flink.sink.StoreMultiCommitter;
 import org.apache.paimon.manifest.WrappedManifestCommittable;
 import org.apache.paimon.options.Options;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,7 +48,7 @@ public class PreCommitOperator
                 CommittableMessage<MultiTableCommittable>> {
     protected static final Logger LOGGER = LoggerFactory.getLogger(PreCommitOperator.class);
 
-    private String commitUser;
+    private final String commitUser;
 
     private final Options catalogOptions;
 
@@ -85,33 +82,8 @@ public class PreCommitOperator
             this.storeMultiCommitter =
                     new StoreMultiCommitter(
                             () -> catalog,
-                            new org.apache.paimon.flink.sink.Committer.Context() {
-                                @Override
-                                public String commitUser() {
-                                    return commitUser;
-                                }
-
-                                @Nullable
-                                @Override
-                                public OperatorMetricGroup metricGroup() {
-                                    return null;
-                                }
-
-                                @Override
-                                public boolean streamingCheckpointEnabled() {
-                                    return true;
-                                }
-
-                                @Override
-                                public boolean isRestored() {
-                                    return false;
-                                }
-
-                                @Override
-                                public OperatorStateStore stateStore() {
-                                    return null;
-                                }
-                            });
+                            Committer.createContext(
+                                    commitUser, getMetricGroup(), true, false, null));
         }
         if (element.getValue() instanceof CommittableWithLineage) {
             multiTableCommittables.add(
@@ -148,10 +120,11 @@ public class PreCommitOperator
             multiTableCommittables.forEach(
                     (multiTableCommittable) ->
                             LOGGER.debug(
-                                    "Try to commit: "
-                                            + multiTableCommittable
-                                            + " in checkpoint "
-                                            + checkpointId));
+                                    "Try to commit for {}.{} : {} in checkpoint {}",
+                                    multiTableCommittable.getDatabase(),
+                                    multiTableCommittable.getTable(),
+                                    multiTableCommittables,
+                                    checkpointId));
             WrappedManifestCommittable wrappedManifestCommittable =
                     storeMultiCommitter.combine(checkpointId, checkpointId, multiTableCommittables);
             storeMultiCommitter.commit(Collections.singletonList(wrappedManifestCommittable));

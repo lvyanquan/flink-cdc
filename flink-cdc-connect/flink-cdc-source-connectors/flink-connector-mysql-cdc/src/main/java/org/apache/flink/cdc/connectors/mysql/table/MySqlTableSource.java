@@ -132,6 +132,8 @@ public class MySqlTableSource
     private final Duration heartbeatInterval;
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     final boolean skipSnapshotBackFill;
+    final boolean parseOnlineSchemaChanges;
+    private final boolean useLegacyJsonFormat;
     @Nullable private final AliyunRdsConfig rdsConfig;
 
     private final boolean scanOnlyDeserializeCapturedTablesChangelog;
@@ -193,6 +195,8 @@ public class MySqlTableSource
             boolean isShardingTable,
             @Nullable String chunkKeyColumn,
             boolean skipSnapshotBackFill,
+            boolean parseOnlineSchemaChanges,
+            boolean useLegacyJsonFormat,
             @Nullable AliyunRdsConfig rdsConfig,
             boolean scanOnlyDeserializeCapturedTablesChangelog,
             boolean readChangelogAsAppend,
@@ -222,6 +226,7 @@ public class MySqlTableSource
         this.scanNewlyAddedTableEnabled = scanNewlyAddedTableEnabled;
         this.closeIdleReaders = closeIdleReaders;
         this.jdbcProperties = jdbcProperties;
+        this.parseOnlineSchemaChanges = parseOnlineSchemaChanges;
         this.heartbeatInterval = heartbeatInterval;
         if (chunkKeyColumn != null) {
             this.chunkKeyColumns.put(new ObjectPath(database, tableName), chunkKeyColumn);
@@ -234,6 +239,7 @@ public class MySqlTableSource
                 physicalSchemaWithSystemData.toPhysicalRowDataType());
         this.metadataKeys = Collections.emptyList();
         this.skipSnapshotBackFill = skipSnapshotBackFill;
+        this.useLegacyJsonFormat = useLegacyJsonFormat;
         this.sourceTablePath = sourceTablePath;
         this.isEvolvingSource = false;
         this.capturedTables = new HashSet<>();
@@ -354,6 +360,8 @@ public class MySqlTableSource
                     .jdbcProperties(jdbcProperties)
                     .heartbeatInterval(heartbeatInterval)
                     .skipSnapshotBackfill(skipSnapshotBackFill)
+                    .parseOnLineSchemaChanges(parseOnlineSchemaChanges)
+                    .useLegacyJsonFormat(useLegacyJsonFormat)
                     .chunkKeyColumns(chunkKeyColumns)
                     .scanOnlyDeserializeCapturedTablesChangelog(
                             scanOnlyDeserializeCapturedTablesChangelog)
@@ -482,6 +490,8 @@ public class MySqlTableSource
                         isShardingTable,
                         null,
                         skipSnapshotBackFill,
+                        parseOnlineSchemaChanges,
+                        useLegacyJsonFormat,
                         rdsConfig,
                         scanOnlyDeserializeCapturedTablesChangelog,
                         readChangelogAsAppend,
@@ -513,6 +523,7 @@ public class MySqlTableSource
                 && fetchSize == that.fetchSize
                 && distributionFactorUpper == that.distributionFactorUpper
                 && distributionFactorLower == that.distributionFactorLower
+                && scanNewlyAddedTableEnabled == that.scanNewlyAddedTableEnabled
                 && closeIdleReaders == that.closeIdleReaders
                 && Objects.equals(hostname, that.hostname)
                 && Objects.equals(database, that.database)
@@ -526,9 +537,11 @@ public class MySqlTableSource
                 && Objects.equals(connectMaxRetries, that.connectMaxRetries)
                 && Objects.equals(connectionPoolSize, that.connectionPoolSize)
                 && Objects.equals(startupOptions, that.startupOptions)
-                && Objects.equals(scanNewlyAddedTableEnabled, that.scanNewlyAddedTableEnabled)
                 && Objects.equals(jdbcProperties, that.jdbcProperties)
                 && Objects.equals(heartbeatInterval, that.heartbeatInterval)
+                && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
+                && parseOnlineSchemaChanges == that.parseOnlineSchemaChanges
+                && useLegacyJsonFormat == that.useLegacyJsonFormat
                 && Objects.equals(tablePhysicalSchemas, that.tablePhysicalSchemas)
                 && Objects.equals(tableProducedDataTypes, that.tableProducedDataTypes)
                 && Objects.equals(metadataKeys, that.metadataKeys)
@@ -537,7 +550,6 @@ public class MySqlTableSource
                 && Objects.equals(isShardingTable, that.isShardingTable)
                 && Objects.equals(capturedTables, that.capturedTables)
                 && Objects.equals(chunkKeyColumns, that.chunkKeyColumns)
-                && Objects.equals(skipSnapshotBackFill, that.skipSnapshotBackFill)
                 && Objects.equals(rdsConfig, that.rdsConfig)
                 && Objects.equals(
                         scanOnlyDeserializeCapturedTablesChangelog,
@@ -580,12 +592,14 @@ public class MySqlTableSource
                 closeIdleReaders,
                 jdbcProperties,
                 heartbeatInterval,
+                skipSnapshotBackFill,
+                parseOnlineSchemaChanges,
+                useLegacyJsonFormat,
                 isEvolvingSource,
                 sourceTablePath,
                 isShardingTable,
                 capturedTables,
                 chunkKeyColumns,
-                skipSnapshotBackFill,
                 rdsConfig,
                 readChangelogAsAppend,
                 scanParallelDeserializeChangelog,

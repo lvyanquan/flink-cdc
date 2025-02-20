@@ -29,7 +29,8 @@ limitations under the License.
 
     <properties>
         <mysql.driver.version>8.0.27</mysql.driver.version>
-        <starrocks.connector.version>1.2.9_flink-${flink.major.version}</starrocks.connector.version>
+        <!-- TODO: Update this, when StarRocks releases a 1.20 compatible connector. -->
+        <starrocks.connector.version>1.2.10_flink-1.19</starrocks.connector.version>
         <paimon-ali.version>0.9-ali-8-SNAPSHOT</paimon-ali.version>
     </properties>
 
@@ -91,9 +92,29 @@ limitations under the License.
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-pipeline-connector-kafka</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.paimon</groupId>
             <artifactId>paimon-ali-vvr-8.0-vvp</artifactId>
             <version>${paimon-ali.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-oceanbase-cdc</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-pipeline-connector-maxcompute</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -112,6 +133,12 @@ limitations under the License.
         <!-- testcontainers -->
         <dependency>
             <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
             <artifactId>mysql</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
@@ -122,6 +149,13 @@ limitations under the License.
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
             <version>${scala.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -182,6 +216,7 @@ limitations under the License.
                 </executions>
                 <configuration>
                     <artifactItems>
+
                         <artifactItem>
                             <groupId>mysql</groupId>
                             <artifactId>mysql-connector-java</artifactId>
@@ -241,6 +276,37 @@ limitations under the License.
                             <outputDirectory>${project.build.directory}/dependencies
                             </outputDirectory>
                         </artifactItem>
+
+                        <artifactItem>
+                            <groupId>org.apache.flink</groupId>
+                            <artifactId>flink-cdc-pipeline-connector-kafka</artifactId>
+                            <version>${project.version}</version>
+                            <destFileName>kafka-cdc-pipeline-connector.jar</destFileName>
+                            <type>jar</type>
+                            <outputDirectory>${project.build.directory}/dependencies
+                            </outputDirectory>
+                        </artifactItem>
+
+                        <artifactItem>
+                            <groupId>org.apache.flink</groupId>
+                            <artifactId>flink-cdc-pipeline-connector-oceanbase</artifactId>
+                            <version>${project.version}</version>
+                            <destFileName>oceanbase-cdc-pipeline-connector.jar</destFileName>
+                            <type>jar</type>
+                            <outputDirectory>${project.build.directory}/dependencies
+                            </outputDirectory>
+                        </artifactItem>
+
+                        <artifactItem>
+                            <groupId>org.apache.flink</groupId>
+                            <artifactId>flink-cdc-pipeline-connector-maxcompute</artifactId>
+                            <version>${project.version}</version>
+                            <destFileName>maxcompute-cdc-pipeline-connector.jar</destFileName>
+                            <type>jar</type>
+                            <outputDirectory>${project.build.directory}/dependencies
+                            </outputDirectory>
+                        </artifactItem>
+
                         <artifactItem>
                             <groupId>org.apache.flink</groupId>
                             <artifactId>flink-cdc-pipeline-connector-paimon</artifactId>
@@ -250,6 +316,7 @@ limitations under the License.
                             <outputDirectory>${project.build.directory}/dependencies
                             </outputDirectory>
                         </artifactItem>
+
                         <artifactItem>
                             <groupId>org.apache.flink</groupId>
                             <artifactId>flink-shaded-hadoop-2-uber</artifactId>
@@ -259,6 +326,7 @@ limitations under the License.
                             <outputDirectory>${project.build.directory}/dependencies
                             </outputDirectory>
                         </artifactItem>
+
                         <artifactItem>
                             <groupId>org.apache.paimon</groupId>
                             <artifactId>paimon-ali-vvr-8.0-vvp</artifactId>

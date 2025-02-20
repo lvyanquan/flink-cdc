@@ -30,7 +30,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Remove duplicate {@link FlushEvent} created by {@link BucketAssignOperator}. */
+/** Align {@link FlushEvent}s broadcasted by {@link BucketAssignOperator}. */
 public class FlushEventAlignmentOperator extends AbstractStreamOperator<Event>
         implements OneInputStreamOperator<Event, Event> {
 
@@ -52,8 +52,8 @@ public class FlushEventAlignmentOperator extends AbstractStreamOperator<Event>
     @Override
     public void open() throws Exception {
         super.open();
-        this.totalTasksNumber = getRuntimeContext().getNumberOfParallelSubtasks();
-        this.currentSubTaskId = getRuntimeContext().getIndexOfThisSubtask();
+        this.totalTasksNumber = getRuntimeContext().getTaskInfo().getNumberOfParallelSubtasks();
+        this.currentSubTaskId = getRuntimeContext().getTaskInfo().getIndexOfThisSubtask();
         sourceTaskIdToAssignBucketSubTaskIds = new HashMap<>();
     }
 
@@ -69,16 +69,20 @@ public class FlushEventAlignmentOperator extends AbstractStreamOperator<Event>
             int subtaskId = bucketWrapperFlushEvent.getBucketAssignTaskId();
             subTaskIds.add(subtaskId);
             if (subTaskIds.size() == totalTasksNumber) {
-                LOG.info(currentSubTaskId + " send FlushEvent of " + sourceSubTaskId);
-                output.collect(new StreamRecord<>(new FlushEvent(sourceSubTaskId)));
+                LOG.info("{} send FlushEvent of {}", currentSubTaskId, sourceSubTaskId);
+                output.collect(
+                        new StreamRecord<>(
+                                new FlushEvent(
+                                        sourceSubTaskId,
+                                        bucketWrapperFlushEvent.getTableIds(),
+                                        bucketWrapperFlushEvent.getSchemaChangeEventType())));
                 sourceTaskIdToAssignBucketSubTaskIds.remove(sourceSubTaskId);
             } else {
                 LOG.info(
-                        currentSubTaskId
-                                + " collect FlushEvent of "
-                                + sourceSubTaskId
-                                + " with subtask "
-                                + subtaskId);
+                        "{} collect FlushEvent of {} with subtask {}",
+                        currentSubTaskId,
+                        sourceSubTaskId,
+                        subtaskId);
                 sourceTaskIdToAssignBucketSubTaskIds.put(sourceSubTaskId, subTaskIds);
             }
         } else {

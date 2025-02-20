@@ -28,6 +28,7 @@ import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.util.TestLogger;
 
+import com.fasterxml.jackson.core.Version;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Volume;
@@ -64,6 +65,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.flink.util.Preconditions.checkState;
@@ -71,7 +73,6 @@ import static org.apache.flink.util.Preconditions.checkState;
 /** Test environment running pipeline job on Flink containers. */
 @RunWith(Parameterized.class)
 public abstract class PipelineTestEnvironment extends TestLogger {
-
     private static final Logger LOG = LoggerFactory.getLogger(PipelineTestEnvironment.class);
 
     @Parameterized.Parameter public Integer parallelism;
@@ -94,6 +95,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                     "taskmanager.bind-host: 0.0.0.0",
                     "rest.bind-address: 0.0.0.0",
                     "rest.address: 0.0.0.0",
+                    "jobmanager.memory.process.size: 1GB",
                     "query.server.port: 6125",
                     "blob.server.port: 6124",
                     "taskmanager.numberOfTaskSlots: 10",
@@ -109,12 +111,12 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Nullable protected RestClusterClient<StandaloneClusterId> restClusterClient;
-
     protected GenericContainer<?> jobManager;
     protected GenericContainer<?> taskManager;
     protected Volume sharedVolume = new Volume("/tmp/shared");
 
     protected ToStringConsumer jobManagerConsumer;
+
     protected ToStringConsumer taskManagerConsumer;
 
     @Before
@@ -205,7 +207,6 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         String commands =
                 "/tmp/flinkCDC/bin/flink-cdc.sh /tmp/flinkCDC/conf/pipeline.yaml --flink-home /opt/flink"
                         + sb;
-
         ExecResult execResult = jobManager.execInContainer("bash", "-c", commands);
         LOG.info(execResult.getStdout());
         LOG.error(execResult.getStderr());
@@ -294,5 +295,27 @@ public abstract class PipelineTestEnvironment extends TestLogger {
         assert url != null;
         Path path = new File(url.getFile()).toPath();
         return Files.readAllLines(path);
+    }
+
+    private static Version parseVersion(String version) {
+        List<Integer> versionParts =
+                Arrays.stream(version.split("\\."))
+                        .map(Integer::valueOf)
+                        .limit(3)
+                        .collect(Collectors.toList());
+        return new Version(
+                versionParts.get(0), versionParts.get(1), versionParts.get(2), null, null, null);
+    }
+
+    private static String getFlinkProperties() {
+        return String.join(
+                "\n",
+                Arrays.asList(
+                        "restart-strategy.type: off",
+                        "jobmanager.rpc.address: jobmanager",
+                        "taskmanager.numberOfTaskSlots: 10",
+                        "parallelism.default: 4",
+                        "execution.checkpointing.interval: 300",
+                        "env.java.opts.all: -Doracle.jdbc.timezoneAsRegion=false"));
     }
 }

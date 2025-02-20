@@ -38,9 +38,12 @@ import org.apache.flink.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import org.apache.flink.cdc.connectors.mysql.utils.OptionUtils;
+import org.apache.flink.cdc.debezium.table.DebeziumOptions;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.ObjectPath;
 
+import com.mysql.cj.conf.PropertyKey;
+import io.debezium.relational.RelationalDatabaseConnectorConfig;
 import io.debezium.relational.Tables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,8 +82,10 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.CONNECT_TIMEOUT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HEARTBEAT_INTERVAL;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.INCLUDE_COMMENTS_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_COLUMN_INCLUDE_LIST;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_LIST;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED;
@@ -104,7 +109,9 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SERVER_TIME_ZONE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES_EXCLUDE;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.TREAT_TINYINT1_AS_BOOLEAN_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.USERNAME;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.USE_LEGACY_JSON_FORMAT;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.ObjectUtils.doubleCompare;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.DEBEZIUM_OPTIONS_PREFIX;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
@@ -150,6 +157,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         double distributionFactorLower = config.get(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
 
         boolean closeIdleReaders = config.get(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        boolean includeComments = config.get(INCLUDE_COMMENTS_ENABLED);
+        boolean treatTinyInt1AsBoolean = config.get(TREAT_TINYINT1_AS_BOOLEAN_ENABLED);
 
         Duration heartbeatInterval = config.get(HEARTBEAT_INTERVAL);
         Duration connectTimeout = config.get(CONNECT_TIMEOUT);
@@ -158,6 +167,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         boolean scanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         boolean scanBinlogNewlyAddedTableEnabled =
                 config.get(SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED);
+        boolean isParsingOnLineSchemaChanges = config.get(PARSE_ONLINE_SCHEMA_CHANGES);
+        boolean useLegacyJsonFormat = config.get(USE_LEGACY_JSON_FORMAT);
 
         boolean scanOnlyDeserializeCapturedTablesChangelog =
                 config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
@@ -175,6 +186,18 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
 
         Map<String, String> configMap = config.toMap();
         OptionUtils.printOptions(IDENTIFIER, config.toMap());
+        if (includeComments) {
+            // set debezium config 'include.schema.comments' to true
+            configMap.put(
+                    DebeziumOptions.DEBEZIUM_OPTIONS_PREFIX
+                            + RelationalDatabaseConnectorConfig.INCLUDE_SCHEMA_COMMENTS.name(),
+                    "true");
+        }
+
+        if (!treatTinyInt1AsBoolean) {
+            // set jdbc config 'tinyInt1isBit' to false
+            configMap.put(PROPERTIES_PREFIX + PropertyKey.tinyInt1isBit.getKeyName(), "false");
+        }
 
         MySqlSourceConfigFactory configFactory =
                 new MySqlSourceConfigFactory()
@@ -201,6 +224,10 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .scanNewlyAddedTableEnabled(config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED))
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap))
+                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                        .parseOnLineSchemaChanges(isParsingOnLineSchemaChanges)
+                        .treatTinyInt1AsBoolean(treatTinyInt1AsBoolean)
+                        .useLegacyJsonFormat(useLegacyJsonFormat)
                         .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                         .scanOnlyDeserializeCapturedTablesChangelog(
                                 scanOnlyDeserializeCapturedTablesChangelog)
@@ -350,6 +377,12 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
         options.add(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
         options.add(SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED);
+        options.add(METADATA_LIST);
+        options.add(METADATA_COLUMN_INCLUDE_LIST);
+        options.add(INCLUDE_COMMENTS_ENABLED);
+        options.add(USE_LEGACY_JSON_FORMAT);
+        options.add(TREAT_TINYINT1_AS_BOOLEAN_ENABLED);
+        options.add(PARSE_ONLINE_SCHEMA_CHANGES);
 
         // rds config
         options.add(RDS_REGION_ID);
@@ -362,8 +395,6 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(RDS_USE_INTRANET_LINK);
         options.add(RDS_MAIN_DB_ID);
         options.add(RDS_BINLOG_ENDPOINT);
-        options.add(METADATA_LIST);
-        options.add(METADATA_COLUMN_INCLUDE_LIST);
         return options;
     }
 

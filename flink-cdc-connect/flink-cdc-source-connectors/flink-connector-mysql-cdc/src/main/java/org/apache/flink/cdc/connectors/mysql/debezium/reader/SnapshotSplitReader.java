@@ -36,10 +36,8 @@ import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.guava31.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import io.debezium.config.Configuration;
 import io.debezium.connector.base.ChangeEventQueue;
-import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlOffsetContext;
 import io.debezium.connector.mysql.MySqlStreamingChangeEventSourceMetrics;
@@ -108,23 +106,14 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
             MySqlSourceReaderMetrics sourceReaderMetrics,
             int subtaskId,
             SnapshotPhaseHooks hooks) {
-        final MySqlConnection jdbcConnection = createMySqlConnection(sourceConfig);
-        final BinaryLogClient binaryLogClient =
-                createBinaryClient(sourceConfig.getDbzConfiguration());
-        this.statefulTaskContext =
+        this(
                 new StatefulTaskContext(
-                        sourceConfig, binaryLogClient, jdbcConnection, sourceReaderMetrics);
-        ThreadFactory threadFactory =
-                new ThreadFactoryBuilder()
-                        .setNameFormat("debezium-reader-" + subtaskId)
-                        .setUncaughtExceptionHandler(
-                                (thread, throwable) -> setReadException(throwable))
-                        .build();
-        this.executorService = Executors.newSingleThreadExecutor(threadFactory);
-        this.hooks = hooks;
-        this.currentTaskRunning = false;
-        this.hasNextElement = new AtomicBoolean(false);
-        this.reachEnd = new AtomicBoolean(false);
+                        sourceConfig,
+                        createBinaryClient(sourceConfig.getDbzConfiguration()),
+                        createMySqlConnection(sourceConfig),
+                        sourceReaderMetrics),
+                subtaskId,
+                hooks);
     }
 
     public SnapshotSplitReader(
@@ -183,7 +172,6 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
                         // Step 2: read binlog events between low and high watermark and backfill
                         // changes into snapshot
                         backfill(snapshotResult, sourceContext);
-
                     } catch (Throwable e) {
                         setReadException(e);
                     } finally {
@@ -457,7 +445,9 @@ public class SnapshotSplitReader implements DebeziumReader<SourceRecords, MySqlS
     public void close() {
         try {
             stopCurrentTask();
-            statefulTaskContext.close();
+            if (statefulTaskContext != null) {
+                statefulTaskContext.close();
+            }
             if (executorService != null) {
                 executorService.shutdown();
                 if (!executorService.awaitTermination(READER_CLOSE_TIMEOUT, TimeUnit.SECONDS)) {

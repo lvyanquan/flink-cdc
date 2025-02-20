@@ -36,11 +36,9 @@ import org.apache.flink.util.FlinkRuntimeException;
 
 import org.apache.flink.shaded.guava31.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.Event;
 import com.github.shyiko.mysql.binlog.event.EventType;
 import io.debezium.connector.base.ChangeEventQueue;
-import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlStreamingChangeEventSourceMetrics;
 import io.debezium.connector.mysql.MySqlTaskContext;
 import io.debezium.pipeline.DataChangeEvent;
@@ -58,6 +56,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -93,33 +92,32 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
     private Predicate capturedTableFilter;
     private final StoppableChangeEventSourceContext changeEventSourceContext =
             new StoppableChangeEventSourceContext();
+    private final boolean isParsingOnLineSchemaChanges;
 
     private static final long READER_CLOSE_TIMEOUT = 30L;
 
     public BinlogSplitReader(
             MySqlSourceConfig sourceConfig,
             MySqlSourceReaderMetrics sourceReaderMetric,
-            int subTaskId) {
-        final MySqlConnection jdbcConnection = createMySqlConnection(sourceConfig);
-        final BinaryLogClient binaryLogClient =
-                createBinaryClient(sourceConfig.getDbzConfiguration());
-        this.statefulTaskContext =
+            int subtaskId) {
+        this(
                 new StatefulTaskContext(
-                        sourceConfig, binaryLogClient, jdbcConnection, sourceReaderMetric);
-        ThreadFactory threadFactory =
-                new ThreadFactoryBuilder().setNameFormat("binlog-reader-" + subTaskId).build();
-        this.executorService = Executors.newSingleThreadExecutor(threadFactory);
-        this.currentTaskRunning = true;
-        this.pureBinlogPhaseTables = new HashSet<>();
+                        sourceConfig,
+                        createBinaryClient(sourceConfig.getDbzConfiguration()),
+                        createMySqlConnection(sourceConfig),
+                        sourceReaderMetric),
+                subtaskId);
     }
 
-    public BinlogSplitReader(StatefulTaskContext statefulTaskContext, int subTaskId) {
+    public BinlogSplitReader(StatefulTaskContext statefulTaskContext, int subtaskId) {
         this.statefulTaskContext = statefulTaskContext;
         ThreadFactory threadFactory =
-                new ThreadFactoryBuilder().setNameFormat("binlog-reader-" + subTaskId).build();
+                new ThreadFactoryBuilder().setNameFormat("binlog-reader-" + subtaskId).build();
         this.executorService = Executors.newSingleThreadExecutor(threadFactory);
         this.currentTaskRunning = true;
         this.pureBinlogPhaseTables = new HashSet<>();
+        this.isParsingOnLineSchemaChanges =
+                statefulTaskContext.getSourceConfig().isParseOnLineSchemaChanges();
     }
 
     public void submitSplit(MySqlSplit mySqlSplit) {
@@ -190,6 +188,14 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
         if (currentTaskRunning) {
             List<DataChangeEvent> batch = queue.poll();
             for (DataChangeEvent event : batch) {
+                if (isParsingOnLineSchemaChanges) {
+                    Optional<SourceRecord> oscRecord =
+                            parseOnLineSchemaChangeEvent(event.getRecord());
+                    if (oscRecord.isPresent()) {
+                        sourceRecords.add(oscRecord.get());
+                        continue;
+                    }
+                }
                 if (shouldEmit(event.getRecord())) {
                     sourceRecords.add(event.getRecord());
                 }
@@ -220,8 +226,10 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
     @Override
     public void close() {
         try {
-            statefulTaskContext.close();
             stopBinlogReadTask();
+            if (statefulTaskContext != null) {
+                statefulTaskContext.close();
+            }
             if (executorService != null) {
                 executorService.shutdown();
                 if (!executorService.awaitTermination(READER_CLOSE_TIMEOUT, TimeUnit.SECONDS)) {
@@ -230,10 +238,23 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
                             READER_CLOSE_TIMEOUT);
                 }
             }
-            statefulTaskContext.getDatabaseSchema().close();
         } catch (Exception e) {
             LOG.error("Close binlog reader error", e);
         }
+    }
+
+    private Optional<SourceRecord> parseOnLineSchemaChangeEvent(SourceRecord sourceRecord) {
+        if (RecordUtils.isOnLineSchemaChangeEvent(sourceRecord)) {
+            // This is a gh-ost initialized schema change event and should be emitted if the
+            // peeled tableId matches the predicate.
+            TableId originalTableId = RecordUtils.getTableId(sourceRecord);
+            TableId peeledTableId = RecordUtils.peelTableId(originalTableId);
+            if (capturedTableFilter.test(peeledTableId)) {
+                return Optional.of(
+                        RecordUtils.setTableId(sourceRecord, originalTableId, peeledTableId));
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -268,7 +289,7 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
                         ChunkUtils.getChunkKeyColumnType(
                                 statefulTaskContext.getDatabaseSchema().tableFor(tableId),
                                 statefulTaskContext.getSourceConfig().getChunkKeyColumns(),
-                                statefulTaskContext.getSourceConfig().isTreatTinyintAsBoolean());
+                                statefulTaskContext.getSourceConfig().isTreatTinyInt1AsBoolean());
 
                 Struct target = RecordUtils.getStructContainsChunkKey(sourceRecord);
                 Object[] chunkKey =
@@ -299,7 +320,7 @@ public class BinlogSplitReader implements DebeziumReader<SourceRecords, MySqlSpl
     private boolean hasEnterPureBinlogPhase(TableId tableId, BinlogOffset position) {
         // the existed tables those have finished snapshot reading
         if (maxSplitHighWatermarkMap.containsKey(tableId)
-                && position.isAtOrAfter(maxSplitHighWatermarkMap.get(tableId))) {
+                && position.isAfter(maxSplitHighWatermarkMap.get(tableId))) {
             pureBinlogPhaseTables.add(tableId);
             return true;
         }

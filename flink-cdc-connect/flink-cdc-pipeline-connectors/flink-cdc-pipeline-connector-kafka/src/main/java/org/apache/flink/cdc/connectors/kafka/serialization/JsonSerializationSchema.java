@@ -75,8 +75,8 @@ public class JsonSerializationSchema implements SerializationSchema<Event> {
             String mapNullKeyLiteral,
             ZoneId zoneId,
             boolean encodeDecimalAsPlainNumber,
-            boolean writeNullProperties,
-            boolean ignoreNullFields) {
+            boolean ignoreNullFields,
+            boolean writeNullProperties) {
         this.timestampFormat = timestampFormat;
         this.mapNullKeyMode = mapNullKeyMode;
         this.mapNullKeyLiteral = mapNullKeyLiteral;

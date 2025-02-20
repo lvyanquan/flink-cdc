@@ -43,6 +43,13 @@ public class ValuesDataSinkOptions {
                     .withDescription(
                             "The sink api on which the sink is based: SinkFunction or SinkV2.");
 
+    public static final ConfigOption<Boolean> ERROR_ON_SCHEMA_CHANGE =
+            ConfigOptions.key("error.on.schema.change")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "True if a runtime error should be thrown when handling schema change events.");
+
     public static final ConfigOption<Boolean> SINK_STANDARD_ERROR =
             ConfigOptions.key("sink.print.standard-error")
                     .booleanType()
@@ -61,11 +68,4 @@ public class ValuesDataSinkOptions {
                     .longType()
                     .defaultValue(2000L)
                     .withDescription("Limit of logger records to output, default 2000");
-
-    public static final ConfigOption<Boolean> ERROR_ON_SCHEMA_CHANGE =
-            ConfigOptions.key("error.on.schema.change")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription(
-                            "True if a runtime error should be thrown when handling schema change events.");
 }

@@ -100,12 +100,6 @@ public class FactoryDiscoveryUtils {
      * Return the path of the jar file that contains the {@link Factory} for the given identifier.
      */
     public static <T extends Factory> Optional<URL> getJarPathByIdentifier(
-            String identifier, Class<T> factoryClass) {
-        return getJarPathByIdentifier(
-                identifier, factoryClass, Thread.currentThread().getContextClassLoader());
-    }
-
-    public static <T extends Factory> Optional<URL> getJarPathByIdentifier(
             String identifier, Class<T> factoryClass, ClassLoader classLoader) {
         try {
             T factory = getFactoryByIdentifier(identifier, factoryClass, classLoader);

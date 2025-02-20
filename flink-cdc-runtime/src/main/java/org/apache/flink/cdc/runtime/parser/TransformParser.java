@@ -53,7 +53,6 @@ import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
-import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -63,7 +62,6 @@ import org.apache.calcite.sql.type.InferTypes;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
-import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.SqlOperatorTables;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -122,7 +120,7 @@ public class TransformParser {
         rootSchema.add(
                 DEFAULT_SCHEMA,
                 TransformSchemaFactory.INSTANCE.create(schema, DEFAULT_SCHEMA, operand));
-        List<SqlOperator> udfFunctions = new ArrayList<>();
+        List<SqlFunction> udfFunctions = new ArrayList<>();
         for (UserDefinedFunctionDescriptor udf : udfDescriptors) {
             try {
                 Class<?> clazz = Class.forName(udf.getClasspath());
@@ -161,13 +159,15 @@ public class TransformParser {
                         factory,
                         new CalciteConnectionConfigImpl(new Properties()));
         TransformSqlOperatorTable transformSqlOperatorTable = TransformSqlOperatorTable.instance();
-        SqlOperatorTable udfOperatorTable = new ListSqlOperatorTable(udfFunctions);
+        SqlOperatorTable udfOperatorTable = SqlOperatorTables.of(udfFunctions);
         SqlValidator validator =
                 SqlValidatorUtil.newValidator(
                         SqlOperatorTables.chain(transformSqlOperatorTable, udfOperatorTable),
                         calciteCatalogReader,
                         factory,
-                        SqlValidator.Config.DEFAULT.withIdentifierExpansion(true));
+                        SqlValidator.Config.DEFAULT
+                                .withIdentifierExpansion(true)
+                                .withConformance(SqlConformanceEnum.MYSQL_5));
         SqlNode validateSqlNode = validator.validate(sqlNode);
         SqlToRelConverter sqlToRelConverter =
                 new SqlToRelConverter(
@@ -178,8 +178,8 @@ public class TransformParser {
                                 new HepPlanner(new HepProgramBuilder().build()),
                                 new RexBuilder(factory)),
                         StandardConvertletTable.INSTANCE,
-                        SqlToRelConverter.config().withTrimUnusedFields(false));
-        RelRoot relRoot = sqlToRelConverter.convertQuery(validateSqlNode, false, true);
+                        SqlToRelConverter.config().withTrimUnusedFields(true));
+        RelRoot relRoot = sqlToRelConverter.convertQuery(validateSqlNode, false, false);
         return relRoot.rel;
     }
 

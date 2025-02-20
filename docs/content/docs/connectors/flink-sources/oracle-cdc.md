@@ -41,7 +41,7 @@ In order to setup the Oracle CDC connector, the following table provides depende
 
 **Download link is available only for stable releases.**
 
-Download [flink-sql-connector-oracle-cdc-3.1.0.jar](https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-oracle-cdc/3.1.0/flink-sql-connector-oracle-cdc-3.1.0.jar) and put it under `<FLINK_HOME>/lib/`.
+Download [flink-sql-connector-oracle-cdc-{{< param Version >}}.jar](https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-oracle-cdc/{{< param Version >}}/flink-sql-connector-oracle-cdc-{{< param Version >}}.jar) and put it under `<FLINK_HOME>/lib/`.
 
 **Note:** Refer to [flink-sql-connector-oracle-cdc](https://mvnrepository.com/artifact/org.apache.flink/flink-sql-connector-oracle-cdc), more released versions will be available in the Maven central warehouse.
 
@@ -614,6 +614,26 @@ public class OracleSourceExample {
   }
 }
 ```
+
+### Available Source metrics
+
+Metrics can help understand the progress of assignments, and the following are the supported [Flink metrics](https://nightlies.apache.org/flink/flink-docs-master/docs/ops/metrics/):
+
+| Group                  | Name                       | Type  | Description                                         |
+|------------------------|----------------------------|-------|-----------------------------------------------------|
+| namespace.schema.table | isSnapshotting             | Gauge | Weather the table is snapshotting or not            |
+| namespace.schema.table | isStreamReading            | Gauge | Weather the table is stream reading or not          |
+| namespace.schema.table | numTablesSnapshotted       | Gauge | The number of tables that have been snapshotted     |
+| namespace.schema.table | numTablesRemaining         | Gauge | The number of tables that have not been snapshotted |
+| namespace.schema.table | numSnapshotSplitsProcessed | Gauge | The number of splits that is being processed        |
+| namespace.schema.table | numSnapshotSplitsRemaining | Gauge | The number of splits that have not been processed   |
+| namespace.schema.table | numSnapshotSplitsFinished  | Gauge | The number of splits that have been processed       |
+| namespace.schema.table | snapshotStartTime          | Gauge | The time when the snapshot started                  |
+| namespace.schema.table | snapshotEndTime            | Gauge | The time when the snapshot ended                    |
+
+Notice:
+1. The group name is `namespace.schema.table`, where `namespace` is the actual database name, `schema` is the actual schema name, and `table` is the actual table name.
+2. For Oracle, the group name will be like `test_database.test_schema.test_table`.
 
 Data Type Mapping
 ----------------

@@ -55,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.common.types.DataTypes.DECIMAL;
@@ -127,16 +128,22 @@ class SchemaMergingUtilsTest {
                     ARRAY,
                     MAP);
 
-    private static final ImmutableMap<Object, Object> DUMMY_OBJECTS =
-            ImmutableMap.builder()
-                    .put(TINYINT, (byte) 17)
-                    .put(SMALLINT, (short) 17)
-                    .put(INT, 17)
-                    .put(BIGINT, 17L)
-                    .put(DECIMAL, decOf(17))
-                    .put(FLOAT, 17.0f)
-                    .put(DOUBLE, 17.0)
-                    .build();
+    private static final Map<DataType, Object> DUMMY_OBJECTS =
+            ImmutableMap.of(
+                    TINYINT,
+                    (byte) 17,
+                    SMALLINT,
+                    (short) 17,
+                    INT,
+                    17,
+                    BIGINT,
+                    17L,
+                    DECIMAL,
+                    decOf(17),
+                    FLOAT,
+                    17.0f,
+                    DOUBLE,
+                    17.0);
 
     @Test
     void testIsSchemaCompatible() {
@@ -968,7 +975,7 @@ class SchemaMergingUtilsTest {
                         DECIMAL, FLOAT, DOUBLE, STRING, STRING, STRING, STRING, STRING, STRING,
                         STRING));
 
-        // 16-bit TINYINT could fit into FLOAT (24 sig bits) or DOUBLE (53 sig bits)
+        // 16-bit SMALLINT could fit into FLOAT (24 sig bits) or DOUBLE (53 sig bits)
         assertTypeMergingVector(
                 SMALLINT,
                 Arrays.asList(
@@ -976,7 +983,7 @@ class SchemaMergingUtilsTest {
                         DECIMAL, FLOAT, DOUBLE, STRING, STRING, STRING, STRING, STRING, STRING,
                         STRING));
 
-        // 32-bit TINYINT could fit into DOUBLE (53 sig bits)
+        // 32-bit INT could fit into DOUBLE (53 sig bits)
         assertTypeMergingVector(
                 INT,
                 Arrays.asList(

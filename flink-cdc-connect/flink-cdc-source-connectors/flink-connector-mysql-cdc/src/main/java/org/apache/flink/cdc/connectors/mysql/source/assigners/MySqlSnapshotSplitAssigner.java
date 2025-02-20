@@ -113,7 +113,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 new LinkedHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
-                INITIAL_ASSIGNING,
+                AssignerStatus.INITIAL_ASSIGNING,
                 remainingTables,
                 isTableIdCaseSensitive,
                 true,
@@ -469,10 +469,8 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     @Override
     public void onFinishedSplits(Map<String, BinlogOffset> splitFinishedOffsets) {
         this.splitFinishedOffsets.putAll(splitFinishedOffsets);
-
         if (allSnapshotSplitsFinished()) {
             enumeratorContext.setIsProcessingBacklog(false);
-
             if (AssignerStatus.isAssigningSnapshotSplits(assignerStatus)) {
                 // Skip the waiting checkpoint when current parallelism is 1 which means we do not
                 // need

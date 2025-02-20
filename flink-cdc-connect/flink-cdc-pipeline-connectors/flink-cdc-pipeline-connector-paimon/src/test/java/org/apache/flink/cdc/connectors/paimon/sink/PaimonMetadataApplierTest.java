@@ -125,7 +125,10 @@ public class PaimonMetadataApplierTest {
         addedColumns.add(
                 new AddColumnEvent.ColumnWithPosition(
                         Column.physicalColumn(
-                                "col3", org.apache.flink.cdc.common.types.DataTypes.STRING())));
+                                "col3",
+                                org.apache.flink.cdc.common.types.DataTypes.STRING(),
+                                null,
+                                "col3DefValue")));
         AddColumnEvent addColumnEvent =
                 new AddColumnEvent(TableId.parse("test.table1"), addedColumns);
         metadataApplier.applySchemaChange(addColumnEvent);
@@ -137,6 +140,12 @@ public class PaimonMetadataApplierTest {
                                 new DataField(2, "col3", DataTypes.STRING())));
         Assertions.assertEquals(
                 tableSchema, catalog.getTable(Identifier.fromString("test.table1")).rowType());
+
+        Assertions.assertEquals(
+                "col3DefValue",
+                catalog.getTable(Identifier.fromString("test.table1"))
+                        .options()
+                        .get("fields.col3.default-value"));
 
         Map<String, String> nameMapping = new HashMap<>();
         nameMapping.put("col2", "newcol2");
@@ -179,6 +188,59 @@ public class PaimonMetadataApplierTest {
                                 new DataField(2, "newcol3", DataTypes.STRING())));
         Assertions.assertEquals(
                 tableSchema, catalog.getTable(Identifier.fromString("test.table1")).rowType());
+
+        // Create table with partition column.
+        createTableEvent =
+                new CreateTableEvent(
+                        TableId.parse("test.table_with_partition"),
+                        org.apache.flink.cdc.common.schema.Schema.newBuilder()
+                                .physicalColumn(
+                                        "col1",
+                                        org.apache.flink.cdc.common.types.DataTypes.STRING()
+                                                .notNull())
+                                .physicalColumn(
+                                        "col2", org.apache.flink.cdc.common.types.DataTypes.INT())
+                                .physicalColumn(
+                                        "dt",
+                                        org.apache.flink.cdc.common.types.DataTypes.INT().notNull())
+                                .primaryKey("col1")
+                                .partitionKey("dt")
+                                .build());
+        metadataApplier.applySchemaChange(createTableEvent);
+        tableSchema =
+                new RowType(
+                        Arrays.asList(
+                                new DataField(0, "col1", DataTypes.STRING().notNull()),
+                                new DataField(1, "col2", DataTypes.INT()),
+                                new DataField(2, "dt", DataTypes.INT().notNull())));
+        Table tableWithPartition =
+                catalog.getTable(Identifier.fromString("test.table_with_partition"));
+        Assertions.assertEquals(tableSchema, tableWithPartition.rowType());
+        Assertions.assertEquals(Arrays.asList("col1", "dt"), tableWithPartition.primaryKeys());
+        // Create table with upper case.
+        catalogOptions.setString("allow-upper-case", "true");
+        metadataApplier = new PaimonMetadataApplier(catalogOptions);
+        createTableEvent =
+                new CreateTableEvent(
+                        TableId.parse("test.table_with_upper_case"),
+                        org.apache.flink.cdc.common.schema.Schema.newBuilder()
+                                .physicalColumn(
+                                        "COL1",
+                                        org.apache.flink.cdc.common.types.DataTypes.STRING()
+                                                .notNull())
+                                .physicalColumn(
+                                        "col2", org.apache.flink.cdc.common.types.DataTypes.INT())
+                                .primaryKey("COL1")
+                                .build());
+        metadataApplier.applySchemaChange(createTableEvent);
+        tableSchema =
+                new RowType(
+                        Arrays.asList(
+                                new DataField(0, "COL1", DataTypes.STRING().notNull()),
+                                new DataField(1, "col2", DataTypes.INT())));
+        Assertions.assertEquals(
+                tableSchema,
+                catalog.getTable(Identifier.fromString("test.table_with_upper_case")).rowType());
     }
 
     @ParameterizedTest

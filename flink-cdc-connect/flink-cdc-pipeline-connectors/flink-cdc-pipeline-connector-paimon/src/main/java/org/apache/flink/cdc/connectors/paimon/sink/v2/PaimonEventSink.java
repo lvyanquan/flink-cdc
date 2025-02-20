@@ -63,14 +63,13 @@ public class PaimonEventSink extends PaimonSink<Event> implements WithPreWriteTo
                         new BucketAssignOperator(
                                 catalogOptions, schemaOperatorUid, zoneId, commitUser, flinkConf))
                 .name("Assign Bucket")
-
                 // All Events after BucketAssignOperator are decorated with BucketWrapper.
                 .partitionCustom(
                         (bucket, numPartitions) -> bucket % numPartitions,
                         (event) -> ((BucketWrapper) event).getBucket())
                 // Avoid disorder of FlushEvent and DataChangeEvent.
                 .transform(
-                        "RemoveDuplicateEvents",
+                        "FlushEventAlignment",
                         new BucketWrapperEventTypeInfo(),
                         new FlushEventAlignmentOperator());
     }

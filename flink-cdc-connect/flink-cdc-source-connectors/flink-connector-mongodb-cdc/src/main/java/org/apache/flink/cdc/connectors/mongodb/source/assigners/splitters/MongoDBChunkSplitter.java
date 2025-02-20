@@ -40,9 +40,6 @@ public class MongoDBChunkSplitter implements ChunkSplitter {
     }
 
     @Override
-    public void open() {}
-
-    @Override
     public Collection<SnapshotSplit> generateSplits(TableId collectionId) {
         ArrayList<SnapshotSplit> snapshotSplits = new ArrayList<>();
         SplitContext splitContext = SplitContext.of(sourceConfig, collectionId);
@@ -55,6 +52,9 @@ public class MongoDBChunkSplitter implements ChunkSplitter {
         }
         return snapshotSplits;
     }
+
+    @Override
+    public void open() {}
 
     @Override
     public boolean hasNextChunk() {

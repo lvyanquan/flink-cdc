@@ -110,9 +110,10 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
     @Override
     public void open() throws Exception {
         super.open();
+        this.catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
         this.bucketAssignerMap = new HashMap<>();
-        this.totalTasksNumber = getRuntimeContext().getNumberOfParallelSubtasks();
-        this.currentTaskNumber = getRuntimeContext().getIndexOfThisSubtask();
+        this.totalTasksNumber = getRuntimeContext().getTaskInfo().getNumberOfParallelSubtasks();
+        this.currentTaskNumber = getRuntimeContext().getTaskInfo().getIndexOfThisSubtask();
         this.schemaMaps = new HashMap<>();
     }
 
@@ -143,7 +144,9 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                                 new BucketWrapperFlushEvent(
                                         i,
                                         ((FlushEvent) event).getSourceSubTaskId(),
-                                        currentTaskNumber)));
+                                        currentTaskNumber,
+                                        ((FlushEvent) event).getTableIds(),
+                                        ((FlushEvent) event).getSchemaChangeEventType())));
             }
             return;
         }
@@ -221,13 +224,16 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
             SchemaChangeEvent schemaChangeEvent = (SchemaChangeEvent) event;
             Schema schema =
                     SchemaUtils.applySchemaChangeEvent(
-                            schemaMaps.get(schemaChangeEvent.tableId()).getSchema(),
+                            Optional.ofNullable(schemaMaps.get(schemaChangeEvent.tableId()))
+                                    .map(TableSchemaInfo::getSchema)
+                                    .orElse(null),
                             schemaChangeEvent);
             schemaMaps.put(schemaChangeEvent.tableId(), new TableSchemaInfo(schema, zoneId));
-            // Broadcast SchemaChangeEvent.
-            for (int i = 0; i < totalTasksNumber; i++) {
+            // Broadcast SchemachangeEvent.
+            for (int index = 0; index < totalTasksNumber; index++) {
                 output.collect(
-                        new StreamRecord<>(new BucketWrapperChangeEvent(i, (ChangeEvent) event)));
+                        new StreamRecord<>(
+                                new BucketWrapperChangeEvent(index, (ChangeEvent) event)));
             }
         }
     }

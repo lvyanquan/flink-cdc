@@ -61,8 +61,8 @@ public class KeySerializationFactory {
                             mapNullKeyLiteral,
                             zoneId,
                             encodeDecimalAsPlainNumber,
-                            writeNullProperties,
-                            ignoreNullFields);
+                            ignoreNullFields,
+                            writeNullProperties);
                 }
             case CSV:
                 {

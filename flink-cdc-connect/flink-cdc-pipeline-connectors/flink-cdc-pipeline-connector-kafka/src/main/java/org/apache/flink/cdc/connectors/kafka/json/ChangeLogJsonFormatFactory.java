@@ -80,10 +80,10 @@ public class ChangeLogJsonFormatFactory {
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber,
-                            writeNullProperties,
                             zoneId,
-                            ignoreNullFields);
+                            encodeDecimalAsPlainNumber,
+                            ignoreNullFields,
+                            writeNullProperties);
                 }
             case CANAL_JSON:
                 {
@@ -102,10 +102,10 @@ public class ChangeLogJsonFormatFactory {
                             timestampFormat,
                             mapNullKeyMode,
                             mapNullKeyLiteral,
-                            encodeDecimalAsPlainNumber,
-                            writeNullProperties,
                             zoneId,
-                            ignoreNullFields);
+                            encodeDecimalAsPlainNumber,
+                            ignoreNullFields,
+                            writeNullProperties);
                 }
             default:
                 {

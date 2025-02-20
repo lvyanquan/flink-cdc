@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -77,9 +78,10 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
     // using TreeSet to prefer assigning binlog split to task-0 for easier debug
     private final TreeSet<Integer> readersAwaitingSplit;
     private List<List<FinishedSnapshotSplitInfo>> binlogSplitMeta;
-    private boolean isBinlogSplitUpdateRequestSend = false;
 
     @Nullable private Integer binlogSplitTaskId;
+
+    private boolean isBinlogSplitUpdateRequestAlreadySent = false;
 
     public MySqlSourceEnumerator(
             SplitEnumeratorContext<MySqlSplit> context,
@@ -194,7 +196,7 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
         LOG.info("Closing enumerator...");
         splitAssigner.close();
     }
@@ -276,15 +278,15 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
     }
 
     private void requestBinlogSplitUpdateIfNeed(String trigger) {
-        if (isNewlyAddedAssigningSnapshotFinished(splitAssigner.getAssignerStatus())
-                && (!isBinlogSplitUpdateRequestSend)) {
+        if (!isBinlogSplitUpdateRequestAlreadySent
+                && isNewlyAddedAssigningSnapshotFinished(splitAssigner.getAssignerStatus())) {
             for (int subtaskId : getRegisteredReader()) {
+                isBinlogSplitUpdateRequestAlreadySent = true;
                 LOG.info(
                         "The enumerator requests subtask {} to update the binlog split after newly added table from {}.",
                         subtaskId,
                         trigger);
                 context.sendEventToSourceReader(subtaskId, new BinlogSplitUpdateRequestEvent());
-                this.isBinlogSplitUpdateRequestSend = true;
             }
         }
     }

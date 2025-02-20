@@ -184,7 +184,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
         OperatorIDGenerator schemaOperatorIDGenerator =
                 new OperatorIDGenerator(schemaOperatorTranslator.getSchemaOperatorUid());
         DataSource dataSource =
-                sourceTranslator.createDataSource(pipelineDef.getSource(), env, pipelineDefConfig);
+                sourceTranslator.createDataSource(pipelineDef.getSource(), pipelineDefConfig, env);
         DataSink dataSink =
                 sinkTranslator.createDataSink(pipelineDef.getSink(), pipelineDefConfig, env);
 

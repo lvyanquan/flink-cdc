@@ -1878,6 +1878,7 @@ public class MySqlConnectorITCase extends MySqlSourceTestBase {
 
         try (Connection connection = inventoryDatabase.getJdbcConnection();
                 Statement statement = connection.createStatement()) {
+
             statement.execute(
                     "INSERT INTO products VALUES (default,'jacket','water resistent white wind breaker',0.2);"); // 110
         }

@@ -49,7 +49,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
     @Rule public final Timeout timeoutPerTest = Timeout.seconds(60);
 
     private static final String DDL_FILE = "charset_test";
-    private static final String DATABASE_NAME = "cdc_c_" + getRandomSuffix();
+    private static final String DATABASE = "cdc_c_" + getRandomSuffix();
 
     private final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
@@ -152,7 +152,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
     public static void beforeClass() throws InterruptedException {
         initializePolardbxTables(
                 DDL_FILE,
-                DATABASE_NAME,
+                DATABASE,
                 s ->
                         !StringUtils.isNullOrWhitespaceOnly(s)
                                 && (s.contains("utf8_test")
@@ -174,7 +174,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
 
     @AfterClass
     public static void after() {
-        dropDatabase(DATABASE_NAME);
+        dropDatabase(DATABASE);
     }
 
     @Test
@@ -200,10 +200,10 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                                 + ")",
                         testName,
                         getHost(),
-                        PORT,
+                        getPort(),
                         USER_NAME,
                         PASSWORD,
-                        DATABASE_NAME,
+                        DATABASE,
                         testName,
                         true,
                         getServerId(),
@@ -234,7 +234,7 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
             statement.execute(
                     String.format(
                             "/*TDDL:FORBID_EXECUTE_DML_ALL=FALSE*/UPDATE %s.%s SET table_id = table_id + 10;",
-                            DATABASE_NAME, testName));
+                            DATABASE, testName));
         }
         waitForSinkSize("sink", binlogExpected.length);
         LOG.info(

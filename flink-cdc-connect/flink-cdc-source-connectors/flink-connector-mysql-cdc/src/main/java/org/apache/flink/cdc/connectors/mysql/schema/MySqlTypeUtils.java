@@ -108,8 +108,8 @@ public class MySqlTypeUtils {
     private static final String UNKNOWN = "UNKNOWN";
 
     /** Returns a corresponding Flink data type from a debezium {@link Column}. */
-    public static DataType fromDbzColumn(Column column, boolean treatTinyint1AsBool) {
-        DataType dataType = convertFromColumn(column, treatTinyint1AsBool);
+    public static DataType fromDbzColumn(Column column, boolean tinyInt1isBit) {
+        DataType dataType = convertFromColumn(column, tinyInt1isBit);
         if (column.isOptional()) {
             return dataType;
         } else {
@@ -118,14 +118,10 @@ public class MySqlTypeUtils {
     }
 
     /** Returns a corresponding Flink data type from a debezium {@link Table}. */
-    public static DataType fromDbzTable(Table table, boolean treatTinyint1AsBool) {
+    public static DataType fromDbzTable(Table table, boolean tinyInt1isBit) {
         return DataTypes.ROW(
                 table.columns().stream()
-                        .map(
-                                col ->
-                                        DataTypes.FIELD(
-                                                col.name(),
-                                                fromDbzColumn(col, treatTinyint1AsBool)))
+                        .map(col -> DataTypes.FIELD(col.name(), fromDbzColumn(col, tinyInt1isBit)))
                         .toArray(DataTypes.Field[]::new));
     }
 
@@ -133,7 +129,7 @@ public class MySqlTypeUtils {
      * Returns a corresponding Flink data type from a debezium {@link Column} with nullable always
      * be true.
      */
-    private static DataType convertFromColumn(Column column, boolean treatTinyint1AsBool) {
+    private static DataType convertFromColumn(Column column, boolean tinyInt1isBit) {
         String typeName = column.typeName();
         switch (typeName) {
             case BIT:
@@ -148,10 +144,9 @@ public class MySqlTypeUtils {
                 // user should not use tinyint(1) to store number although jdbc url parameter
                 // tinyInt1isBit=false can help change the return value, it's not a general way
                 // btw: mybatis and mysql-connector-java map tinyint(1) to boolean by default
-                if (column.length() == 1) {
-                    return treatTinyint1AsBool ? DataTypes.BOOLEAN() : DataTypes.TINYINT();
-                }
-                return DataTypes.TINYINT();
+                return (column.length() == 1 && tinyInt1isBit)
+                        ? DataTypes.BOOLEAN()
+                        : DataTypes.TINYINT();
             case TINYINT_UNSIGNED:
             case TINYINT_UNSIGNED_ZEROFILL:
             case SMALLINT:

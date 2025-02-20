@@ -119,6 +119,7 @@ import static org.apache.flink.runtime.metrics.MetricNames.IO_NUM_RECORDS_IN;
 import static org.apache.flink.runtime.metrics.MetricNames.SOURCE_IDLE_TIME;
 import static org.apache.flink.util.Preconditions.checkState;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -203,6 +204,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
 
     private static final int USE_POST_LOWWATERMARK_HOOK = 1;
     private static final int USE_PRE_HIGHWATERMARK_HOOK = 2;
+
     private static final int USE_POST_HIGHWATERMARK_HOOK = 3;
 
     @Parameterized.Parameters(

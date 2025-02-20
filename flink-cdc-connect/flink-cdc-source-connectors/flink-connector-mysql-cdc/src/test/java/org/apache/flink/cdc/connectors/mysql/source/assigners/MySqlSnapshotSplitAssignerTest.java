@@ -664,7 +664,6 @@ public class MySqlSnapshotSplitAssignerTest extends MySqlSourceTestBase {
     private List<String> getSplitsFromAssigner(final MySqlSnapshotSplitAssigner assigner) {
         assigner.setEnumeratorMetrics(getMySqlSourceEnumeratorMetrics());
         assigner.open();
-
         List<MySqlSplit> sqlSplits = new ArrayList<>();
         while (true) {
             Optional<MySqlSplit> split = assigner.getNext();

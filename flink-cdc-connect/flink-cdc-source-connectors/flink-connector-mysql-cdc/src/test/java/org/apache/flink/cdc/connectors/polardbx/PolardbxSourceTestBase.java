@@ -18,7 +18,7 @@
 package org.apache.flink.cdc.connectors.polardbx;
 
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
-import org.apache.flink.test.util.AbstractTestBase;
+import org.apache.flink.test.util.AbstractTestBaseJUnit4;
 import org.apache.flink.types.Row;
 
 import org.apache.commons.lang3.StringUtils;
@@ -51,8 +51,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /** Basic class for testing Database Polardbx which supported the mysql protocol. */
-public abstract class PolardbxSourceTestBase extends AbstractTestBase {
-
+public abstract class PolardbxSourceTestBase extends AbstractTestBaseJUnit4 {
     private static final Logger LOG = LoggerFactory.getLogger(PolardbxSourceTestBase.class);
     private static final Pattern COMMENT_PATTERN = Pattern.compile("^(.*)--.*$");
     protected static final Integer PORT = 3306;
@@ -64,8 +63,12 @@ public abstract class PolardbxSourceTestBase extends AbstractTestBase {
         return HOSTNAME;
     }
 
+    protected static int getPort() {
+        return PORT;
+    }
+
     protected static String getJdbcUrl() {
-        return String.format("jdbc:mysql://%s:%s", HOSTNAME, PORT);
+        return String.format("jdbc:mysql://%s:%s", getHost(), getPort());
     }
 
     protected static Connection getJdbcConnection() throws SQLException {
@@ -76,7 +79,7 @@ public abstract class PolardbxSourceTestBase extends AbstractTestBase {
 
     /** initialize database and tables with ${databaseName}.sql for testing. */
     protected static void initializePolardbxTables(
-            String ddlName, String dbName, Function<String, Boolean> filter)
+            String ddlName, String databaseName, Function<String, Boolean> filter)
             throws InterruptedException {
         final String ddlFile = String.format("ddl/%s.sql", ddlName);
         final URL ddlTestFile = PolardbxSourceTestBase.class.getClassLoader().getResource(ddlFile);
@@ -85,9 +88,9 @@ public abstract class PolardbxSourceTestBase extends AbstractTestBase {
         Thread.sleep(1000);
         try (Connection connection = getJdbcConnection();
                 Statement statement = connection.createStatement()) {
-            statement.execute("drop database if exists " + dbName);
-            statement.execute("create database if not exists " + dbName);
-            statement.execute("use " + dbName + ";");
+            statement.execute("drop database if exists " + databaseName);
+            statement.execute("create database if not exists " + databaseName);
+            statement.execute("use " + databaseName + ";");
             final List<String> statements =
                     Arrays.stream(
                                     Files.readAllLines(Paths.get(ddlTestFile.toURI())).stream()

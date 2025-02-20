@@ -79,6 +79,9 @@ public class MySqlSourceConfigFactory implements Serializable {
     private Properties dbzProperties;
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     private boolean skipSnapshotBackfill = false;
+    private boolean parseOnLineSchemaChanges = false;
+    private boolean treatTinyInt1AsBoolean = true;
+    private boolean useLegacyJsonFormat = true;
     private CapturingMode capturingMode;
     @Nullable private AliyunRdsConfig rdsConfig;
     private boolean scanOnlyDeserializeCapturedTablesChangelog = false;
@@ -296,6 +299,15 @@ public class MySqlSourceConfigFactory implements Serializable {
     }
 
     /**
+     * Whether to use legacy json format. The default value is true, which means there is no
+     * whitespace before value and after comma in json format.
+     */
+    public MySqlSourceConfigFactory useLegacyJsonFormat(boolean useLegacyJsonFormat) {
+        this.useLegacyJsonFormat = useLegacyJsonFormat;
+        return this;
+    }
+
+    /**
      * Capturing mode of MySQL CDC source. See JavaDoc of {@link CapturingMode} for more details.
      */
     @Deprecated
@@ -319,6 +331,17 @@ public class MySqlSourceConfigFactory implements Serializable {
      */
     public MySqlSourceConfigFactory closeIdleReaders(boolean closeIdleReaders) {
         this.closeIdleReaders = closeIdleReaders;
+        return this;
+    }
+
+    /** Whether to parse gh-ost/pt-osc utility generated schema change events. Defaults to false. */
+    public MySqlSourceConfigFactory parseOnLineSchemaChanges(boolean parseOnLineSchemaChanges) {
+        this.parseOnLineSchemaChanges = parseOnLineSchemaChanges;
+        return this;
+    }
+
+    public MySqlSourceConfigFactory treatTinyInt1AsBoolean(boolean treatTinyInt1AsBoolean) {
+        this.treatTinyInt1AsBoolean = treatTinyInt1AsBoolean;
         return this;
     }
 
@@ -461,6 +484,9 @@ public class MySqlSourceConfigFactory implements Serializable {
                 jdbcProperties,
                 chunkKeyColumns,
                 skipSnapshotBackfill,
+                parseOnLineSchemaChanges,
+                treatTinyInt1AsBoolean,
+                useLegacyJsonFormat,
                 rdsConfig,
                 scanChunkAssignStrategy);
     }

@@ -83,7 +83,6 @@ public class DataSinkTranslator {
 
     public DataSink createDataSink(
             SinkDef sinkDef, Configuration pipelineConfig, StreamExecutionEnvironment env) {
-
         // Search the data sink factory
         DataSinkFactory sinkFactory = findSinkFactory(sinkDef.getType(), env);
 

@@ -24,9 +24,12 @@ import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.DropTableEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
+import org.apache.flink.cdc.common.event.SchemaChangeEventType;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.event.TruncateTableEvent;
+import org.apache.flink.cdc.common.event.visitor.SchemaChangeEventVisitor;
 import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
+import org.apache.flink.cdc.common.exceptions.UnsupportedSchemaChangeEventException;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
@@ -38,6 +41,8 @@ import org.apache.flink.runtime.dlf.api.DlfResource;
 import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
 import org.apache.flink.runtime.dlf.api.VvrDataLakeConfig;
 import org.apache.flink.util.Preconditions;
+
+import org.apache.flink.shaded.guava31.com.google.common.collect.Sets;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
@@ -54,6 +59,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.flink.cdc.common.utils.Preconditions.checkArgument;
 import static org.apache.flink.cdc.common.utils.Preconditions.checkNotNull;
@@ -64,7 +70,7 @@ import static org.apache.flink.cdc.common.utils.Preconditions.checkNotNull;
  */
 public class PaimonMetadataApplier implements MetadataApplier {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PaimonMetadataApplier.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PaimonMetadataApplier.class);
 
     // Catalog is unSerializable.
     private transient Catalog catalog;
@@ -76,12 +82,15 @@ public class PaimonMetadataApplier implements MetadataApplier {
 
     private final Map<TableId, List<String>> partitionMaps;
 
+    private Set<SchemaChangeEventType> enabledSchemaEvolutionTypes;
+
     private final ReadableConfig flinkConf;
 
     public PaimonMetadataApplier(Options catalogOptions) {
         this.catalogOptions = catalogOptions;
         this.tableOptions = new HashMap<>();
         this.partitionMaps = new HashMap<>();
+        this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
         this.flinkConf = new Configuration();
     }
 
@@ -93,6 +102,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
         this.catalogOptions = catalogOptions;
         this.tableOptions = tableOptions;
         this.partitionMaps = partitionMaps;
+        this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
         this.flinkConf = flinkConf;
     }
 
@@ -101,12 +111,8 @@ public class PaimonMetadataApplier implements MetadataApplier {
         if (!isDlfCatalog()) {
             return null;
         }
-        LOGGER.debug("Try to get token for " + tableId);
-        try {
-            tryGetDlfTablePermission(tableId.getSchemaName(), tableId.getTableName());
-        } catch (Exception e) {
-            LOGGER.error("Failed to get dlf table permission", e);
-        }
+        LOG.debug("Try to get token for " + tableId);
+        tryGetDlfTablePermissionIgnoreException(tableId.getSchemaName(), tableId.getTableName());
         try {
             String endpoint =
                     Preconditions.checkNotNull(
@@ -131,11 +137,33 @@ public class PaimonMetadataApplier implements MetadataApplier {
                                     .databaseName(tableId.getSchemaName())
                                     .tableName(tableId.getTableName())
                                     .build());
-            LOGGER.debug("Get table token: " + token + " for table:" + tableId);
+            LOG.debug("Get table token: " + token + " for table:" + tableId);
             return token.toJson();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public MetadataApplier setAcceptedSchemaEvolutionTypes(
+            Set<SchemaChangeEventType> schemaEvolutionTypes) {
+        this.enabledSchemaEvolutionTypes = schemaEvolutionTypes;
+        return this;
+    }
+
+    @Override
+    public boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
+        return enabledSchemaEvolutionTypes.contains(schemaChangeEventType);
+    }
+
+    @Override
+    public Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
+        return Sets.newHashSet(
+                SchemaChangeEventType.CREATE_TABLE,
+                SchemaChangeEventType.ADD_COLUMN,
+                SchemaChangeEventType.DROP_COLUMN,
+                SchemaChangeEventType.RENAME_COLUMN,
+                SchemaChangeEventType.ALTER_COLUMN_TYPE);
     }
 
     @Override
@@ -145,117 +173,162 @@ public class PaimonMetadataApplier implements MetadataApplier {
             DlfCatalogUtil.convertOptionToDlf(catalogOptions, flinkConf);
             catalog = FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
         }
+        SchemaChangeEventVisitor.visit(
+                schemaChangeEvent,
+                addColumnEvent -> {
+                    applyAddColumn(addColumnEvent);
+                    return null;
+                },
+                alterColumnTypeEvent -> {
+                    applyAlterColumnType(alterColumnTypeEvent);
+                    return null;
+                },
+                createTableEvent -> {
+                    applyCreateTable(createTableEvent);
+                    return null;
+                },
+                dropColumnEvent -> {
+                    applyDropColumn(dropColumnEvent);
+                    return null;
+                },
+                dropTableEvent -> {
+                    applyDropTable(dropTableEvent);
+                    return null;
+                },
+                renameColumnEvent -> {
+                    applyRenameColumn(renameColumnEvent);
+                    return null;
+                },
+                truncateTableEvent -> {
+                    applyTruncateTable(truncateTableEvent);
+                    return null;
+                });
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (catalog != null) {
+            catalog.close();
+        }
+    }
+
+    private void applyCreateTable(CreateTableEvent event) throws SchemaEvolveException {
         try {
-            if (schemaChangeEvent instanceof CreateTableEvent) {
-                applyCreateTable((CreateTableEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof AddColumnEvent) {
-                applyAddColumn((AddColumnEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof DropColumnEvent) {
-                applyDropColumn((DropColumnEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof RenameColumnEvent) {
-                applyRenameColumn((RenameColumnEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof AlterColumnTypeEvent) {
-                applyAlterColumn((AlterColumnTypeEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof TruncateTableEvent) {
-                applyTruncateTable((TruncateTableEvent) schemaChangeEvent);
-            } else if (schemaChangeEvent instanceof DropTableEvent) {
-                applyDropTable((DropTableEvent) schemaChangeEvent);
+            try {
+                tryGetDlfDatabasePermission(event.tableId().getSchemaName());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void applyCreateTable(CreateTableEvent event) throws Exception {
-        tryGetDlfDatabasePermission(event.tableId().getSchemaName());
-        if (!catalog.databaseExists(event.tableId().getSchemaName())) {
-            catalog.createDatabase(event.tableId().getSchemaName(), true);
-        }
-        Schema schema = event.getSchema();
-        org.apache.paimon.schema.Schema.Builder builder =
-                new org.apache.paimon.schema.Schema.Builder();
-        schema.getColumns()
-                .forEach(
-                        (column) ->
-                                builder.column(
-                                        column.getName(),
-                                        LogicalTypeConversion.toDataType(
-                                                DataTypeUtils.toFlinkDataType(column.getType())
-                                                        .getLogicalType())));
-        builder.primaryKey(schema.primaryKeys().toArray(new String[0]));
-        if (partitionMaps.containsKey(event.tableId())) {
+            if (!catalog.databaseExists(event.tableId().getSchemaName())) {
+                catalog.createDatabase(event.tableId().getSchemaName(), true);
+            }
+            Schema schema = event.getSchema();
+            org.apache.paimon.schema.Schema.Builder builder =
+                    new org.apache.paimon.schema.Schema.Builder();
+            schema.getColumns()
+                    .forEach(
+                            (column) ->
+                                    builder.column(
+                                            column.getName(),
+                                            LogicalTypeConversion.toDataType(
+                                                    DataTypeUtils.toFlinkDataType(column.getType())
+                                                            .getLogicalType())));
+            List<String> partitionKeys = new ArrayList<>();
             List<String> primaryKeys = schema.primaryKeys();
-            primaryKeys.addAll(partitionMaps.get(event.tableId()));
-            builder.primaryKey(primaryKeys);
-            builder.partitionKeys(partitionMaps.get(event.tableId()));
-        } else if (schema.partitionKeys() != null && !schema.partitionKeys().isEmpty()) {
-            builder.partitionKeys(schema.partitionKeys());
+            if (partitionMaps.containsKey(event.tableId())) {
+                partitionKeys.addAll(partitionMaps.get(event.tableId()));
+            } else if (schema.partitionKeys() != null && !schema.partitionKeys().isEmpty()) {
+                partitionKeys.addAll(schema.partitionKeys());
+            }
+            for (String partitionColumn : partitionKeys) {
+                if (!primaryKeys.contains(partitionColumn)) {
+                    primaryKeys.add(partitionColumn);
+                }
+            }
+            builder.partitionKeys(partitionKeys)
+                    .primaryKey(primaryKeys)
+                    .comment(schema.comment())
+                    .options(tableOptions)
+                    .options(schema.options());
+            catalog.createTable(tableIdToIdentifier(event), builder.build(), true);
+            tryGetDlfTablePermissionWithRuntimeException(
+                    event.tableId().getSchemaName(), event.tableId().getTableName());
+        } catch (Catalog.TableAlreadyExistException
+                | Catalog.DatabaseNotExistException
+                | Catalog.DatabaseAlreadyExistException e) {
+            throw new SchemaEvolveException(event, e.getMessage(), e);
         }
-        builder.options(tableOptions);
-        builder.options(schema.options());
-        catalog.createTable(tableIdToIdentifier(event), builder.build(), true);
-        tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
     }
 
-    private void applyAddColumn(AddColumnEvent event) throws Exception {
-        List<SchemaChange> tableChangeList = applyAddColumnEventWithPosition(event);
-        tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+    private void applyAddColumn(AddColumnEvent event) throws SchemaEvolveException {
+        try {
+            List<SchemaChange> tableChangeList = applyAddColumnEventWithPosition(event);
+            tryGetDlfTablePermissionWithRuntimeException(
+                    event.tableId().getSchemaName(), event.tableId().getTableName());
+            catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+        } catch (Catalog.TableNotExistException
+                | Catalog.ColumnAlreadyExistException
+                | Catalog.ColumnNotExistException e) {
+            if (e instanceof Catalog.ColumnAlreadyExistException) {
+                LOG.warn("{}, skip it.", e.getMessage());
+            } else {
+                throw new SchemaEvolveException(event, e.getMessage(), e);
+            }
+        }
     }
 
     private List<SchemaChange> applyAddColumnEventWithPosition(AddColumnEvent event)
-            throws Exception {
-        List<SchemaChange> tableChangeList = new ArrayList<>();
-        for (AddColumnEvent.ColumnWithPosition columnWithPosition : event.getAddedColumns()) {
-            SchemaChange tableChange;
-            switch (columnWithPosition.getPosition()) {
-                case FIRST:
-                    tableChange =
-                            SchemaChangeProvider.add(
-                                    columnWithPosition,
-                                    SchemaChange.Move.first(
-                                            columnWithPosition.getAddColumn().getName()));
-                    tableChangeList.add(tableChange);
-                    break;
-                case LAST:
-                    SchemaChange schemaChangeWithLastPosition =
-                            SchemaChangeProvider.add(columnWithPosition);
-                    tableChangeList.add(schemaChangeWithLastPosition);
-                    break;
-                case BEFORE:
-                    SchemaChange schemaChangeWithBeforePosition =
-                            applyAddColumnWithBeforePosition(
-                                    event.tableId().getSchemaName(),
-                                    event.tableId().getTableName(),
-                                    columnWithPosition);
-                    tableChangeList.add(schemaChangeWithBeforePosition);
-                    break;
-                case AFTER:
-                    checkNotNull(
-                            columnWithPosition.getExistedColumnName(),
-                            "Existing column name must be provided for AFTER position");
-                    SchemaChange.Move after =
-                            SchemaChange.Move.after(
-                                    columnWithPosition.getAddColumn().getName(),
-                                    columnWithPosition.getExistedColumnName());
-                    tableChange = SchemaChangeProvider.add(columnWithPosition, after);
-                    tableChangeList.add(tableChange);
-                    break;
-                default:
-                    throw new IllegalArgumentException(
-                            "Unknown column position: " + columnWithPosition.getPosition());
+            throws SchemaEvolveException {
+        try {
+            List<SchemaChange> tableChangeList = new ArrayList<>();
+            for (AddColumnEvent.ColumnWithPosition columnWithPosition : event.getAddedColumns()) {
+                switch (columnWithPosition.getPosition()) {
+                    case FIRST:
+                        tableChangeList.addAll(
+                                SchemaChangeProvider.add(
+                                        columnWithPosition,
+                                        SchemaChange.Move.first(
+                                                columnWithPosition.getAddColumn().getName())));
+                        break;
+                    case LAST:
+                        tableChangeList.addAll(SchemaChangeProvider.add(columnWithPosition));
+                        break;
+                    case BEFORE:
+                        tableChangeList.addAll(
+                                applyAddColumnWithBeforePosition(
+                                        event.tableId().getSchemaName(),
+                                        event.tableId().getTableName(),
+                                        columnWithPosition));
+                        break;
+                    case AFTER:
+                        checkNotNull(
+                                columnWithPosition.getExistedColumnName(),
+                                "Existing column name must be provided for AFTER position");
+                        SchemaChange.Move after =
+                                SchemaChange.Move.after(
+                                        columnWithPosition.getAddColumn().getName(),
+                                        columnWithPosition.getExistedColumnName());
+                        tableChangeList.addAll(SchemaChangeProvider.add(columnWithPosition, after));
+                        break;
+                    default:
+                        throw new SchemaEvolveException(
+                                event,
+                                "Unknown column position: " + columnWithPosition.getPosition());
+                }
             }
+            return tableChangeList;
+        } catch (Catalog.TableNotExistException e) {
+            throw new SchemaEvolveException(event, e.getMessage(), e);
         }
-        return tableChangeList;
     }
 
-    private SchemaChange applyAddColumnWithBeforePosition(
+    private List<SchemaChange> applyAddColumnWithBeforePosition(
             String schemaName,
             String tableName,
             AddColumnEvent.ColumnWithPosition columnWithPosition)
-            throws Exception {
+            throws Catalog.TableNotExistException {
         String existedColumnName = columnWithPosition.getExistedColumnName();
-        tryGetDlfTablePermission(schemaName, tableName);
+        tryGetDlfTablePermissionWithRuntimeException(schemaName, tableName);
         Table table = catalog.getTable(new Identifier(schemaName, tableName));
         List<String> columnNames = table.rowType().getFieldNames();
         int index = checkColumnPosition(existedColumnName, columnNames);
@@ -275,39 +348,77 @@ public class PaimonMetadataApplier implements MetadataApplier {
         return index;
     }
 
-    private void applyDropColumn(DropColumnEvent event) throws Exception {
-        List<SchemaChange> tableChangeList = new ArrayList<>();
-        event.getDroppedColumnNames()
-                .forEach((column) -> tableChangeList.add(SchemaChangeProvider.drop(column)));
-        tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+    private void applyDropColumn(DropColumnEvent event) throws SchemaEvolveException {
+        try {
+            List<SchemaChange> tableChangeList = new ArrayList<>();
+            event.getDroppedColumnNames()
+                    .forEach((column) -> tableChangeList.addAll(SchemaChangeProvider.drop(column)));
+            tryGetDlfTablePermissionWithRuntimeException(
+                    event.tableId().getSchemaName(), event.tableId().getTableName());
+            catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+        } catch (Catalog.TableNotExistException
+                | Catalog.ColumnAlreadyExistException
+                | Catalog.ColumnNotExistException e) {
+            throw new SchemaEvolveException(event, e.getMessage(), e);
+        }
     }
 
-    private void applyRenameColumn(RenameColumnEvent event) throws Exception {
-        List<SchemaChange> tableChangeList = new ArrayList<>();
-        event.getNameMapping()
-                .forEach(
-                        (oldName, newName) ->
-                                tableChangeList.add(SchemaChangeProvider.rename(oldName, newName)));
-        tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+    private void applyRenameColumn(RenameColumnEvent event) throws SchemaEvolveException {
+        try {
+            Map<String, String> options =
+                    catalog.getTable(
+                                    new Identifier(
+                                            event.tableId().getSchemaName(),
+                                            event.tableId().getTableName()))
+                            .options();
+            List<SchemaChange> tableChangeList = new ArrayList<>();
+            event.getNameMapping()
+                    .forEach(
+                            (oldName, newName) ->
+                                    tableChangeList.addAll(
+                                            SchemaChangeProvider.rename(
+                                                    oldName, newName, options)));
+            tryGetDlfTablePermissionWithRuntimeException(
+                    event.tableId().getSchemaName(), event.tableId().getTableName());
+            catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+        } catch (Catalog.TableNotExistException
+                | Catalog.ColumnAlreadyExistException
+                | Catalog.ColumnNotExistException e) {
+            throw new SchemaEvolveException(event, e.getMessage(), e);
+        }
     }
 
-    private void applyAlterColumn(AlterColumnTypeEvent event) throws Exception {
-        List<SchemaChange> tableChangeList = new ArrayList<>();
-        event.getTypeMapping()
-                .forEach(
-                        (oldName, newType) ->
-                                tableChangeList.add(
-                                        SchemaChangeProvider.updateColumnType(oldName, newType)));
-        tryGetDlfTablePermission(event.tableId().getSchemaName(), event.tableId().getTableName());
-        catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+    private void applyAlterColumnType(AlterColumnTypeEvent event) throws SchemaEvolveException {
+        try {
+            List<SchemaChange> tableChangeList = new ArrayList<>();
+            event.getTypeMapping()
+                    .forEach(
+                            (oldName, newType) ->
+                                    tableChangeList.add(
+                                            SchemaChangeProvider.updateColumnType(
+                                                    oldName, newType)));
+            tryGetDlfTablePermissionWithRuntimeException(
+                    event.tableId().getSchemaName(), event.tableId().getTableName());
+            catalog.alterTable(tableIdToIdentifier(event), tableChangeList, true);
+        } catch (Catalog.TableNotExistException
+                | Catalog.ColumnAlreadyExistException
+                | Catalog.ColumnNotExistException e) {
+            throw new SchemaEvolveException(event, e.getMessage(), e);
+        }
     }
 
-    private void applyTruncateTable(TruncateTableEvent event) throws Exception {
-        try (BatchTableCommit batchTableCommit =
-                catalog.getTable(tableIdToIdentifier(event)).newBatchWriteBuilder().newCommit()) {
-            batchTableCommit.truncateTable();
+    private void applyTruncateTable(TruncateTableEvent event) throws SchemaEvolveException {
+        try {
+            Table table = catalog.getTable(tableIdToIdentifier(event));
+            if (table.options().get("deletion-vectors.enabled").equals("true")) {
+                throw new UnsupportedSchemaChangeEventException(
+                        event, "Unable to truncate a table with deletion vectors enabled.", null);
+            }
+            try (BatchTableCommit batchTableCommit = table.newBatchWriteBuilder().newCommit()) {
+                batchTableCommit.truncateTable();
+            }
+        } catch (Exception e) {
+            throw new SchemaEvolveException(event, "Failed to apply truncate table event", e);
         }
     }
 
@@ -329,7 +440,23 @@ public class PaimonMetadataApplier implements MetadataApplier {
                                     catalogOptions.get(VvrDataLakeConfig.CATALOG_INSTANCE_ID))
                             .databaseName(database)
                             .build());
-            LOGGER.debug("Succeed to get database permission for " + database);
+            LOG.debug("Succeed to get database permission for " + database);
+        }
+    }
+
+    private void tryGetDlfTablePermissionIgnoreException(String database, String tableName) {
+        try {
+            tryGetDlfTablePermission(database, tableName);
+        } catch (Exception e) {
+            LOG.error("Failed to get dlf table permission", e);
+        }
+    }
+
+    private void tryGetDlfTablePermissionWithRuntimeException(String database, String tableName) {
+        try {
+            tryGetDlfTablePermission(database, tableName);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -344,7 +471,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
                             .databaseName(database)
                             .tableName(tableName)
                             .build());
-            LOGGER.debug("Succeed to get table permission for " + database + "." + tableName);
+            LOG.debug("Succeed to get table permission for " + database + "." + tableName);
         }
     }
 
