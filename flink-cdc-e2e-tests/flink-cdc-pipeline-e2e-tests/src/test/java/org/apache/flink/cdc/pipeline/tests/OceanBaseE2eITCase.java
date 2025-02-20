@@ -145,11 +145,11 @@ public class OceanBaseE2eITCase extends PipelineTestEnvironment {
                 originList,
                 Matchers.containsInAnyOrder(
                         Stream.of(
-                                        "101,scooter,Small 2-wheel scooter,3.14,red,{\"key1\": \"value1\"},{\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
-                                        "102,car battery,12V car battery,8.1,white,{\"key2\": \"value2\"},{\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
-                                        "103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8,red,{\"key3\": \"value3\"},{\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
-                                        "104,hammer,12oz carpenter's hammer,0.75,white,{\"key4\": \"value4\"},{\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
-                                        "105,hammer,14oz carpenter's hammer,0.875,red,{\"k1\": \"v1\", \"k2\": \"v2\"},{\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
+                                        "101,scooter,Small 2-wheel scooter,3.14,red,{\"key1\":\"value1\"},{\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
+                                        "102,car battery,12V car battery,8.1,white,{\"key2\":\"value2\"},{\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
+                                        "103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8,red,{\"key3\":\"value3\"},{\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
+                                        "104,hammer,12oz carpenter's hammer,0.75,white,{\"key4\":\"value4\"},{\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
+                                        "105,hammer,14oz carpenter's hammer,0.875,red,{\"k1\":\"v1\",\"k2\":\"v2\"},{\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
                                         "106,hammer,16oz carpenter's hammer,1.0,null,null,null",
                                         "107,rocks,box of assorted rocks,5.3,null,null,null",
                                         "108,jacket,water resistent black wind breaker,0.1,null,null,null",
@@ -201,11 +201,11 @@ public class OceanBaseE2eITCase extends PipelineTestEnvironment {
                 updateList,
                 Matchers.containsInAnyOrder(
                         Stream.of(
-                                        "101,scooter,Small 2-wheel scooter,3.14,red,{\"key1\": \"value1\"},{\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0},null",
-                                        "102,car battery,12V car battery,8.1,white,{\"key2\": \"value2\"},{\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0},null",
-                                        "103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8,red,{\"key3\": \"value3\"},{\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0},null",
-                                        "104,hammer,12oz carpenter's hammer,0.75,white,{\"key4\": \"value4\"},{\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0},null",
-                                        "105,hammer,14oz carpenter's hammer,0.875,red,{\"k1\": \"v1\", \"k2\": \"v2\"},{\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0},null",
+                                        "101,scooter,Small 2-wheel scooter,3.14,red,{\"key1\":\"value1\"},{\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0},null",
+                                        "102,car battery,12V car battery,8.1,white,{\"key2\":\"value2\"},{\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0},null",
+                                        "103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8,red,{\"key3\":\"value3\"},{\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0},null",
+                                        "104,hammer,12oz carpenter's hammer,0.75,white,{\"key4\":\"value4\"},{\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0},null",
+                                        "105,hammer,14oz carpenter's hammer,0.875,red,{\"k1\":\"v1\",\"k2\":\"v2\"},{\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0},null",
                                         "106,hammer,18oz carpenter hammer,1.0,null,null,null,null",
                                         "107,rocks,box of assorted rocks,5.1,null,null,null,null",
                                         "108,jacket,water resistent black wind breaker,0.1,null,null,null,null",
