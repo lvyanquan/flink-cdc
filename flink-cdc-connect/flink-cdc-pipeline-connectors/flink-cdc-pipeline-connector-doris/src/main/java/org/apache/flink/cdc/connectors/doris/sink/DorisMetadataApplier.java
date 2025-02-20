@@ -48,9 +48,11 @@ import org.apache.doris.flink.catalog.doris.DataModel;
 import org.apache.doris.flink.catalog.doris.FieldSchema;
 import org.apache.doris.flink.catalog.doris.TableSchema;
 import org.apache.doris.flink.cfg.DorisOptions;
+import org.apache.doris.flink.exception.DorisSchemaChangeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -64,6 +66,8 @@ import static org.apache.flink.cdc.common.event.SchemaChangeEventType.DROP_COLUM
 import static org.apache.flink.cdc.common.event.SchemaChangeEventType.DROP_TABLE;
 import static org.apache.flink.cdc.common.event.SchemaChangeEventType.RENAME_COLUMN;
 import static org.apache.flink.cdc.common.event.SchemaChangeEventType.TRUNCATE_TABLE;
+import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SCHEMA_EVOLUTION_TIMEOUT;
+import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_ENABLE_BATCH_MODE;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.TABLE_CREATE_PROPERTIES_PREFIX;
 
 /** Supports {@link DorisDataSink} to schema evolution. */
@@ -73,12 +77,16 @@ public class DorisMetadataApplier implements MetadataApplier {
     private DorisSchemaChangeManager schemaChangeManager;
     private Configuration config;
     private Set<SchemaChangeEventType> enabledSchemaEvolutionTypes;
+    private boolean batchMode;
+    private Duration schemaEvolutionTimeout;
 
     public DorisMetadataApplier(DorisOptions dorisOptions, Configuration config) {
         this.dorisOptions = dorisOptions;
         this.schemaChangeManager = new DorisSchemaChangeManager(dorisOptions);
         this.config = config;
         this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
+        this.batchMode = config.get(SINK_ENABLE_BATCH_MODE);
+        this.schemaEvolutionTimeout = config.get(SCHEMA_EVOLUTION_TIMEOUT);
     }
 
     @Override
@@ -136,6 +144,27 @@ public class DorisMetadataApplier implements MetadataApplier {
                     applyTruncateTableEvent(truncateTableEvent);
                     return null;
                 });
+
+        TableId tableId = event.tableId();
+        SchemaChangeEventType type = event.getType();
+
+        // In non-batch mode, we can't wait for schema evolution to finish because that will block
+        // the checkpoint process. Non-batch sink writer relies on checkpoint to write data
+        // synchronously.
+        if (batchMode) {
+            // Only ALTER TABLE schema change events requires waiting timeout.
+            if (type == ADD_COLUMN
+                    || type == ALTER_COLUMN_TYPE
+                    || type == RENAME_COLUMN
+                    || type == DROP_COLUMN) {
+                try {
+                    waitUntilSchemaEvolutionEnds(tableId, schemaEvolutionTimeout);
+                } catch (Exception e) {
+                    throw new SchemaEvolveException(
+                            event, "Failed to wait until schema evolution to end.", e);
+                }
+            }
+        }
     }
 
     private void applyCreateTableEvent(CreateTableEvent event) throws SchemaEvolveException {
@@ -302,6 +331,32 @@ public class DorisMetadataApplier implements MetadataApplier {
             schemaChangeManager.dropTable(tableId.getSchemaName(), tableId.getTableName());
         } catch (Exception e) {
             throw new SchemaEvolveException(dropTableEvent, "fail to drop table", e);
+        }
+    }
+
+    private void waitUntilSchemaEvolutionEnds(TableId tableId, Duration timeout) throws Exception {
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            DorisSchemaChangeManager.MetadataApplyingState state =
+                    schemaChangeManager.getAlterJobState(
+                            tableId.getSchemaName(), tableId.getTableName());
+            switch (state.state) {
+                case "PENDING":
+                case "WAITING_TXN":
+                case "RUNNING":
+                    LOG.info(
+                            "Schema evolving for table {} is still in `{}` state, waiting...",
+                            tableId,
+                            state.state);
+                    // Still evolving, wait for a little while...
+                    Thread.sleep(1000);
+                    continue;
+                case "EMPTY":
+                case "FINISHED":
+                    return;
+                default:
+                    throw new DorisSchemaChangeException("Unexpected alter job state: " + state);
+            }
         }
     }
 }

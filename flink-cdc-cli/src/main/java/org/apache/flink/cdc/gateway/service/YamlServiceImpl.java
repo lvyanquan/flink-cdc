@@ -31,12 +31,15 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.artifacts.ArtifactFetcher;
 import org.apache.flink.table.artifacts.ArtifactFinder;
 import org.apache.flink.table.gateway.api.cdc.YamlService;
+import org.apache.flink.table.gateway.api.vvr.command.info.cdc.CatalogOptionsInfo;
+import org.apache.flink.table.gateway.api.vvr.command.info.cdc.IdentifierInfo;
 import org.apache.flink.util.MutableURLClassLoader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.List;
 
 import static org.apache.flink.configuration.PipelineOptions.JARS;
 
@@ -81,14 +84,26 @@ public class YamlServiceImpl implements YamlService {
     }
 
     @Override
-    public String convertCxasToCdcYaml(
-            String s,
+    public IdentifierInfo getReferencedCatalogInfo(
+            List<Object> list,
             Configuration configuration,
             MutableURLClassLoader mutableURLClassLoader,
             ArtifactFetcher artifactFetcher,
             ArtifactFinder artifactFinder)
             throws Exception {
-        return "";
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public String convertCxasToCdcYaml(
+            List<Object> list,
+            CatalogOptionsInfo catalogOptionsInfo,
+            Configuration configuration,
+            MutableURLClassLoader mutableURLClassLoader,
+            ArtifactFetcher artifactFetcher,
+            ArtifactFinder artifactFinder)
+            throws Exception {
+        throw new UnsupportedOperationException("Not implemented yet.");
     }
 
     @VisibleForTesting

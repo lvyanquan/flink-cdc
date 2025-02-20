@@ -220,7 +220,7 @@ public class DorisSinkTestBase extends TestLogger {
                             "-uroot",
                             "-P9030",
                             "-h127.0.0.1",
-                            String.format("-e DROP DATABASE IF EXISTS %s;", databaseName));
+                            String.format("-e DROP DATABASE IF EXISTS %s FORCE;", databaseName));
 
             if (rs.getExitCode() != 0) {
                 throw new RuntimeException("Failed to drop database." + rs.getStderr());

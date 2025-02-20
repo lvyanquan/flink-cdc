@@ -24,11 +24,11 @@ import org.apache.flink.cdc.connectors.mysql.testutils.MySqlVersion;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.pipeline.tests.utils.PipelineTestEnvironment;
 
+import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -51,15 +51,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 /** End-to-end tests for mysql cdc to Doris pipeline job. */
-@Ignore
 @RunWith(Parameterized.class)
 public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(MySqlToDorisE2eITCase.class);
@@ -213,11 +207,11 @@ public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                 "products",
                 7,
                 Arrays.asList(
-                        "101 | scooter | Small 2-wheel scooter | 3.14 | red | {\"key1\": \"value1\"} | {\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
-                        "102 | car battery | 12V car battery | 8.1 | white | {\"key2\": \"value2\"} | {\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
-                        "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\": \"value3\"} | {\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
-                        "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\": \"value4\"} | {\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
-                        "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\": \"v1\", \"k2\": \"v2\"} | {\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
+                        "101 | scooter | Small 2-wheel scooter | 3.14 | red | {\"key1\":\"value1\"} | {\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
+                        "102 | car battery | 12V car battery | 8.1 | white | {\"key2\":\"value2\"} | {\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
+                        "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\":\"value3\"} | {\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
+                        "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\":\"value4\"} | {\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
+                        "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\":\"v1\",\"k2\":\"v2\"} | {\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
                         "106 | hammer | 16oz carpenter's hammer | 1.0 | null | null | null",
                         "107 | rocks | box of assorted rocks | 5.3 | null | null | null",
                         "108 | jacket | water resistent black wind breaker | 0.1 | null | null | null",
@@ -254,11 +248,11 @@ public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                     "products",
                     7,
                     Arrays.asList(
-                            "101 | scooter | Small 2-wheel scooter | 3.14 | red | {\"key1\": \"value1\"} | {\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
-                            "102 | car battery | 12V car battery | 8.1 | white | {\"key2\": \"value2\"} | {\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
-                            "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\": \"value3\"} | {\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
-                            "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\": \"value4\"} | {\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
-                            "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\": \"v1\", \"k2\": \"v2\"} | {\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
+                            "101 | scooter | Small 2-wheel scooter | 3.14 | red | {\"key1\":\"value1\"} | {\"coordinates\":[1,1],\"type\":\"Point\",\"srid\":0}",
+                            "102 | car battery | 12V car battery | 8.1 | white | {\"key2\":\"value2\"} | {\"coordinates\":[2,2],\"type\":\"Point\",\"srid\":0}",
+                            "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\":\"value3\"} | {\"coordinates\":[3,3],\"type\":\"Point\",\"srid\":0}",
+                            "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\":\"value4\"} | {\"coordinates\":[4,4],\"type\":\"Point\",\"srid\":0}",
+                            "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\":\"v1\",\"k2\":\"v2\"} | {\"coordinates\":[5,5],\"type\":\"Point\",\"srid\":0}",
                             "106 | hammer | 16oz carpenter's hammer | 1.0 | null | null | null",
                             "107 | rocks | box of assorted rocks | 5.3 | null | null | null",
                             "108 | jacket | water resistent black wind breaker | 0.1 | null | null | null",
@@ -285,10 +279,10 @@ public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                 "products",
                 7,
                 Arrays.asList(
-                        "102 | car battery | 12V car battery | 8.1 | white | {\"key2\": \"value2\"} | null",
-                        "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\": \"value3\"} | null",
-                        "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\": \"value4\"} | null",
-                        "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\": \"v1\", \"k2\": \"v2\"} | null",
+                        "102 | car battery | 12V car battery | 8.1 | white | {\"key2\":\"value2\"} | null",
+                        "103 | 12-pack drill bits | 12-pack of drill bits with sizes ranging from #40 to #3 | 0.8 | red | {\"key3\":\"value3\"} | null",
+                        "104 | hammer | 12oz carpenter's hammer | 0.75 | white | {\"key4\":\"value4\"} | null",
+                        "105 | hammer | 14oz carpenter's hammer | 0.875 | red | {\"k1\":\"v1\",\"k2\":\"v2\"} | null",
                         "106 | hammer | 18oz carpenter hammer | 1.0 | null | null | null",
                         "107 | rocks | box of assorted rocks | 5.1 | null | null | null",
                         "108 | jacket | water resistent black wind breaker | 0.1 | null | null | null",
@@ -479,15 +473,6 @@ public class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     }
 
     public static void assertEqualsInAnyOrder(List<String> expected, List<String> actual) {
-        assertTrue(expected != null && actual != null);
-        assertEqualsInOrder(
-                expected.stream().sorted().collect(Collectors.toList()),
-                actual.stream().sorted().collect(Collectors.toList()));
-    }
-
-    public static void assertEqualsInOrder(List<String> expected, List<String> actual) {
-        assertTrue(expected != null && actual != null);
-        assertEquals(expected.size(), actual.size());
-        assertArrayEquals(expected.toArray(new String[0]), actual.toArray(new String[0]));
+        Assertions.assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
     }
 }

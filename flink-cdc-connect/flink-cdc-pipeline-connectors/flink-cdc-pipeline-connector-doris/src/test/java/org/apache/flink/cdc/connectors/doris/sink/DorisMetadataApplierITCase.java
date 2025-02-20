@@ -20,9 +20,11 @@ package org.apache.flink.cdc.connectors.doris.sink;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.cdc.common.configuration.Configuration;
+import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
+import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
@@ -32,6 +34,7 @@ import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
 import org.apache.flink.cdc.common.schema.PhysicalColumn;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.DataSink;
+import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.composer.definition.SinkDef;
 import org.apache.flink.cdc.composer.flink.coordination.OperatorIDGenerator;
@@ -39,6 +42,7 @@ import org.apache.flink.cdc.composer.flink.translator.DataSinkTranslator;
 import org.apache.flink.cdc.composer.flink.translator.SchemaOperatorTranslator;
 import org.apache.flink.cdc.connectors.doris.sink.utils.DorisContainer;
 import org.apache.flink.cdc.connectors.doris.sink.utils.DorisSinkTestBase;
+import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -46,7 +50,6 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -65,10 +68,10 @@ import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.PA
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_ENABLE_BATCH_MODE;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_ENABLE_DELETE;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.USERNAME;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /** IT tests for {@link DorisMetadataApplier}. */
 @RunWith(Parameterized.class)
-@Ignore
 public class DorisMetadataApplierITCase extends DorisSinkTestBase {
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
@@ -429,6 +432,65 @@ public class DorisMetadataApplierITCase extends DorisSinkTestBase {
                         DorisContainer.DORIS_DATABASE_NAME, DorisContainer.DORIS_TABLE_NAME);
 
         runJobWithEvents(generateNarrowingAlterColumnTypeEvents(tableId));
+    }
+
+    @Test
+    public void testDorisConsecutiveLargeScaleAlterColumnType() throws Exception {
+        assumeThat(batchMode).isTrue();
+        TableId tableId =
+                TableId.tableId(
+                        DorisContainer.DORIS_DATABASE_NAME, DorisContainer.DORIS_TABLE_NAME);
+
+        runJobWithEvents(generateConsecutiveLargeAlterColumnTypeEvents(tableId));
+
+        List<String> actual = inspectTableSchema(tableId);
+
+        List<String> expected =
+                Arrays.asList(
+                        "id | BIGINT | Yes | true | null",
+                        "col_1 | DOUBLE | Yes | false | null",
+                        "col_2 | DOUBLE | Yes | false | null");
+
+        assertEqualsInOrder(expected, actual);
+    }
+
+    private List<Event> generateConsecutiveLargeAlterColumnTypeEvents(TableId tableId) {
+        Schema schema =
+                Schema.newBuilder()
+                        .column(new PhysicalColumn("id", DataTypes.BIGINT().notNull(), null))
+                        .column(new PhysicalColumn("col_1", DataTypes.VARCHAR(1024), null))
+                        .column(new PhysicalColumn("col_2", DataTypes.VARCHAR(1024), null))
+                        .primaryKey("id")
+                        .build();
+
+        BinaryRecordDataGenerator generator =
+                new BinaryRecordDataGenerator(schema.getColumnDataTypes().toArray(new DataType[0]));
+
+        List<Event> events = new ArrayList<>();
+        events.add(new CreateTableEvent(tableId, schema));
+
+        // Make sure we have plenty of data that schema evolution is slow
+        for (int i = 0; i < 100_000; i++) {
+            events.add(
+                    DataChangeEvent.insertEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        (long) i,
+                                        BinaryStringData.fromString(String.valueOf(Math.random())),
+                                        BinaryStringData.fromString(String.valueOf(Math.random()))
+                                    })));
+        }
+
+        // Evolve schema one-by-one
+        events.add(
+                new AlterColumnTypeEvent(
+                        tableId, Collections.singletonMap("col_1", DataTypes.DOUBLE())));
+
+        events.add(
+                new AlterColumnTypeEvent(
+                        tableId, Collections.singletonMap("col_2", DataTypes.DOUBLE())));
+        return events;
     }
 
     private void runJobWithEvents(List<Event> events) throws Exception {

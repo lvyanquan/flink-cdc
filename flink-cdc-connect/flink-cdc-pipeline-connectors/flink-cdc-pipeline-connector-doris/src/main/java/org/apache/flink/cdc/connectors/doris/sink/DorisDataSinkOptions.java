@@ -148,6 +148,12 @@ public class DorisDataSinkOptions {
                     .defaultValue(false)
                     .withDescription("Whether to use buffer cache for breakpoint resume");
 
+    public static final ConfigOption<Duration> SCHEMA_EVOLUTION_TIMEOUT =
+            ConfigOptions.key("schema-evolution.timeout")
+                    .durationType()
+                    .defaultValue(Duration.ofMinutes(3))
+                    .withDescription("Schema evolution waiting duration before timeout failure.");
+
     // Prefix for Doris StreamLoad specific properties.
     public static final String STREAM_LOAD_PROP_PREFIX = "sink.properties.";
     // Prefix for Doris Create table.

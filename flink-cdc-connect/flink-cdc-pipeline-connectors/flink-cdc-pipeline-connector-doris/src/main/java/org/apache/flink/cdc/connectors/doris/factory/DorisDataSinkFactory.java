@@ -42,6 +42,7 @@ import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.BE
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.FENODES;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.JDBC_URL;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.PASSWORD;
+import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SCHEMA_EVOLUTION_TIMEOUT;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_BUFFER_COUNT;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_BUFFER_FLUSH_INTERVAL;
 import static org.apache.flink.cdc.connectors.doris.sink.DorisDataSinkOptions.SINK_BUFFER_FLUSH_MAX_BYTES;
@@ -159,6 +160,7 @@ public class DorisDataSinkFactory implements DataSinkFactory {
         options.add(SINK_BUFFER_FLUSH_INTERVAL);
         options.add(SINK_IGNORE_UPDATE_BEFORE);
         options.add(SINK_USE_CACHE);
+        options.add(SCHEMA_EVOLUTION_TIMEOUT);
 
         return options;
     }
