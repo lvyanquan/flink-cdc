@@ -124,10 +124,12 @@ public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
         boolean primitiveAsString = config.getOptional(SCAN_PRIMITIVE_AS_STRING).orElse(false);
         ResolvedSchema physicalSchema =
                 getPhysicalSchema(context.getCatalogTable().getResolvedSchema());
+        AssignStrategy assignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
+
+        /*
         checkArgument(physicalSchema.getPrimaryKey().isPresent(), "Primary key must be present");
         checkPrimaryKey(physicalSchema.getPrimaryKey().get(), "Primary key must be _id field");
-        AssignStrategy assignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
-        /*
+
         Users can create the Mongo cdc source and Mongo lookup source with the same identifier 'mongodb' in flink-connector-mongodb.
         Mongo cdc source request primary key must be '_id', Mongo lookup source has no limit on this.
         But `createDynamicTableSource` will fail for the tables without primary key or primary key is not '_id'.
