@@ -1,3 +1,36 @@
+# 在本地执行依赖 Docker 镜像测试用例的方法
+
+依赖的 Docker 镜像可以分为三类：
+
+1. 带有 reg.docker.alibaba-inc.com 前缀的镜像，为早期镜像站不可用时，手动从 Docker Hub 迁移的结果。
+2. 无特殊前缀的 Docker 镜像，且已经在 opsx.alibaba-inc.com 中提供。本（VVR CDC）仓库依赖的大部分测试镜像均已同步。
+3. 无特殊前缀的 Docker 镜像，且在 opsx.alibaba-inc.com 中不提供。
+
+以上三类镜像建议的拉取方法为：
+
+1. 第一类可以**关闭阿里郎代理和 Docker 的代理配置**，直接拉取。
+2. 第二类可以**关闭阿里郎代理和 Docker 的代理配置**，在 Docker `config.json` 中如此配置：
+
+```json
+{
+  "registry-mirrors" : [
+    "http:\/\/yum.tbsite.net\/mirrors\/"
+  ],
+  "insecure-registries" : [
+    "yum.tbsite.net"
+  ]
+}
+```
+
+然后直接拉取即可。会自动前往镜像站拉取，无需手动添加前缀。
+
+3.1. 第三类（如果有 OPSX 登录权限）：前往 https://opsx.alibaba-inc.com/web/scm/package/docker_others 手动输入需要拉取的镜像名称和 tag，等待同步完成后按 (2) 操作即可。
+3.2. 第三类（如果没有 OPSX 登录权限）：打开阿里郎代理，并且在 Docker 客户端（建议 OrbStack）中配置代理地址为 `socks5://127.0.0.1:13659`，走代理拉镜像。
+
+> 配置阿里郎代理(和/或) Docker 代理地址可能导致前两类镜像无法正常拉取。
+
+---
+
 <p align="center">
   <a href="https://nightlies.apache.org/flink/flink-cdc-docs-stable/"><img src="docs/static/fig/flinkcdc-logo.png" alt="Flink CDC" style="width: 375px;"></a>
 </p>
