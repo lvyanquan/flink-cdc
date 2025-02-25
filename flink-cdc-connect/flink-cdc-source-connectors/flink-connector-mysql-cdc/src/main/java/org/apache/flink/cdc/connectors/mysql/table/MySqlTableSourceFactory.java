@@ -33,9 +33,13 @@ import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.connector.OptionSnapshot;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.factories.CannotMigrateException;
+import org.apache.flink.table.factories.CannotSnapshotException;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.factories.OptionUpgradableTableFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +48,14 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_ACCESS_KEY_SECRET;
@@ -61,24 +67,39 @@ import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_MAIN_DB_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_REGION_ID;
 import static org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsOptions.RDS_USE_INTRANET_LINK;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.DATABASE_NAME;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_IS_SHARDING_TABLE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_PREFIX;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_MODE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_GTID_SET;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.TABLE_NAME;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.VERVERICA_START_TIME_MILLS;
 import static org.apache.flink.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
 import static org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils.getPhysicalSchema;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Factory for creating configured instance of {@link MySqlTableSource}. */
-public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
+public class MySqlTableSourceFactory
+        implements DynamicTableSourceFactory, OptionUpgradableTableFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(MySqlTableSourceFactory.class);
 
     private static final String IDENTIFIER = "mysql-cdc";
+    private static final int CURRENT_SNAPSHOT_VERSION = 1;
 
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {
@@ -537,6 +558,93 @@ public class MySqlTableSourceFactory implements DynamicTableSourceFactory {
                             SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED.key(),
                             TableConfigOptions.EVOLVING_SCAN_NEWLY_ADDED_TABLE_ENABLED.key(),
                             SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED.key()));
+        }
+    }
+
+    @Override
+    public OptionSnapshot snapshotOptions(UpgradeContext context) throws CannotSnapshotException {
+        Map<String, String> allOptions = new HashMap<>(context.getCatalogTable().getOptions());
+        allOptions.put(
+                FactoryUtil.PROPERTY_VERSION.key(), String.valueOf(CURRENT_SNAPSHOT_VERSION));
+        // Delete password and sk when saving snapshot
+        allOptions.remove(PASSWORD.key());
+        allOptions.remove(RDS_ACCESS_KEY_SECRET.key());
+        return new OptionSnapshot(allOptions);
+    }
+
+    @Override
+    public Map<String, String> migrateOptions(UpgradeContext context, OptionSnapshot snapshot)
+            throws CannotMigrateException {
+        FactoryUtil.OptionMigrateHelper helper =
+                FactoryUtil.createOptionMigrateHelper(this, context);
+        Map<String, String> mergedConfig = Configuration.fromMap(snapshot.getOptions()).toMap();
+        // check whether the snapshot version is compatible
+        if (!String.valueOf(CURRENT_SNAPSHOT_VERSION)
+                .equals(mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()))) {
+            throw new CannotMigrateException(
+                    String.format(
+                            "Can not migrate connector because its snapshot version is %s and current version is %s.",
+                            mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()),
+                            CURRENT_SNAPSHOT_VERSION));
+        }
+        mergedConfig.remove(FactoryUtil.PROPERTY_VERSION.key());
+        Map<String, String> allOptions = helper.getEnrichmentOptions().toMap();
+        checkChangedOptions(mergedConfig, allOptions);
+        mergedConfig.putAll(allOptions);
+        return mergedConfig;
+    }
+
+    public Set<String> notAllowedChangedOptions() {
+        return Arrays.asList(
+                        DATABASE_NAME,
+                        TABLE_NAME,
+                        SCAN_STARTUP_MODE,
+                        SCAN_STARTUP_SPECIFIC_OFFSET_FILE,
+                        SCAN_STARTUP_SPECIFIC_OFFSET_POS,
+                        SCAN_STARTUP_SPECIFIC_OFFSET_GTID_SET,
+                        SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS,
+                        SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS,
+                        SCAN_STARTUP_TIMESTAMP_MILLIS,
+                        SCAN_INCREMENTAL_SNAPSHOT_ENABLED,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN,
+                        SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED)
+                .stream()
+                .map(ConfigOption::key)
+                .collect(Collectors.toSet());
+    }
+
+    private void checkChangedOptions(
+            Map<String, String> snapshotOptions, Map<String, String> newOptions)
+            throws CannotMigrateException {
+        Set<String> notAllowedChangedOptions = notAllowedChangedOptions();
+        Set<String> addedOptions = new HashSet<>(newOptions.keySet());
+        addedOptions.removeAll(snapshotOptions.keySet());
+        Set<String> removedOptions = new HashSet<>(snapshotOptions.keySet());
+        removedOptions.removeAll(newOptions.keySet());
+        for (String key : removedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is removed.",
+                                key));
+            }
+        }
+        for (String key : addedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is added.", key));
+            }
+        }
+        for (String key : snapshotOptions.keySet()) {
+            if (notAllowedChangedOptions.contains(key)
+                    && (!snapshotOptions.get(key).equals(newOptions.get(key)))) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is changed from %s to %s.",
+                                key, snapshotOptions.get(key), newOptions.get(key)));
+            }
         }
     }
 }
