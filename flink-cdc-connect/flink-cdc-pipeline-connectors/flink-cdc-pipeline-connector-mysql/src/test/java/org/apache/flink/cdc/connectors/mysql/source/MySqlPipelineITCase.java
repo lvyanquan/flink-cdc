@@ -795,9 +795,7 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                         .executeAndCollect();
         Thread.sleep(5_000);
 
-        List<Event> expected =
-                new ArrayList<>(
-                        getInventoryCreateAllTableEvents(inventoryDatabase.getDatabaseName()));
+        List<Event> expected = new ArrayList<>();
 
         try (Connection connection = inventoryDatabase.getJdbcConnection();
                 Statement statement = connection.createStatement()) {
@@ -806,6 +804,16 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                     String.format(
                             "ALTER TABLE `%s`.`customers` ADD COLUMN `newcol1` INT NULL;",
                             inventoryDatabase.getDatabaseName()));
+            expected.add(
+                    new CreateTableEvent(
+                            TableId.tableId(inventoryDatabase.getDatabaseName(), "customers"),
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT().notNull())
+                                    .physicalColumn("first_name", DataTypes.VARCHAR(255).notNull())
+                                    .physicalColumn("last_name", DataTypes.VARCHAR(255).notNull())
+                                    .physicalColumn("email", DataTypes.VARCHAR(255).notNull())
+                                    .primaryKey(Collections.singletonList("id"))
+                                    .build()));
             expected.add(
                     new AddColumnEvent(
                             TableId.tableId(inventoryDatabase.getDatabaseName(), "customers"),
@@ -898,7 +906,17 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
             statement.execute(
                     String.format(
                             "TRUNCATE TABLE `%s`.`orders`;", inventoryDatabase.getDatabaseName()));
-
+            expected.add(
+                    new CreateTableEvent(
+                            TableId.tableId(inventoryDatabase.getDatabaseName(), "orders"),
+                            Schema.newBuilder()
+                                    .physicalColumn("order_number", DataTypes.INT().notNull())
+                                    .physicalColumn("order_date", DataTypes.DATE().notNull())
+                                    .physicalColumn("purchaser", DataTypes.INT().notNull())
+                                    .physicalColumn("quantity", DataTypes.INT().notNull())
+                                    .physicalColumn("product_id", DataTypes.INT().notNull())
+                                    .primaryKey(Collections.singletonList("order_number"))
+                                    .build()));
             expected.add(
                     new TruncateTableEvent(
                             TableId.tableId(inventoryDatabase.getDatabaseName(), "orders")));
@@ -1200,9 +1218,7 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                         .executeAndCollect();
         Thread.sleep(5_000);
 
-        List<Event> expectedEvents =
-                new ArrayList<>(
-                        getInventoryCreateAllTableEvents(inventoryDatabase.getDatabaseName()));
+        List<Event> expectedEvents = new ArrayList<>();
 
         expectedEvents.add(
                 new DropTableEvent(
@@ -1385,46 +1401,6 @@ public class MySqlPipelineITCase extends MySqlSourceTestBase {
                         .physicalColumn("weight", DataTypes.FLOAT())
                         .primaryKey(Collections.singletonList("id"))
                         .build());
-    }
-
-    private List<CreateTableEvent> getInventoryCreateAllTableEvents(String databaseName) {
-        return Arrays.asList(
-                new CreateTableEvent(
-                        TableId.tableId(databaseName, "products"),
-                        Schema.newBuilder()
-                                .physicalColumn("id", DataTypes.INT().notNull())
-                                .physicalColumn("name", DataTypes.VARCHAR(255).notNull(), "flink")
-                                .physicalColumn("description", DataTypes.VARCHAR(512))
-                                .physicalColumn("weight", DataTypes.FLOAT())
-                                .primaryKey(Collections.singletonList("id"))
-                                .build()),
-                new CreateTableEvent(
-                        TableId.tableId(databaseName, "customers"),
-                        Schema.newBuilder()
-                                .physicalColumn("id", DataTypes.INT().notNull())
-                                .physicalColumn("first_name", DataTypes.VARCHAR(255).notNull())
-                                .physicalColumn("last_name", DataTypes.VARCHAR(255).notNull())
-                                .physicalColumn("email", DataTypes.VARCHAR(255).notNull())
-                                .primaryKey(Collections.singletonList("id"))
-                                .build()),
-                new CreateTableEvent(
-                        TableId.tableId(databaseName, "orders"),
-                        Schema.newBuilder()
-                                .physicalColumn("order_number", DataTypes.INT().notNull())
-                                .physicalColumn("order_date", DataTypes.DATE().notNull())
-                                .physicalColumn("purchaser", DataTypes.INT().notNull())
-                                .physicalColumn("quantity", DataTypes.INT().notNull())
-                                .physicalColumn("product_id", DataTypes.INT().notNull())
-                                .primaryKey(Collections.singletonList("order_number"))
-                                .build()),
-                new CreateTableEvent(
-                        TableId.tableId(databaseName, "multi_max_table"),
-                        Schema.newBuilder()
-                                .physicalColumn("order_id", DataTypes.VARCHAR(128).notNull())
-                                .physicalColumn("index", DataTypes.INT().notNull())
-                                .physicalColumn("desc", DataTypes.VARCHAR(512).notNull())
-                                .primaryKey(Arrays.asList("order_id", "index"))
-                                .build()));
     }
 
     private List<Event> getSnapshotExpected(TableId tableId) {
