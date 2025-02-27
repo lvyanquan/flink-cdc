@@ -60,7 +60,7 @@ public class CanalJsonSchemaParserTest {
 
         for (String json : illegalJsons) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
-            assertThat(schemaParser.parseRecordSchema(record)).isEmpty();
+            assertThat(schemaParser.parseRecordValueSchema(record)).isEmpty();
         }
     }
 
@@ -91,7 +91,7 @@ public class CanalJsonSchemaParserTest {
             String json = lines.get(i);
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
             Optional<Tuple2<TableId, Schema>> tableSchemaOp =
-                    schemaParser.parseRecordSchema(record);
+                    schemaParser.parseRecordValueSchema(record);
             if (i == 9) {
                 // type: CREATE
                 assertThat(tableSchemaOp).isEmpty();
@@ -151,11 +151,12 @@ public class CanalJsonSchemaParserTest {
 
         ConsumerRecord<byte[], byte[]> record = buildRecord(json);
 
-        Optional<Tuple2<TableId, Schema>> tableSchemaOp = schemaParser.parseRecordSchema(record);
+        Optional<Tuple2<TableId, Schema>> tableSchemaOp =
+                schemaParser.parseRecordValueSchema(record);
         assertThat(tableSchemaOp).isPresent();
         assertThat(tableSchemaOp.get().f1).isEqualTo(schema);
 
-        tableSchemaOp = schemaParserPrimitiveAsString.parseRecordSchema(record);
+        tableSchemaOp = schemaParserPrimitiveAsString.parseRecordValueSchema(record);
         assertThat(tableSchemaOp).isPresent();
         assertThat(tableSchemaOp.get().f1).isEqualTo(schemaAllString);
     }

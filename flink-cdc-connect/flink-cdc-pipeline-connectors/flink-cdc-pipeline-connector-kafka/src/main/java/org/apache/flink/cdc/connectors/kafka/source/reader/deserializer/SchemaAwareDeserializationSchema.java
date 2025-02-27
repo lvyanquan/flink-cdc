@@ -18,11 +18,23 @@
 package org.apache.flink.cdc.connectors.kafka.source.reader.deserializer;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaAware;
+import org.apache.flink.util.Collector;
+
+import java.io.IOException;
 
 /**
  * {@link SchemaAwareDeserializationSchema} is a @{link DeserializationSchema} which maintains table
  * schemas.
  */
-public interface SchemaAwareDeserializationSchema<T>
-        extends DeserializationSchema<T>, SchemaAware {}
+public interface SchemaAwareDeserializationSchema<T> extends DeserializationSchema<T>, SchemaAware {
+
+    /**
+     * Deserialize messages which do not contain table id information by explicitly passing
+     * parameter {@link TableId}.
+     */
+    default void deserialize(byte[] message, TableId tableId, Collector<T> out) throws IOException {
+        deserialize(message, out);
+    }
+}

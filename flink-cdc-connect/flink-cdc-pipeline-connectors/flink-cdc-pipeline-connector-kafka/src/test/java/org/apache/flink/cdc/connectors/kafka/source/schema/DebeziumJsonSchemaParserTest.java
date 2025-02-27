@@ -64,8 +64,8 @@ public class DebeziumJsonSchemaParserTest {
 
         for (String json : illegalJsons) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
-            assertThat(schemaParserIncludeSchema.parseRecordSchema(record)).isEmpty();
-            assertThat(schemaParserExcludeSchema.parseRecordSchema(record)).isEmpty();
+            assertThat(schemaParserIncludeSchema.parseRecordValueSchema(record)).isEmpty();
+            assertThat(schemaParserExcludeSchema.parseRecordValueSchema(record)).isEmpty();
         }
     }
 
@@ -85,7 +85,7 @@ public class DebeziumJsonSchemaParserTest {
         for (String json : lines) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
             Optional<Tuple2<TableId, Schema>> tableSchemaOp =
-                    schemaParserExcludeSchema.parseRecordSchema(record);
+                    schemaParserExcludeSchema.parseRecordValueSchema(record);
             assertThat(tableSchemaOp).isPresent();
             assertThat(tableSchemaOp.get().f0).isEqualTo(tableId);
             assertThat(tableSchemaOp.get().f1).isEqualTo(schema);
@@ -108,7 +108,7 @@ public class DebeziumJsonSchemaParserTest {
         for (String json : lines) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
             Optional<Tuple2<TableId, Schema>> tableSchemaOp =
-                    schemaParserIncludeSchema.parseRecordSchema(record);
+                    schemaParserIncludeSchema.parseRecordValueSchema(record);
             assertThat(tableSchemaOp).isPresent();
             assertThat(tableSchemaOp.get().f0).isEqualTo(tableId);
             assertThat(tableSchemaOp.get().f1).isEqualTo(schema);
@@ -136,7 +136,7 @@ public class DebeziumJsonSchemaParserTest {
         for (String json : lines) {
             ConsumerRecord<byte[], byte[]> record = buildRecord(json);
             Optional<Tuple2<TableId, Schema>> tableSchemaOp =
-                    schemaParser.parseRecordSchema(record);
+                    schemaParser.parseRecordValueSchema(record);
             assertThat(tableSchemaOp).isPresent();
             assertThat(tableSchemaOp.get().f0).isEqualTo(tableId);
             assertThat(tableSchemaOp.get().f1).isEqualTo(schema);

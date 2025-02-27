@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.data.RecordData;
 import org.apache.flink.cdc.common.event.AddColumnEvent;
 import org.apache.flink.cdc.common.event.AlterColumnTypeEvent;
+import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -75,9 +77,17 @@ public class SchemaUtils {
      */
     @CheckReturnValue
     public static List<RecordData.FieldGetter> createFieldGetters(List<Column> columns) {
-        List<RecordData.FieldGetter> fieldGetters = new ArrayList<>(columns.size());
-        for (int i = 0; i < columns.size(); i++) {
-            fieldGetters.add(RecordData.createFieldGetter(columns.get(i).getType(), i));
+        return createFieldGetters(columns.stream().map(Column::getType).toArray(DataType[]::new));
+    }
+
+    /**
+     * create a list of {@link RecordData.FieldGetter} from given {@link DataType} to get Object
+     * from RecordData.
+     */
+    public static List<RecordData.FieldGetter> createFieldGetters(DataType[] dataTypes) {
+        List<RecordData.FieldGetter> fieldGetters = new ArrayList<>(dataTypes.length);
+        for (int i = 0; i < dataTypes.length; i++) {
+            fieldGetters.add(RecordData.createFieldGetter(dataTypes[i], i));
         }
         return fieldGetters;
     }
@@ -381,6 +391,85 @@ public class SchemaUtils {
                             // before. Just assume it's not.
                             return false;
                         }));
+    }
+
+    public static SchemaChangeEvent changeColumnName(
+            SchemaChangeEvent event, Function<String, String> function) {
+        return SchemaChangeEventVisitor.visit(
+                event,
+                addColumnEvent -> changeColumnName((AddColumnEvent) event, function),
+                alterColumnEvent -> changeColumnName((AlterColumnTypeEvent) event, function),
+                createTableEvent -> changeColumnName((CreateTableEvent) event, function),
+                dropColumnEvent -> changeColumnName((DropColumnEvent) event, function),
+                dropTableEvent -> event,
+                renameColumnEvent -> changeColumnName((RenameColumnEvent) event, function),
+                truncateTableEvent -> event);
+    }
+
+    private static AddColumnEvent changeColumnName(
+            AddColumnEvent event, Function<String, String> function) {
+        List<AddColumnEvent.ColumnWithPosition> newAddedColumns =
+                event.getAddedColumns().stream()
+                        .map(
+                                columnWithPosition -> {
+                                    Column addColumn = columnWithPosition.getAddColumn();
+                                    String existsColumnName =
+                                            columnWithPosition.getExistedColumnName();
+                                    return new AddColumnEvent.ColumnWithPosition(
+                                            addColumn.copy(function.apply(addColumn.getName())),
+                                            columnWithPosition.getPosition(),
+                                            existsColumnName == null
+                                                    ? null
+                                                    : function.apply(existsColumnName));
+                                })
+                        .collect(Collectors.toList());
+        return new AddColumnEvent(event.tableId(), newAddedColumns);
+    }
+
+    private static AlterColumnTypeEvent changeColumnName(
+            AlterColumnTypeEvent event, Function<String, String> function) {
+        return new AlterColumnTypeEvent(
+                event.tableId(),
+                event.getTypeMapping().entrySet().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        entry -> function.apply(entry.getKey()),
+                                        Map.Entry::getValue)),
+                event.getOldTypeMapping().entrySet().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        entry -> function.apply(entry.getKey()),
+                                        Map.Entry::getValue)));
+    }
+
+    private static DropColumnEvent changeColumnName(
+            DropColumnEvent event, Function<String, String> function) {
+        return new DropColumnEvent(
+                event.tableId(),
+                event.getDroppedColumnNames().stream().map(function).collect(Collectors.toList()));
+    }
+
+    private static RenameColumnEvent changeColumnName(
+            RenameColumnEvent event, Function<String, String> function) {
+        return new RenameColumnEvent(
+                event.tableId(),
+                event.getNameMapping().entrySet().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        entry -> function.apply(entry.getKey()),
+                                        entry -> function.apply(entry.getValue()))));
+    }
+
+    private static CreateTableEvent changeColumnName(
+            CreateTableEvent event, Function<String, String> function) {
+        return new CreateTableEvent(event.tableId(), changeColumnName(event.getSchema(), function));
+    }
+
+    public static Schema changeColumnName(Schema schema, Function<String, String> function) {
+        return schema.copy(
+                schema.getColumns().stream()
+                        .map(column -> column.copy(function.apply(column.getName())))
+                        .collect(Collectors.toList()));
     }
 
     // Schema merging related utility methods have been moved to SchemaMergingUtils class.

@@ -20,7 +20,7 @@ package org.apache.flink.cdc.connectors.kafka.source.reader.deserializer;
 import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaAware;
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 
-/** A interface for the deserialization of Kafka records which can also maintain table schemas. */
+/** An interface for the deserialization of Kafka records which can also maintain table schemas. */
 public interface KafkaRecordSchemaAwareDeserializationSchema<T>
         extends KafkaRecordDeserializationSchema<T>, SchemaAware {
 

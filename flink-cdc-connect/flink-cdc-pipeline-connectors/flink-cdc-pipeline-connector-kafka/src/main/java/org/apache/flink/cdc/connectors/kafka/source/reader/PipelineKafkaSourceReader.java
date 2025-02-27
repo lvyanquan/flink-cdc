@@ -21,7 +21,6 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
-import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaAware;
 import org.apache.flink.cdc.connectors.kafka.source.split.PipelineKafkaPartitionSplit;
 import org.apache.flink.cdc.connectors.kafka.source.split.PipelineKafkaPartitionSplitState;
 import org.apache.flink.configuration.Configuration;
@@ -66,14 +65,19 @@ public class PipelineKafkaSourceReader extends KafkaSourceReader<Event> {
     protected KafkaPartitionSplitState initializedState(KafkaPartitionSplit split) {
         PipelineKafkaPartitionSplit pipelineKafkaPartitionSplit =
                 (PipelineKafkaPartitionSplit) split;
-        Map<TableId, Schema> tableSchemas = pipelineKafkaPartitionSplit.getTableSchemas();
+        Map<TableId, Schema> keyTableSchemas = pipelineKafkaPartitionSplit.getKeyTableSchemas();
+        Map<TableId, Schema> valueTableSchemas = pipelineKafkaPartitionSplit.getValueTableSchemas();
+
         LOG.info(
-                "The initialized table schemas for partition {}: {}",
+                "The initial table schemas for partition {} including key schemas: {}, values schemas: {}",
                 split.getTopicPartition(),
-                tableSchemas);
+                keyTableSchemas,
+                valueTableSchemas);
+        PipelineKafkaRecordEmitter pipelineRecordEmitter =
+                (PipelineKafkaRecordEmitter) recordEmitter;
         // initialize table schemas
-        tableSchemas.forEach(
-                (tableId, schema) -> ((SchemaAware) recordEmitter).setTableSchema(tableId, schema));
+        keyTableSchemas.forEach(pipelineRecordEmitter::setKeyTableSchema);
+        valueTableSchemas.forEach(pipelineRecordEmitter::setTableSchema);
         return new PipelineKafkaPartitionSplitState(pipelineKafkaPartitionSplit);
     }
 

@@ -50,8 +50,13 @@ public class PipelineKafkaSourceEnumStateSerializer extends KafkaSourceEnumState
     private static final int VERSION_0 = 0;
     /** State of VERSION_1 contains initialInferredSchemas and initialSchemaInferenceFinished. */
     private static final int VERSION_1 = 1;
+    /**
+     * State of VERSION_1 contains initialInferredValueSchemas, initialInferredKeySchemas, and
+     * initialSchemaInferenceFinished.
+     */
+    private static final int VERSION_2 = 2;
 
-    private static final int CURRENT_VERSION = 1;
+    private static final int CURRENT_VERSION = 2;
 
     private final TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
     private final SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
@@ -73,17 +78,8 @@ public class PipelineKafkaSourceEnumStateSerializer extends KafkaSourceEnumState
             // serialize child state
             PipelineKafkaSourceEnumState pipelineEnumState =
                     (PipelineKafkaSourceEnumState) enumState;
-            Map<TableId, Schema> initialInferredSchemas =
-                    pipelineEnumState.getInitialInferredSchemas();
-            if (initialInferredSchemas == null || initialInferredSchemas.isEmpty()) {
-                out.writeInt(0);
-            } else {
-                out.writeInt(initialInferredSchemas.size());
-                for (Map.Entry<TableId, Schema> entry : initialInferredSchemas.entrySet()) {
-                    tableIdSerializer.serialize(entry.getKey(), out);
-                    schemaSerializer.serialize(entry.getValue(), out);
-                }
-            }
+            serializeSchemas(pipelineEnumState.getInitialInferredKeySchemas(), out);
+            serializeSchemas(pipelineEnumState.getInitialInferredValueSchemas(), out);
             out.writeBoolean(pipelineEnumState.isInitialSchemaInferenceFinished());
 
             out.flush();
@@ -104,10 +100,15 @@ public class PipelineKafkaSourceEnumStateSerializer extends KafkaSourceEnumState
                         state.partitions(),
                         state.initialDiscoveryFinished(),
                         new HashMap<>(),
+                        new HashMap<>(),
                         true);
             case VERSION_1:
                 // TODO deserialize logic should be updated after parent version being changed
                 return deserializeTopicPartitionAndAssignmentStatusAndInitialInferredSchemas(
+                        serialized);
+            case VERSION_2:
+                // TODO deserialize logic should be updated after parent version being changed
+                return deserializeTopicPartitionAndAssignmentStatusAndInitialInferredKeyValueSchemas(
                         serialized);
             default:
                 throw new IOException(
@@ -115,6 +116,19 @@ public class PipelineKafkaSourceEnumStateSerializer extends KafkaSourceEnumState
                                 "The bytes are serialized with version %d, "
                                         + "while this deserializer only supports version up to %d",
                                 childVersion, CURRENT_VERSION));
+        }
+    }
+
+    private void serializeSchemas(
+            Map<TableId, Schema> tableSchemas, DataOutputViewStreamWrapper out) throws IOException {
+        if (tableSchemas == null) {
+            out.writeInt(0);
+        } else {
+            out.writeInt(tableSchemas.size());
+            for (Map.Entry<TableId, Schema> entry : tableSchemas.entrySet()) {
+                tableIdSerializer.serialize(entry.getKey(), out);
+                schemaSerializer.serialize(entry.getValue(), out);
+            }
         }
     }
 
@@ -154,7 +168,58 @@ public class PipelineKafkaSourceEnumStateSerializer extends KafkaSourceEnumState
             return new PipelineKafkaSourceEnumState(
                     partitions,
                     initialDiscoveryFinished,
+                    new HashMap<>(),
                     initialInferredSchemas,
+                    initialSchemaInferenceFinished);
+        }
+    }
+
+    private PipelineKafkaSourceEnumState
+            deserializeTopicPartitionAndAssignmentStatusAndInitialInferredKeyValueSchemas(
+                    byte[] serialized) throws IOException {
+
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
+                DataInputViewStreamWrapper in = new DataInputViewStreamWrapper(bais)) {
+
+            final int numPartitions = in.readInt();
+            Set<TopicPartitionAndAssignmentStatus> partitions = new HashSet<>(numPartitions);
+
+            for (int i = 0; i < numPartitions; i++) {
+                final String topic = in.readUTF();
+                final int partition = in.readInt();
+                final int statusCode = in.readInt();
+                partitions.add(
+                        new TopicPartitionAndAssignmentStatus(
+                                new TopicPartition(topic, partition),
+                                AssignmentStatus.ofStatusCode(statusCode)));
+            }
+            final boolean initialDiscoveryFinished = in.readBoolean();
+
+            final int numInitialInferredKeySchemas = in.readInt();
+            Map<TableId, Schema> initialInferredKeySchemas =
+                    new HashMap<>(numInitialInferredKeySchemas);
+            for (int i = 0; i < numInitialInferredKeySchemas; i++) {
+                initialInferredKeySchemas.put(
+                        tableIdSerializer.deserialize(in), schemaSerializer.deserialize(in));
+            }
+            final int numInitialInferredValueSchemas = in.readInt();
+            Map<TableId, Schema> initialInferredValueSchemas =
+                    new HashMap<>(numInitialInferredValueSchemas);
+            for (int i = 0; i < numInitialInferredValueSchemas; i++) {
+                initialInferredValueSchemas.put(
+                        tableIdSerializer.deserialize(in), schemaSerializer.deserialize(in));
+            }
+            final boolean initialSchemaInferenceFinished = in.readBoolean();
+
+            if (in.available() > 0) {
+                throw new IOException("Unexpected trailing bytes.");
+            }
+
+            return new PipelineKafkaSourceEnumState(
+                    partitions,
+                    initialDiscoveryFinished,
+                    initialInferredKeySchemas,
+                    initialInferredValueSchemas,
                     initialSchemaInferenceFinished);
         }
     }

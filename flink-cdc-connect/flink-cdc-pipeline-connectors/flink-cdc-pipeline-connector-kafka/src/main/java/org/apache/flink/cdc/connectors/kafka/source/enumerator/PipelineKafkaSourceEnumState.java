@@ -28,8 +28,11 @@ import java.util.Set;
 /** The state of pipeline Kafka source enumerator. */
 public class PipelineKafkaSourceEnumState extends KafkaSourceEnumState {
 
-    /** The table schemas inferred by initial schema inference. */
-    private final Map<TableId, Schema> initialInferredSchemas;
+    /** The table schemas inferred by initial schema inference for key of kafka records. */
+    private final Map<TableId, Schema> initialInferredKeySchemas;
+
+    /** The table schemas inferred by initial schema inference for value of kafka records. */
+    private final Map<TableId, Schema> initialInferredValueSchemas;
 
     /** This flag will be marked as true if initial schema inference has finished. */
     private final boolean initialSchemaInferenceFinished;
@@ -37,15 +40,21 @@ public class PipelineKafkaSourceEnumState extends KafkaSourceEnumState {
     public PipelineKafkaSourceEnumState(
             Set<TopicPartitionAndAssignmentStatus> partitions,
             boolean initialDiscoveryFinished,
-            Map<TableId, Schema> initialInferredSchemas,
+            Map<TableId, Schema> initialInferredKeySchemas,
+            Map<TableId, Schema> initialInferredValueSchemas,
             boolean initialSchemaInferenceFinished) {
         super(partitions, initialDiscoveryFinished);
-        this.initialInferredSchemas = initialInferredSchemas;
+        this.initialInferredKeySchemas = initialInferredKeySchemas;
+        this.initialInferredValueSchemas = initialInferredValueSchemas;
         this.initialSchemaInferenceFinished = initialSchemaInferenceFinished;
     }
 
-    public Map<TableId, Schema> getInitialInferredSchemas() {
-        return initialInferredSchemas;
+    public Map<TableId, Schema> getInitialInferredValueSchemas() {
+        return initialInferredValueSchemas;
+    }
+
+    public Map<TableId, Schema> getInitialInferredKeySchemas() {
+        return initialInferredKeySchemas;
     }
 
     public boolean isInitialSchemaInferenceFinished() {

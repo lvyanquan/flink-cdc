@@ -18,7 +18,8 @@
 package org.apache.flink.cdc.connectors.kafka.source.schema;
 
 import org.apache.flink.cdc.common.configuration.Configuration;
-import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.connectors.kafka.json.JsonDeserializationType;
+import org.apache.flink.cdc.connectors.kafka.json.JsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -31,7 +32,7 @@ import java.time.ZoneId;
 public class RecordSchemaParserFactory {
 
     public static RecordSchemaParser createRecordSchemaParser(
-            Configuration formatOptions, JsonSerializationType type, ZoneId zoneId) {
+            Configuration formatOptions, JsonDeserializationType type, ZoneId zoneId) {
         TimestampFormat timestampFormat;
         boolean primitiveAsString;
 
@@ -52,6 +53,14 @@ public class RecordSchemaParserFactory {
                 String table = formatOptions.get(CanalJsonFormatOptions.TABLE_INCLUDE);
                 return new CanalJsonSchemaParser(
                         database, table, primitiveAsString, timestampFormat, zoneId);
+            case JSON:
+                timestampFormat = formatOptions.get(JsonFormatOptions.TIMESTAMP_FORMAT);
+                boolean flattenNestedColumn =
+                        formatOptions.get(JsonFormatOptions.INFER_SCHEMA_FLATTEN_NECOLUMNS_ENABLE);
+                primitiveAsString =
+                        formatOptions.get(JsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
+                return new JsonSchemaParser(
+                        flattenNestedColumn, primitiveAsString, timestampFormat, zoneId);
             default:
                 throw new IllegalArgumentException("UnSupport JsonDeserializationType of " + type);
         }

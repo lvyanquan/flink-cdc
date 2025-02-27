@@ -26,4 +26,12 @@ public interface SchemaAware {
     Schema getTableSchema(TableId tableId);
 
     void setTableSchema(TableId tableId, Schema schema);
+
+    default Schema getKeyTableSchema(TableId tableId) {
+        return null;
+    }
+
+    default void setKeyTableSchema(TableId tableId, Schema schema) {
+        setTableSchema(tableId, schema);
+    }
 }

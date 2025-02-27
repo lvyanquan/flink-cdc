@@ -41,6 +41,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,9 +56,16 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
     private static final long POLL_TIMEOUT = 10000L;
 
     private final int maxFetchRecords;
-    private final RecordSchemaParser recordSchemaParser;
-    /** The initial inferred table schemas. It will never change after initializing. */
-    private final Map<TableId, Schema> initialInferredSchemas;
+    @Nullable private final RecordSchemaParser recordKeySchemaParser;
+    private final RecordSchemaParser recordValueSchemaParser;
+
+    /**
+     * The initial inferred table schemas for key and value respectively. It will never change after
+     * initializing.
+     */
+    private final Map<TableId, Schema> initialInferredValueSchemas;
+
+    private final Map<TableId, Schema> initialInferredKeySchemas;
 
     private final Properties properties;
 
@@ -71,7 +80,8 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
             SplitEnumeratorContext<KafkaPartitionSplit> context,
             Boundedness boundedness,
             int maxFetchRecords,
-            RecordSchemaParser recordSchemaParser) {
+            @Nullable RecordSchemaParser recordKeySchemaParser,
+            RecordSchemaParser recordValueSchemaParser) {
         super(
                 subscriber,
                 startingOffsetInitializer,
@@ -80,10 +90,12 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                 context,
                 boundedness);
         this.maxFetchRecords = maxFetchRecords;
-        this.recordSchemaParser = recordSchemaParser;
+        this.recordKeySchemaParser = recordKeySchemaParser;
+        this.recordValueSchemaParser = recordValueSchemaParser;
         this.properties = properties;
 
-        this.initialInferredSchemas = new HashMap<>();
+        this.initialInferredValueSchemas = new HashMap<>();
+        this.initialInferredKeySchemas = new HashMap<>();
     }
 
     public PipelineKafkaSourceEnumerator(
@@ -95,7 +107,8 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
             Boundedness boundedness,
             PipelineKafkaSourceEnumState kafkaSourceEnumState,
             int maxFetchRecords,
-            RecordSchemaParser recordSchemaParser) {
+            @Nullable RecordSchemaParser recordKeySchemaParser,
+            RecordSchemaParser recordValueSchemaParser) {
         super(
                 subscriber,
                 startingOffsetInitializer,
@@ -105,16 +118,23 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                 boundedness,
                 kafkaSourceEnumState);
         this.maxFetchRecords = maxFetchRecords;
-        this.recordSchemaParser = recordSchemaParser;
+        this.recordKeySchemaParser = recordKeySchemaParser;
+        this.recordValueSchemaParser = recordValueSchemaParser;
         this.properties = properties;
 
-        this.initialInferredSchemas = kafkaSourceEnumState.getInitialInferredSchemas();
+        this.initialInferredKeySchemas = kafkaSourceEnumState.getInitialInferredKeySchemas();
+        this.initialInferredValueSchemas = kafkaSourceEnumState.getInitialInferredValueSchemas();
+        this.initialSchemaInferenceFinished =
+                kafkaSourceEnumState.isInitialSchemaInferenceFinished();
     }
 
     @Override
     public void start() {
         try {
-            recordSchemaParser.open();
+            if (recordKeySchemaParser != null) {
+                recordKeySchemaParser.open();
+            }
+            recordValueSchemaParser.open();
         } catch (Exception e) {
             throw new IllegalStateException("Open recordSchemaParser failed.", e);
         }
@@ -129,7 +149,8 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
         return new PipelineKafkaSourceEnumState(
                 state.partitions(),
                 state.initialDiscoveryFinished(),
-                initialInferredSchemas,
+                initialInferredKeySchemas,
+                initialInferredValueSchemas,
                 initialSchemaInferenceFinished);
     }
 
@@ -137,22 +158,31 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
     protected PartitionSplitChange initializePartitionSplits(PartitionChange partitionChange) {
         if (!initialSchemaInferenceFinished) {
             // fetch records per partition to initialize the inferred schemas
-            Map<TableId, Schema> initialTableSchemas = new HashMap<>();
+            Map<TableId, Schema> initialValueTableSchemas = new HashMap<>();
+            Map<TableId, Schema> initialKeyTableSchemas = new HashMap<>();
             partitionChange
                     .getNewPartitions()
                     .forEach(
                             partition -> {
-                                Map<TableId, Schema> tableSchemas =
+                                Tuple2<Map<TableId, Schema>, Map<TableId, Schema>> tableSchemas =
                                         getTableSchemasByParsingRecord(partition, maxFetchRecords);
-                                tableSchemas.forEach(
+                                tableSchemas.f0.forEach(
                                         (tableId, schema) ->
-                                                initialTableSchemas.put(
+                                                initialKeyTableSchemas.put(
                                                         tableId,
                                                         SchemaMergingUtils.getLeastCommonSchema(
-                                                                initialTableSchemas.get(tableId),
+                                                                initialKeyTableSchemas.get(tableId),
+                                                                schema)));
+                                tableSchemas.f1.forEach(
+                                        (tableId, schema) ->
+                                                initialValueTableSchemas.put(
+                                                        tableId,
+                                                        SchemaMergingUtils.getLeastCommonSchema(
+                                                                initialValueTableSchemas.get(
+                                                                        tableId),
                                                                 schema)));
                             });
-            if (maxFetchRecords > 0 && initialTableSchemas.isEmpty()) {
+            if (maxFetchRecords > 0 && initialValueTableSchemas.isEmpty()) {
                 String errorMessage =
                         String.format(
                                 "Cannot infer initial table schemas for partitions: <%s>, it may caused by dirty data or empty partitions.",
@@ -160,9 +190,13 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                 LOG.error(errorMessage);
                 throw new IllegalStateException(errorMessage);
             }
-            this.initialInferredSchemas.putAll(initialTableSchemas);
+            this.initialInferredKeySchemas.putAll(initialKeyTableSchemas);
+            this.initialInferredValueSchemas.putAll(initialValueTableSchemas);
             this.initialSchemaInferenceFinished = true;
-            LOG.info("The initial inferred table schemas: {}", initialInferredSchemas);
+            LOG.info(
+                    "The initial inferred key table schemas: {}, value schemas: {}",
+                    initialKeyTableSchemas,
+                    initialValueTableSchemas);
         }
         return super.initializePartitionSplits(partitionChange);
     }
@@ -178,7 +212,11 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
             TopicPartition tp, long startingOffset, long stoppingOffset) {
         // attach initial inferred table schemas to splits
         return new PipelineKafkaPartitionSplit(
-                tp, startingOffset, stoppingOffset, initialInferredSchemas);
+                tp,
+                startingOffset,
+                stoppingOffset,
+                initialInferredValueSchemas,
+                initialInferredKeySchemas);
     }
 
     private KafkaConsumer<byte[], byte[]> getKafkaConsumer() {
@@ -194,7 +232,7 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
         return prefix + "-enumerator-pre-consumer";
     }
 
-    private Map<TableId, Schema> getTableSchemasByParsingRecord(
+    private Tuple2<Map<TableId, Schema>, Map<TableId, Schema>> getTableSchemasByParsingRecord(
             TopicPartition partition, long fetchSize) {
         try {
             long beginningOffset =
@@ -217,10 +255,12 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                 fetchSize = partitionRecordSize;
             }
             if (fetchSize == 0) {
-                return Collections.emptyMap();
+                return Tuple2.of(Collections.emptyMap(), Collections.emptyMap());
             }
 
-            Map<TableId, Schema> tableSchemas = new HashMap<>();
+            Map<TableId, Schema> keyTableSchemas = new HashMap<>();
+            Map<TableId, Schema> valueTableSchemas = new HashMap<>();
+
             consumer.assign(Collections.singleton(partition));
             consumer.seek(partition, endOffset - fetchSize);
 
@@ -231,18 +271,31 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                         consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
                 receivedRecordNum += consumerRecords.count();
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
-                    Optional<Tuple2<TableId, Schema>> tableSchemaOp =
-                            recordSchemaParser.parseRecordSchema(record);
-                    if (!tableSchemaOp.isPresent()) {
+                    if (recordKeySchemaParser != null) {
+                        Optional<Tuple2<TableId, Schema>> keyTableSchemaOp =
+                                recordKeySchemaParser.parseRecordKeySchema(record);
+                        if (keyTableSchemaOp.isPresent()) {
+                            TableId tableId = keyTableSchemaOp.get().f0;
+                            Schema schema = keyTableSchemaOp.get().f1;
+                            keyTableSchemas.put(
+                                    tableId,
+                                    SchemaMergingUtils.getLeastCommonSchema(
+                                            keyTableSchemas.get(tableId), schema));
+                        }
+                    }
+
+                    Optional<Tuple2<TableId, Schema>> valueTableSchemaOp =
+                            recordValueSchemaParser.parseRecordValueSchema(record);
+                    if (!valueTableSchemaOp.isPresent()) {
                         continue;
                     }
                     parseSchemaRecordNum++;
-                    TableId tableId = tableSchemaOp.get().f0;
-                    Schema schema = tableSchemaOp.get().f1;
-                    tableSchemas.put(
+                    TableId tableId = valueTableSchemaOp.get().f0;
+                    Schema schema = valueTableSchemaOp.get().f1;
+                    valueTableSchemas.put(
                             tableId,
                             SchemaMergingUtils.getLeastCommonSchema(
-                                    tableSchemas.get(tableId), schema));
+                                    valueTableSchemas.get(tableId), schema));
                 }
             }
             LOG.info(
@@ -250,12 +303,12 @@ public class PipelineKafkaSourceEnumerator extends KafkaSourceEnumerator {
                     partition,
                     receivedRecordNum,
                     parseSchemaRecordNum);
-            return tableSchemas;
+            return Tuple2.of(keyTableSchemas, valueTableSchemas);
         } catch (Exception e) {
             LOG.warn(
                     String.format("Failed to initialize table schemas for partition %s", partition),
                     e);
-            return Collections.emptyMap();
+            return Tuple2.of(Collections.emptyMap(), Collections.emptyMap());
         }
     }
 }

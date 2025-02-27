@@ -28,18 +28,25 @@ import java.util.Map;
 /** A SourceSplit for a Kafka partition with table schemas. */
 public class PipelineKafkaPartitionSplit extends KafkaPartitionSplit {
 
-    private final Map<TableId, Schema> tableSchemas;
+    private final Map<TableId, Schema> valueTableSchemas;
+    private final Map<TableId, Schema> keyTableSchemas;
 
     public PipelineKafkaPartitionSplit(
             TopicPartition tp,
             long startingOffset,
             long stoppingOffset,
-            Map<TableId, Schema> tableSchemas) {
+            Map<TableId, Schema> valueTableSchemas,
+            Map<TableId, Schema> keyTableSchemas) {
         super(tp, startingOffset, stoppingOffset);
-        this.tableSchemas = tableSchemas;
+        this.valueTableSchemas = valueTableSchemas;
+        this.keyTableSchemas = keyTableSchemas;
     }
 
-    public Map<TableId, Schema> getTableSchemas() {
-        return tableSchemas;
+    public Map<TableId, Schema> getValueTableSchemas() {
+        return valueTableSchemas;
+    }
+
+    public Map<TableId, Schema> getKeyTableSchemas() {
+        return keyTableSchemas;
     }
 }

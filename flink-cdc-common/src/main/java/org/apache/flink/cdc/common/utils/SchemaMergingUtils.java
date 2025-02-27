@@ -84,6 +84,37 @@ import java.util.stream.Collectors;
  */
 @PublicEvolving
 public class SchemaMergingUtils {
+
+    /**
+     * Get a wider schema by joining columns from two schemas. The column names in two schemas
+     * should not conflict.
+     */
+    public static Schema getJoinedColumnsSchema(Schema lschema, Schema rschema) {
+        Schema.Builder builder = Schema.newBuilder();
+        lschema.getColumns().forEach(builder::column);
+        rschema.getColumns().forEach(builder::column);
+
+        List<String> primaryKeys = new ArrayList<>();
+        primaryKeys.addAll(lschema.primaryKeys());
+        primaryKeys.addAll(rschema.primaryKeys());
+        builder.primaryKey(primaryKeys);
+
+        List<String> partitionKeys = new ArrayList<>();
+        partitionKeys.addAll(lschema.partitionKeys());
+        partitionKeys.addAll(rschema.partitionKeys());
+        builder.partitionKey(partitionKeys);
+
+        if (lschema.comment() != null && rschema.comment() != null) {
+            builder.comment(String.format("%s\n%s", lschema.comment(), rschema.comment()));
+        } else if (lschema.comment() != null) {
+            builder.comment(lschema.comment());
+        } else if (rschema.comment() != null) {
+            builder.comment(rschema.comment());
+        }
+
+        return builder.build();
+    }
+
     /**
      * Checking if given {@code upcomingSchema} could be fit into currently known {@code
      * currentSchema}. Current schema could be null (as the cold opening state, and in this case it

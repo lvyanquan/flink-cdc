@@ -23,7 +23,6 @@ import org.apache.flink.cdc.common.schema.Schema;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Optional;
 
@@ -32,6 +31,7 @@ public interface RecordSchemaParser extends Serializable {
 
     void open() throws Exception;
 
-    Optional<Tuple2<TableId, Schema>> parseRecordSchema(ConsumerRecord<byte[], byte[]> record)
-            throws IOException;
+    Optional<Tuple2<TableId, Schema>> parseRecordKeySchema(ConsumerRecord<byte[], byte[]> record);
+
+    Optional<Tuple2<TableId, Schema>> parseRecordValueSchema(ConsumerRecord<byte[], byte[]> record);
 }

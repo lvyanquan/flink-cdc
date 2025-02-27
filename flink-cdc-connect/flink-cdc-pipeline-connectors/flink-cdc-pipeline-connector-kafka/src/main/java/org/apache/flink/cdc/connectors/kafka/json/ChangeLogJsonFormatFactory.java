@@ -126,7 +126,7 @@ public class ChangeLogJsonFormatFactory {
     public static SchemaAwareDeserializationSchema<Event> createDeserializationSchema(
             SchemaInferenceStrategy schemaInferenceStrategy,
             Configuration formatOptions,
-            JsonSerializationType type,
+            JsonDeserializationType type,
             ZoneId zoneId) {
         TimestampFormat timestampFormat;
         boolean primitiveAsString;
@@ -178,6 +178,31 @@ public class ChangeLogJsonFormatFactory {
                     return new CanalJsonStaticDeserializationSchema(
                             database,
                             table,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else {
+                    throw new IllegalArgumentException(
+                            "Unsupported schema inference strategy " + schemaInferenceStrategy);
+                }
+            case JSON:
+                timestampFormat = formatOptions.get(JsonFormatOptions.TIMESTAMP_FORMAT);
+                primitiveAsString =
+                        formatOptions.get(JsonFormatOptions.INFER_SCHEMA_PRIMITIVE_AS_STRING);
+                ignoreParseErrors = formatOptions.get(JsonFormatOptions.IGNORE_PARSE_ERRORS);
+                boolean flattenNestedColumn =
+                        formatOptions.get(JsonFormatOptions.INFER_SCHEMA_FLATTEN_NECOLUMNS_ENABLE);
+                if (schemaInferenceStrategy == CONTINUOUS) {
+                    return new JsonContinuousDeserializationSchema(
+                            flattenNestedColumn,
+                            ignoreParseErrors,
+                            primitiveAsString,
+                            timestampFormat,
+                            zoneId);
+                } else if (schemaInferenceStrategy == STATIC) {
+                    return new JsonStaticDeserializationSchema(
+                            flattenNestedColumn,
                             ignoreParseErrors,
                             primitiveAsString,
                             timestampFormat,

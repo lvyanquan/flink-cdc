@@ -64,6 +64,17 @@ public class JsonFormatOptions {
                     .withDescription(
                             "Optional flag to specify whether to fail if parse error, false by default.");
 
+    public static final ConfigOption<Boolean> INFER_SCHEMA_FLATTEN_NECOLUMNS_ENABLE =
+            key("infer-schema.flatten-nested-columns.enable")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Optional flag to recursively flatten the JSON OBJECT field into columns in the top level schema. "
+                                    + "For a better understanding, the name of the flattened column will be composed of the path to get the column. "
+                                    + "For example, the field `col` in the json {\"nested\": {\"col\": true}} is `nested.col` in the flattened schema. "
+                                    + "If the flattened field names get conflicts, currently the JsonParser will throw the exception to stop the execution. "
+                                    + "Please use the option 'json.ignore-parse-errors' to ignore the parse errors.");
+
     public static final ConfigOption<Boolean> INFER_SCHEMA_PRIMITIVE_AS_STRING =
             key("infer-schema.primitive-as-string")
                     .booleanType()

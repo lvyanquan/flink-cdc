@@ -67,8 +67,11 @@ public class PipelineKafkaRecordEmitter
             deserializationSchema.deserialize(consumerRecord, sourceOutputWrapper);
             splitState.setCurrentOffset(consumerRecord.offset() + 1);
 
+            PipelineKafkaPartitionSplitState pipelineSplitState =
+                    (PipelineKafkaPartitionSplitState) splitState;
             if (sourceOutputWrapper.getTableId() != null) {
                 TableId tableId = sourceOutputWrapper.getTableId();
+                Schema keySchema = deserializationSchema.getKeyTableSchema(tableId);
                 Schema schema = deserializationSchema.getTableSchema(tableId);
                 if (schema == null) {
                     throw new FlinkRuntimeException(
@@ -76,7 +79,10 @@ public class PipelineKafkaRecordEmitter
                                     "Cannot update schema state for table [%s], topic partition is [%s]",
                                     tableId, splitState.getTopicPartition()));
                 }
-                ((PipelineKafkaPartitionSplitState) splitState).setTableSchema(tableId, schema);
+                if (keySchema != null) {
+                    pipelineSplitState.setTableSchema(tableId, schema);
+                }
+                pipelineSplitState.setTableSchema(tableId, schema);
             }
         } catch (Exception e) {
             throw new IOException("Failed to deserialize consumer record due to", e);
@@ -91,6 +97,16 @@ public class PipelineKafkaRecordEmitter
     @Override
     public void setTableSchema(TableId tableId, Schema schema) {
         deserializationSchema.setTableSchema(tableId, schema);
+    }
+
+    @Override
+    public void setKeyTableSchema(TableId tableId, Schema schema) {
+        deserializationSchema.setKeyTableSchema(tableId, schema);
+    }
+
+    @Override
+    public Schema getKeyTableSchema(TableId tableId) {
+        return deserializationSchema.getKeyTableSchema(tableId);
     }
 
     private static class SourceOutputWrapper implements Collector<Event> {

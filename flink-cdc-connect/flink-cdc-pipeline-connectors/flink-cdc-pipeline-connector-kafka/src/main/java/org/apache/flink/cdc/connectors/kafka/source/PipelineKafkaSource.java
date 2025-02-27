@@ -62,7 +62,8 @@ import java.util.function.Supplier;
 public class PipelineKafkaSource extends KafkaSource<Event> {
 
     private final SchemaInferenceStrategy schemaInferenceStrategy;
-    private final RecordSchemaParser recordSchemaParser;
+    private final RecordSchemaParser keyRecordSchemaParser;
+    private final RecordSchemaParser valueRecordSchemaParser;
     private final int maxFetchRecords;
 
     PipelineKafkaSource(
@@ -73,7 +74,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
             KafkaRecordDeserializationSchema<Event> deserializationSchema,
             Properties props,
             SchemaInferenceStrategy schemaInferenceStrategy,
-            RecordSchemaParser recordSchemaParser,
+            RecordSchemaParser keyRecordSchemaParser,
+            RecordSchemaParser valueRecordSchemaParser,
             int maxFetchRecords) {
         super(
                 subscriber,
@@ -84,7 +86,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 props,
                 null);
         this.schemaInferenceStrategy = schemaInferenceStrategy;
-        this.recordSchemaParser = recordSchemaParser;
+        this.valueRecordSchemaParser = valueRecordSchemaParser;
+        this.keyRecordSchemaParser = keyRecordSchemaParser;
         this.maxFetchRecords = maxFetchRecords;
     }
 
@@ -148,7 +151,8 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 enumContext,
                 boundedness,
                 maxFetchRecords,
-                recordSchemaParser);
+                keyRecordSchemaParser,
+                valueRecordSchemaParser);
     }
 
     @Override
@@ -165,6 +169,7 @@ public class PipelineKafkaSource extends KafkaSource<Event> {
                 boundedness,
                 (PipelineKafkaSourceEnumState) checkpoint,
                 maxFetchRecords,
-                recordSchemaParser);
+                keyRecordSchemaParser,
+                valueRecordSchemaParser);
     }
 }

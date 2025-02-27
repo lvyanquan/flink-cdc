@@ -20,14 +20,18 @@ package org.apache.flink.cdc.connectors.kafka.source.enumerator;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.DataTypes;
+import org.apache.flink.cdc.runtime.serializer.TableIdSerializer;
+import org.apache.flink.cdc.runtime.serializer.schema.SchemaSerializer;
 import org.apache.flink.connector.kafka.source.enumerator.AssignmentStatus;
 import org.apache.flink.connector.kafka.source.enumerator.KafkaSourceEnumState;
 import org.apache.flink.connector.kafka.source.enumerator.KafkaSourceEnumStateSerializer;
 import org.apache.flink.connector.kafka.source.enumerator.TopicPartitionAndAssignmentStatus;
+import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class PipelineKafkaSourceEnumStateSerializerTest {
 
     private static final TableId TABLE_ID_1 = TableId.tableId("test-topic");
+
     private static final Schema SCHEMA_1 =
             Schema.newBuilder()
                     .physicalColumn("id", DataTypes.BIGINT().notNull())
@@ -55,13 +60,24 @@ public class PipelineKafkaSourceEnumStateSerializerTest {
                     .physicalColumn("weight", DataTypes.DOUBLE())
                     .build();
 
+    private static final Schema SCHEMA_KEY =
+            Schema.newBuilder()
+                    .physicalColumn("key1", DataTypes.BIGINT())
+                    .physicalColumn("key2", DataTypes.STRING())
+                    .build();
+
     @Test
     public void testEnumStateSerde() throws IOException {
-        Map<TableId, Schema> tableSchemas = new HashMap<>();
-        tableSchemas.put(TABLE_ID_1, SCHEMA_1);
-        tableSchemas.put(TABLE_ID_2, SCHEMA_2);
+        Map<TableId, Schema> valueTableSchemas = new HashMap<>();
+        valueTableSchemas.put(TABLE_ID_1, SCHEMA_1);
+        valueTableSchemas.put(TABLE_ID_2, SCHEMA_2);
+        Map<TableId, Schema> keyTableSchemas = new HashMap<>();
+        keyTableSchemas.put(TABLE_ID_1, SCHEMA_KEY);
+        keyTableSchemas.put(TABLE_ID_2, SCHEMA_KEY);
+
         final PipelineKafkaSourceEnumState state =
-                new PipelineKafkaSourceEnumState(constructPartitions(), true, tableSchemas, true);
+                new PipelineKafkaSourceEnumState(
+                        constructPartitions(), true, keyTableSchemas, valueTableSchemas, true);
 
         final PipelineKafkaSourceEnumStateSerializer serializer =
                 new PipelineKafkaSourceEnumStateSerializer();
@@ -76,14 +92,16 @@ public class PipelineKafkaSourceEnumStateSerializerTest {
                 .isEqualTo(state.unassignedInitialPartitions());
         assertThat(restoredState.initialDiscoveryFinished()).isTrue();
 
-        assertThat(restoredState.getInitialInferredSchemas())
-                .isEqualTo(state.getInitialInferredSchemas());
+        assertThat(restoredState.getInitialInferredValueSchemas())
+                .isEqualTo(state.getInitialInferredValueSchemas());
+        assertThat(restoredState.getInitialInferredKeySchemas())
+                .isEqualTo(state.getInitialInferredKeySchemas());
         assertThat(restoredState.isInitialSchemaInferenceFinished())
                 .isEqualTo(state.isInitialSchemaInferenceFinished());
     }
 
     @Test
-    public void testBackwardCompatibility() throws IOException {
+    public void testBackwardCompatibilityV0() throws IOException {
         KafkaSourceEnumState parentState = new KafkaSourceEnumState(constructPartitions(), true);
         KafkaSourceEnumStateSerializer parentSerializer = new KafkaSourceEnumStateSerializer();
 
@@ -98,8 +116,40 @@ public class PipelineKafkaSourceEnumStateSerializerTest {
         assertThat(state.assignedPartitions()).isEqualTo(parentState.assignedPartitions());
         assertThat(state.initialDiscoveryFinished())
                 .isEqualTo(parentState.initialDiscoveryFinished());
-        assertThat(state.getInitialInferredSchemas()).isEmpty();
+        assertThat(state.getInitialInferredKeySchemas()).isEmpty();
+        assertThat(state.getInitialInferredValueSchemas()).isEmpty();
         assertThat(state.isInitialSchemaInferenceFinished()).isTrue();
+    }
+
+    @Test
+    public void testBackwardCompatibilityV1() throws IOException {
+        Map<TableId, Schema> initialInferredValueSchemas = new HashMap<>();
+        initialInferredValueSchemas.put(TABLE_ID_1, SCHEMA_1);
+        initialInferredValueSchemas.put(TABLE_ID_2, SCHEMA_2);
+        PipelineKafkaSourceEnumState stateV1 =
+                new PipelineKafkaSourceEnumState(
+                        constructPartitions(),
+                        true,
+                        new HashMap<>(),
+                        initialInferredValueSchemas,
+                        true);
+        PipelineKafkaSourceEnumStateSerializerV1 serializerV1 =
+                new PipelineKafkaSourceEnumStateSerializerV1();
+        byte[] bytes = serializerV1.serialize(stateV1);
+
+        PipelineKafkaSourceEnumStateSerializer serializer =
+                new PipelineKafkaSourceEnumStateSerializer();
+        PipelineKafkaSourceEnumState state =
+                (PipelineKafkaSourceEnumState)
+                        serializer.deserialize(serializerV1.getVersion(), bytes);
+
+        assertThat(state.assignedPartitions()).isEqualTo(stateV1.assignedPartitions());
+        assertThat(state.initialDiscoveryFinished()).isEqualTo(stateV1.initialDiscoveryFinished());
+        assertThat(state.getInitialInferredKeySchemas()).isEmpty();
+        assertThat(state.getInitialInferredValueSchemas())
+                .isEqualTo(stateV1.getInitialInferredValueSchemas());
+        assertThat(state.isInitialSchemaInferenceFinished())
+                .isEqualTo(stateV1.isInitialSchemaInferenceFinished());
     }
 
     private Set<TopicPartitionAndAssignmentStatus> constructPartitions() {
@@ -111,5 +161,47 @@ public class PipelineKafkaSourceEnumStateSerializerTest {
                 new TopicPartitionAndAssignmentStatus(
                         new TopicPartition("topic-1", 1), AssignmentStatus.UNASSIGNED_INITIAL));
         return partitions;
+    }
+
+    private static class PipelineKafkaSourceEnumStateSerializerV1
+            extends KafkaSourceEnumStateSerializer {
+        private final TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
+        private final SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
+
+        @Override
+        public int getVersion() {
+            return (1 << 16) + super.getVersion();
+        }
+
+        @Override
+        public byte[] serialize(KafkaSourceEnumState enumState) throws IOException {
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    DataOutputViewStreamWrapper out = new DataOutputViewStreamWrapper(baos)) {
+                baos.write(super.serialize(enumState));
+
+                PipelineKafkaSourceEnumState pipelineEnumState =
+                        (PipelineKafkaSourceEnumState) enumState;
+                // only serialize value schemas
+                serializeSchemas(pipelineEnumState.getInitialInferredValueSchemas(), out);
+                out.writeBoolean(pipelineEnumState.isInitialSchemaInferenceFinished());
+
+                out.flush();
+                return baos.toByteArray();
+            }
+        }
+
+        private void serializeSchemas(
+                Map<TableId, Schema> tableSchemas, DataOutputViewStreamWrapper out)
+                throws IOException {
+            if (tableSchemas == null) {
+                out.writeInt(0);
+            } else {
+                out.writeInt(tableSchemas.size());
+                for (Map.Entry<TableId, Schema> entry : tableSchemas.entrySet()) {
+                    tableIdSerializer.serialize(entry.getKey(), out);
+                    schemaSerializer.serialize(entry.getValue(), out);
+                }
+            }
+        }
     }
 }

@@ -18,7 +18,8 @@
 package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.configuration.ConfigOption;
-import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.common.configuration.ConfigOptions;
+import org.apache.flink.cdc.connectors.kafka.json.JsonDeserializationType;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptions;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptions.ScanBoundedMode;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptions.ScanStartupMode;
@@ -34,13 +35,35 @@ public class KafkaDataSourceOptions {
     // Prefix for Kafka specific properties.
     public static final String PROPERTIES_PREFIX = "properties.";
 
-    public static final ConfigOption<JsonSerializationType> VALUE_FORMAT =
-            key("value.format")
-                    .enumType(JsonSerializationType.class)
-                    .defaultValue(JsonSerializationType.DEBEZIUM_JSON)
+    public static final ConfigOption<JsonDeserializationType> KEY_FORMAT =
+            key("key.format")
+                    .enumType(JsonDeserializationType.class)
+                    .noDefaultValue()
                     .withDescription(
                             "Defines the format identifier for encoding value data, "
                                     + "available options are `debezium-json` and `canal-json`, default option is `debezium-json`.");
+
+    public static final ConfigOption<JsonDeserializationType> VALUE_FORMAT =
+            key("value.format")
+                    .enumType(JsonDeserializationType.class)
+                    .defaultValue(JsonDeserializationType.DEBEZIUM_JSON)
+                    .withDescription(
+                            "Defines the format identifier for encoding value data, "
+                                    + "available options are `debezium-json` and `canal-json`, default option is `debezium-json`.");
+
+    public static final ConfigOption<String> KEY_FIELDS_PREFIX =
+            key("key.fields-prefix")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Defines a custom prefix for all fields of the key format to avoid name clashes with fields of the value format. By default, the prefix is empty.");
+
+    public static final ConfigOption<String> VALUE_FIELDS_PREFIX =
+            key("value.fields-prefix")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Defines a custom prefix for all fields of the value format to avoid name clashes with fields of the key format. By default, the prefix is empty.");
 
     public static final ConfigOption<List<String>> TOPIC =
             key("topic")
@@ -133,4 +156,12 @@ public class KafkaDataSourceOptions {
                     .defaultValue(50)
                     .withDescription(
                             "The max number of records to be parsed for one kafka topic partition in order to get the initial table schemas.");
+
+    public static final ConfigOption<String> METADATA_LIST =
+            ConfigOptions.key("metadata.list")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "List of readable metadata from ConsumerRecord to be passed to downstream, split by `,`. "
+                                    + "Available readable metadata are: topic,partition,offset,timestamp.");
 }

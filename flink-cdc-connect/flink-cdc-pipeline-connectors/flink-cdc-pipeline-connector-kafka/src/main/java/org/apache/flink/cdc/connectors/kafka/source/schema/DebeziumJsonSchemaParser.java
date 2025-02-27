@@ -117,9 +117,18 @@ public class DebeziumJsonSchemaParser implements RecordSchemaParser {
     }
 
     @Override
-    public Optional<Tuple2<TableId, Schema>> parseRecordSchema(
-            ConsumerRecord<byte[], byte[]> record) throws IOException {
-        byte[] message = record.value();
+    public Optional<Tuple2<TableId, Schema>> parseRecordKeySchema(
+            ConsumerRecord<byte[], byte[]> record) {
+        return parseSchema(record.key());
+    }
+
+    @Override
+    public Optional<Tuple2<TableId, Schema>> parseRecordValueSchema(
+            ConsumerRecord<byte[], byte[]> record) {
+        return parseSchema(record.value());
+    }
+
+    private Optional<Tuple2<TableId, Schema>> parseSchema(byte[] message) {
         if (message == null || message.length == 0) {
             return Optional.empty();
         }

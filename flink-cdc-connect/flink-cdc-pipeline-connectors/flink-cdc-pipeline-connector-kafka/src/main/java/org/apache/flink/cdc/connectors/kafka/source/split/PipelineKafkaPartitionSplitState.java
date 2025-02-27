@@ -29,11 +29,13 @@ import java.util.Map;
 public class PipelineKafkaPartitionSplitState extends KafkaPartitionSplitState
         implements SchemaAware {
 
-    private final Map<TableId, Schema> tableSchemas;
+    private final Map<TableId, Schema> keyTableSchemas;
+    private final Map<TableId, Schema> valueTableSchemas;
 
     public PipelineKafkaPartitionSplitState(PipelineKafkaPartitionSplit split) {
         super(split);
-        this.tableSchemas = split.getTableSchemas();
+        this.keyTableSchemas = split.getKeyTableSchemas();
+        this.valueTableSchemas = split.getValueTableSchemas();
     }
 
     @Override
@@ -42,16 +44,27 @@ public class PipelineKafkaPartitionSplitState extends KafkaPartitionSplitState
                 getTopicPartition(),
                 getCurrentOffset(),
                 getStoppingOffset().orElse(NO_STOPPING_OFFSET),
-                tableSchemas);
+                valueTableSchemas,
+                keyTableSchemas);
     }
 
     @Override
     public Schema getTableSchema(TableId tableId) {
-        return tableSchemas.get(tableId);
+        return valueTableSchemas.get(tableId);
     }
 
     @Override
     public void setTableSchema(TableId tableId, Schema schema) {
-        tableSchemas.put(tableId, schema);
+        valueTableSchemas.put(tableId, schema);
+    }
+
+    @Override
+    public void setKeyTableSchema(TableId tableId, Schema schema) {
+        keyTableSchemas.put(tableId, schema);
+    }
+
+    @Override
+    public Schema getKeyTableSchema(TableId tableId) {
+        return keyTableSchemas.get(tableId);
     }
 }

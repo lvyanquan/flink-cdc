@@ -24,10 +24,12 @@ import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.source.DataSource;
+import org.apache.flink.cdc.common.utils.StringUtils;
 import org.apache.flink.cdc.connectors.kafka.json.ChangeLogJsonFormatFactory;
-import org.apache.flink.cdc.connectors.kafka.json.JsonSerializationType;
+import org.apache.flink.cdc.connectors.kafka.json.JsonDeserializationType;
 import org.apache.flink.cdc.connectors.kafka.json.canal.CanalJsonFormatOptions;
 import org.apache.flink.cdc.connectors.kafka.json.debezium.DebeziumJsonFormatOptions;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.KafkaReadableMetadata;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParserFactory;
@@ -38,16 +40,26 @@ import org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUt
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 
+import javax.annotation.Nullable;
+
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.common.inference.SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY;
 import static org.apache.flink.cdc.common.utils.OptionUtils.VVR_START_TIME_MS;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.KEY_FIELDS_PREFIX;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.KEY_FORMAT;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.METADATA_LIST;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPERTIES_PREFIX;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_BOOTSTRAP_SERVERS;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.PROPS_GROUP_ID;
@@ -62,6 +74,7 @@ import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOption
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.SCAN_TOPIC_PARTITION_DISCOVERY;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.TOPIC;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.TOPIC_PATTERN;
+import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.VALUE_FIELDS_PREFIX;
 import static org.apache.flink.cdc.connectors.kafka.source.KafkaDataSourceOptions.VALUE_FORMAT;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getBoundedOptions;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.getStartupOptions;
@@ -85,11 +98,22 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                             SCAN_MAX_PRE_FETCH_RECORDS.key()));
         }
 
-        JsonSerializationType jsonSerializationType =
+        @Nullable
+        JsonDeserializationType keyJsonDeserializationType =
+                context.getFactoryConfiguration().get(KEY_FORMAT);
+        JsonDeserializationType valueJsonDeserializationType =
                 context.getFactoryConfiguration().get(VALUE_FORMAT);
 
         FactoryHelper helper = FactoryHelper.createFactoryHelper(this, context);
-        helper.validateExcept(PROPERTIES_PREFIX, jsonSerializationType.toString());
+        if (keyJsonDeserializationType != null) {
+            helper.validateExcept(
+                    PROPERTIES_PREFIX,
+                    keyJsonDeserializationType.toString(),
+                    valueJsonDeserializationType.toString());
+        } else {
+            helper.validateExcept(PROPERTIES_PREFIX, valueJsonDeserializationType.toString());
+        }
+
         Configuration configuration =
                 Configuration.fromMap(context.getFactoryConfiguration().toMap());
 
@@ -103,14 +127,33 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                                     .get(PipelineOptions.PIPELINE_LOCAL_TIME_ZONE));
         }
 
+        SchemaAwareDeserializationSchema<Event> keyDeserialization = null;
+        RecordSchemaParser keyRecordSchemaParser = null;
+        if (keyJsonDeserializationType != null) {
+            org.apache.flink.cdc.common.configuration.Configuration keyFormatConfig =
+                    helper.getFormatConfig(keyJsonDeserializationType.toString());
+            keyDeserialization =
+                    ChangeLogJsonFormatFactory.createDeserializationSchema(
+                            SchemaInferenceStrategy.STATIC,
+                            keyFormatConfig,
+                            keyJsonDeserializationType,
+                            zoneId);
+            keyRecordSchemaParser =
+                    RecordSchemaParserFactory.createRecordSchemaParser(
+                            keyFormatConfig, keyJsonDeserializationType, zoneId);
+        }
+
         org.apache.flink.cdc.common.configuration.Configuration formatConfig =
-                helper.getFormatConfig(jsonSerializationType.toString());
+                helper.getFormatConfig(valueJsonDeserializationType.toString());
         SchemaAwareDeserializationSchema<Event> valueDeserialization =
                 ChangeLogJsonFormatFactory.createDeserializationSchema(
-                        schemaInferenceStrategy, formatConfig, jsonSerializationType, zoneId);
-        RecordSchemaParser recordSchemaParser =
+                        schemaInferenceStrategy,
+                        formatConfig,
+                        valueJsonDeserializationType,
+                        zoneId);
+        RecordSchemaParser valueRecordSchemaParser =
                 RecordSchemaParserFactory.createRecordSchemaParser(
-                        formatConfig, jsonSerializationType, zoneId);
+                        formatConfig, valueJsonDeserializationType, zoneId);
 
         final Properties kafkaProperties = new Properties();
         Map<String, String> allOptions = context.getFactoryConfiguration().toMap();
@@ -141,12 +184,20 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         final StartupOptions startupOptions = getStartupOptions(configuration);
         final BoundedOptions boundedOptions = getBoundedOptions(configuration);
 
+        String metadataList = context.getFactoryConfiguration().get(METADATA_LIST);
+        List<KafkaReadableMetadata> readableMetadataList = listReadableMetadata(metadataList);
+
+        @Nullable String keyPrefix = context.getFactoryConfiguration().get(KEY_FIELDS_PREFIX);
+        @Nullable String valuePrefix = context.getFactoryConfiguration().get(VALUE_FIELDS_PREFIX);
+
         return new KafkaDataSource(
+                keyDeserialization,
+                keyRecordSchemaParser,
                 schemaInferenceStrategy,
                 valueDeserialization,
-                recordSchemaParser,
+                valueRecordSchemaParser,
                 maxFetchRecords,
-                isParallelMetadataSource(formatConfig, jsonSerializationType),
+                isParallelMetadataSource(formatConfig, valueJsonDeserializationType),
                 getTopics(configuration),
                 getTopicPattern(configuration),
                 kafkaProperties,
@@ -155,7 +206,10 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
                 startupOptions.startupTimestampMillis,
                 boundedOptions.boundedMode,
                 boundedOptions.specificOffsets,
-                boundedOptions.boundedTimestampMillis);
+                boundedOptions.boundedTimestampMillis,
+                readableMetadataList,
+                keyPrefix,
+                valuePrefix);
     }
 
     @Override
@@ -174,7 +228,10 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(SCHEMA_INFERENCE_STRATEGY);
+        options.add(KEY_FORMAT);
         options.add(VALUE_FORMAT);
+        options.add(KEY_FIELDS_PREFIX);
+        options.add(VALUE_FIELDS_PREFIX);
         options.add(TOPIC);
         options.add(TOPIC_PATTERN);
         options.add(PROPS_GROUP_ID);
@@ -188,6 +245,7 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_CHECK_DUPLICATED_GROUP_ID);
         options.add(SCAN_MAX_PRE_FETCH_RECORDS);
         options.add(VVR_START_TIME_MS);
+        options.add(METADATA_LIST);
         return options;
     }
 
@@ -202,15 +260,41 @@ public class KafkaDataSourceFactory implements DataSourceFactory {
 
     private boolean isParallelMetadataSource(
             org.apache.flink.cdc.common.configuration.Configuration formatOptions,
-            JsonSerializationType formatType) {
+            JsonDeserializationType formatType) {
         switch (formatType) {
             case DEBEZIUM_JSON:
                 return formatOptions.get(DebeziumJsonFormatOptions.DISTRIBUTED_TABLES);
             case CANAL_JSON:
                 return formatOptions.get(CanalJsonFormatOptions.DISTRIBUTED_TABLES);
+            case JSON:
+                return true;
             default:
                 throw new IllegalArgumentException(
                         "UnSupport JsonDeserializationType of " + formatType);
         }
+    }
+
+    private List<KafkaReadableMetadata> listReadableMetadata(String metadataList) {
+        if (StringUtils.isNullOrWhitespaceOnly(metadataList)) {
+            return Collections.emptyList();
+        }
+        Set<String> readableMetadataList =
+                Arrays.stream(metadataList.split(","))
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+        List<KafkaReadableMetadata> foundMetadata = new ArrayList<>();
+        for (KafkaReadableMetadata metadata : KafkaReadableMetadata.values()) {
+            if (readableMetadataList.contains(metadata.getKey())) {
+                foundMetadata.add(metadata);
+                readableMetadataList.remove(metadata.getKey());
+            }
+        }
+        if (readableMetadataList.isEmpty()) {
+            return foundMetadata;
+        }
+        throw new IllegalArgumentException(
+                String.format(
+                        "[%s] cannot be found in kafka metadata.",
+                        String.join(", ", readableMetadataList)));
     }
 }

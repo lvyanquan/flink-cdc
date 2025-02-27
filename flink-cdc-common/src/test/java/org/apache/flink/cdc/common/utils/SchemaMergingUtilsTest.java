@@ -62,6 +62,7 @@ import static org.apache.flink.cdc.common.types.DataTypes.DECIMAL;
 import static org.apache.flink.cdc.common.types.DataTypes.VARCHAR;
 import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.coerceObject;
 import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.coerceRow;
+import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.getJoinedColumnsSchema;
 import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.getLeastCommonSchema;
 import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.getLeastCommonType;
 import static org.apache.flink.cdc.common.utils.SchemaMergingUtils.getSchemaDifference;
@@ -144,6 +145,25 @@ class SchemaMergingUtilsTest {
                     17.0f,
                     DOUBLE,
                     17.0);
+
+    @Test
+    public void testGetJoinedColumnSchema() {
+        Assertions.assertThat(
+                        getJoinedColumnsSchema(
+                                of("f0", INT, "f1", VARCHAR(17)),
+                                of("f2", BIGINT, "f3", VARCHAR(18))))
+                .isEqualTo(of("f0", INT, "f1", VARCHAR(17), "f2", BIGINT, "f3", VARCHAR(18)));
+
+        Schema emptySchema = Schema.newBuilder().build();
+        Assertions.assertThat(getJoinedColumnsSchema(emptySchema, of("f0", INT)))
+                .isEqualTo(of("f0", INT));
+        Assertions.assertThat(getJoinedColumnsSchema(of("f0", INT), emptySchema))
+                .isEqualTo(of("f0", INT));
+
+        Assertions.assertThatThrownBy(() -> getJoinedColumnsSchema(of("f0", INT), of("f0", INT)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Column names must be unique, the duplicate column name: 'f0'");
+    }
 
     @Test
     void testIsSchemaCompatible() {

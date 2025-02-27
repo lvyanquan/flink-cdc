@@ -19,15 +19,18 @@ package org.apache.flink.cdc.connectors.kafka.source;
 
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.inference.SchemaInferenceStrategy;
+import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.KafkaRecordSchemaAwareDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
+import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 
 /** The builder class for {@link PipelineKafkaSource}. */
 public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
 
     private SchemaInferenceStrategy schemaInferenceStrategy;
-    private RecordSchemaParser recordSchemaParser;
+    private RecordSchemaParser keyRecordSchemaParser;
+    private RecordSchemaParser valueRecordSchemaParser;
     private int maxFetchRecords;
 
     public PipelineKafkaSourceBuilder() {
@@ -40,13 +43,31 @@ public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
         return this;
     }
 
-    public PipelineKafkaSourceBuilder setRecordSchemaParser(RecordSchemaParser recordSchemaParser) {
-        this.recordSchemaParser = recordSchemaParser;
+    public PipelineKafkaSourceBuilder setValueRecordSchemaParser(
+            RecordSchemaParser valueRecordSchemaParser) {
+        this.valueRecordSchemaParser = valueRecordSchemaParser;
+        return this;
+    }
+
+    public PipelineKafkaSourceBuilder setKeyRecordSchemaParser(
+            RecordSchemaParser keyRecordSchemaParser) {
+        this.keyRecordSchemaParser = keyRecordSchemaParser;
         return this;
     }
 
     public PipelineKafkaSourceBuilder setMaxFetchRecords(int maxFetchRecords) {
         this.maxFetchRecords = maxFetchRecords;
+        return this;
+    }
+
+    @Override
+    public PipelineKafkaSourceBuilder setDeserializer(
+            KafkaRecordDeserializationSchema<Event> deserializationSchema) {
+        if (!(deserializationSchema instanceof KafkaRecordSchemaAwareDeserializationSchema)) {
+            throw new IllegalArgumentException(
+                    "DeserializationSchema should implement KafkaRecordSchemaAwareDeserializationSchema.");
+        }
+        this.deserializationSchema = deserializationSchema;
         return this;
     }
 
@@ -62,7 +83,8 @@ public class PipelineKafkaSourceBuilder extends KafkaSourceBuilder<Event> {
                 deserializationSchema,
                 props,
                 schemaInferenceStrategy,
-                recordSchemaParser,
+                keyRecordSchemaParser,
+                valueRecordSchemaParser,
                 maxFetchRecords);
     }
 }

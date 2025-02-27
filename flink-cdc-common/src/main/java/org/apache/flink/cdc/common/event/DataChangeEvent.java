@@ -177,6 +177,17 @@ public class DataChangeEvent implements ChangeEvent, Serializable {
                 dataChangeEvent.meta);
     }
 
+    /** Updates the meta info of current data change event. */
+    public static DataChangeEvent replaceMeta(
+            DataChangeEvent dataChangeEvent, Map<String, String> meta) {
+        return new DataChangeEvent(
+                dataChangeEvent.tableId,
+                dataChangeEvent.before,
+                dataChangeEvent.after,
+                dataChangeEvent.op,
+                meta);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

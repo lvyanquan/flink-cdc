@@ -24,7 +24,13 @@ import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.common.source.EventSourceProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.source.MetadataAccessor;
-import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.KafkaRecordSchemaAwareDeserializationSchema;
+import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.KafkaReadableMetadata;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.OffsetMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.PartitionMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.TimestampMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.TopicMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.KafkaEventDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.reader.deserializer.SchemaAwareDeserializationSchema;
 import org.apache.flink.cdc.connectors.kafka.source.schema.RecordSchemaParser;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.NoStoppingOffsetsInitializer;
@@ -38,6 +44,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
+import javax.annotation.Nullable;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -50,9 +58,11 @@ import java.util.stream.Collectors;
 /** A {@link DataSource} for "Kafka" connector. */
 public class KafkaDataSource implements DataSource {
 
+    @Nullable private final SchemaAwareDeserializationSchema<Event> keyDeserialization;
+    @Nullable private final RecordSchemaParser keyRecordSchemaParser;
     private final SchemaInferenceStrategy schemaInferenceStrategy;
     private final SchemaAwareDeserializationSchema<Event> valueDeserialization;
-    private final RecordSchemaParser recordSchemaParser;
+    private final RecordSchemaParser valueRecordSchemaParser;
     private final int maxFetchRecord;
     private final boolean isParallelMetadataSource;
     private final List<String> topics;
@@ -64,11 +74,16 @@ public class KafkaDataSource implements DataSource {
     private final BoundedMode boundedMode;
     private final Map<KafkaTopicPartition, Long> specificBoundedOffsets;
     private final long boundedTimestampMillis;
+    private final List<KafkaReadableMetadata> readableMetadataList;
+    @Nullable private final String keyPrefix;
+    @Nullable private final String valuePrefix;
 
     public KafkaDataSource(
+            @Nullable SchemaAwareDeserializationSchema<Event> keyDeserialization,
+            @Nullable RecordSchemaParser keyRecordSchemaParser,
             SchemaInferenceStrategy schemaInferenceStrategy,
             SchemaAwareDeserializationSchema<Event> valueDeserialization,
-            RecordSchemaParser recordSchemaParser,
+            RecordSchemaParser valueRecordSchemaParser,
             int maxFetchRecord,
             boolean isParallelMetadataSource,
             List<String> topics,
@@ -79,10 +94,21 @@ public class KafkaDataSource implements DataSource {
             long startupTimestampMillis,
             BoundedMode boundedMode,
             Map<KafkaTopicPartition, Long> specificBoundedOffsets,
-            long boundedTimestampMillis) {
-        this.schemaInferenceStrategy = schemaInferenceStrategy;
-        this.valueDeserialization = valueDeserialization;
-        this.recordSchemaParser = recordSchemaParser;
+            long boundedTimestampMillis,
+            List<KafkaReadableMetadata> readableMetadataList,
+            @Nullable String keyPrefix,
+            @Nullable String valuePrefix) {
+        this.keyDeserialization = keyDeserialization;
+        this.keyRecordSchemaParser = keyRecordSchemaParser;
+        this.schemaInferenceStrategy =
+                Preconditions.checkNotNull(
+                        schemaInferenceStrategy, "schemaInferenceStrategy must not be null.");
+        this.valueDeserialization =
+                Preconditions.checkNotNull(
+                        valueDeserialization, "valueDeserialization must not be null.");
+        this.valueRecordSchemaParser =
+                Preconditions.checkNotNull(
+                        valueRecordSchemaParser, "valueRecordSchemaParser must not be null.");
         this.maxFetchRecord = maxFetchRecord;
         this.isParallelMetadataSource = isParallelMetadataSource;
         this.topics = topics;
@@ -101,6 +127,9 @@ public class KafkaDataSource implements DataSource {
                 Preconditions.checkNotNull(
                         specificBoundedOffsets, "Specific bounded offsets must not be null.");
         this.boundedTimestampMillis = boundedTimestampMillis;
+        this.readableMetadataList = readableMetadataList;
+        this.keyPrefix = keyPrefix;
+        this.valuePrefix = valuePrefix;
     }
 
     @Override
@@ -167,12 +196,17 @@ public class KafkaDataSource implements DataSource {
 
         kafkaSourceBuilder
                 .setSchemaInferenceStrategy(schemaInferenceStrategy)
-                .setRecordSchemaParser(recordSchemaParser)
+                .setKeyRecordSchemaParser(keyRecordSchemaParser)
+                .setValueRecordSchemaParser(valueRecordSchemaParser)
                 .setMaxFetchRecords(maxFetchRecord)
                 .setProperties(kafkaProperties)
                 .setDeserializer(
-                        KafkaRecordSchemaAwareDeserializationSchema.valueOnly(
-                                valueDeserialization));
+                        new KafkaEventDeserializationSchema(
+                                keyDeserialization,
+                                valueDeserialization,
+                                keyPrefix,
+                                valuePrefix,
+                                readableMetadataList));
 
         return FlinkSourceProvider.of(kafkaSourceBuilder.build());
     }
@@ -182,6 +216,16 @@ public class KafkaDataSource implements DataSource {
         // this method is never used now
         throw new UnsupportedOperationException(
                 "Kafka data source does not support getMetadataAccessor now.");
+    }
+
+    @Override
+    public SupportedMetadataColumn[] supportedMetadataColumns() {
+        return new SupportedMetadataColumn[] {
+            new TopicMetadataColumn(),
+            new PartitionMetadataColumn(),
+            new OffsetMetadataColumn(),
+            new TimestampMetadataColumn()
+        };
     }
 
     @Override
