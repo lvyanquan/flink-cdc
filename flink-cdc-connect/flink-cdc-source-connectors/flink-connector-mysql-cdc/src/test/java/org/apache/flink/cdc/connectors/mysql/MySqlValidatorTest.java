@@ -25,7 +25,6 @@ import org.apache.flink.cdc.connectors.mysql.source.split.MySqlSplit;
 import org.apache.flink.cdc.connectors.mysql.testutils.MySqlContainer;
 import org.apache.flink.cdc.connectors.mysql.testutils.MySqlVersion;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
-import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.table.api.ValidationException;
 
 import org.apache.kafka.connect.source.SourceRecord;
@@ -34,8 +33,6 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.lifecycle.Startables;
@@ -46,15 +43,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.flink.cdc.connectors.mysql.MySqlTestUtils.basicSourceBuilder;
-import static org.apache.flink.cdc.connectors.mysql.MySqlTestUtils.setupSource;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SERVER_TIME_ZONE;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqlVersion.V5_5;
 import static org.apache.flink.cdc.connectors.mysql.testutils.MySqlVersion.V5_7;
@@ -63,20 +56,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /** Test for the {@link MySqlValidator}. */
-@RunWith(Parameterized.class)
 public class MySqlValidatorTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlValidatorTest.class);
 
     private static TemporaryFolder tempFolder;
     private static File resourceFolder;
-
-    @Parameterized.Parameter public boolean runIncrementalSnapshot;
-
-    @Parameterized.Parameters(name = "runIncrementalSnapshot = {0}")
-    public static List<Boolean> parameters() {
-        return Arrays.asList(true, false);
-    }
 
     @BeforeClass
     public static void setup() throws Exception {
@@ -174,27 +159,20 @@ public class MySqlValidatorTest {
     }
 
     private void startSource(UniqueDatabase database) throws Exception {
-        if (runIncrementalSnapshot) {
-            MySqlSource<SourceRecord> mySqlSource =
-                    MySqlSource.<SourceRecord>builder()
-                            .hostname(database.getHost())
-                            .username(database.getUsername())
-                            .password(database.getPassword())
-                            .port(database.getDatabasePort())
-                            .databaseList(database.getDatabaseName())
-                            .tableList(database.getDatabaseName() + ".products")
-                            .deserializer(new MySqlTestUtils.ForwardDeserializeSchema())
-                            .serverTimeZone("UTC")
-                            .build();
-            try (SplitEnumerator<MySqlSplit, PendingSplitsState> enumerator =
-                    mySqlSource.createEnumerator(new MockSplitEnumeratorContext<>(1))) {
-                enumerator.start();
-            }
-
-        } else {
-            DebeziumSourceFunction<SourceRecord> source =
-                    basicSourceBuilder(database, "UTC", false).build();
-            setupSource(source);
+        MySqlSource<SourceRecord> mySqlSource =
+                MySqlSource.<SourceRecord>builder()
+                        .hostname(database.getHost())
+                        .username(database.getUsername())
+                        .password(database.getPassword())
+                        .port(database.getDatabasePort())
+                        .databaseList(database.getDatabaseName())
+                        .tableList(database.getDatabaseName() + ".products")
+                        .deserializer(new MySqlTestUtils.ForwardDeserializeSchema())
+                        .serverTimeZone("UTC")
+                        .build();
+        try (SplitEnumerator<MySqlSplit, PendingSplitsState> enumerator =
+                mySqlSource.createEnumerator(new MockSplitEnumeratorContext<>(1))) {
+            enumerator.start();
         }
     }
 

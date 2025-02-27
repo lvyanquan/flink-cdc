@@ -911,7 +911,6 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                         + " primary key (city, id) not enforced"
                         + ") WITH ("
                         + " 'connector' = 'mysql-cdc',"
-                        + " 'scan.incremental.snapshot.enabled' = 'true',"
                         + " 'hostname' = '%s',"
                         + " 'port' = '%s',"
                         + " 'username' = '%s',"

@@ -139,8 +139,18 @@ public abstract class MySqlSourceTestBase extends TestLogger {
         return new Object[][] {
             new Object[] {
                 ImmutableMap.<String, String>builder()
-                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
-                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .put(
+                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED
+                                                        .defaultValue())))
+                        .put(
+                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED
+                                                        .defaultValue())))
                         .build()
             },
             new Object[] {new HashMap<>()}

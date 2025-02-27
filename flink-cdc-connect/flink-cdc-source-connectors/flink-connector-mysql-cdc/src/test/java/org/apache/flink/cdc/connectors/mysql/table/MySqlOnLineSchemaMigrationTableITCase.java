@@ -168,7 +168,6 @@ public class MySqlOnLineSchemaMigrationTableITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-time-zone' = 'UTC',"
                                 + " 'server-id' = '%s'"
                                 + ")",
@@ -178,7 +177,6 @@ public class MySqlOnLineSchemaMigrationTableITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         customerDatabase.getDatabaseName(),
                         "customers",
-                        true,
                         getServerId());
 
         tEnv.executeSql(sourceDDL);
@@ -338,7 +336,6 @@ public class MySqlOnLineSchemaMigrationTableITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-time-zone' = 'UTC',"
                                 + " 'server-id' = '%s'"
                                 + ")",
@@ -348,7 +345,6 @@ public class MySqlOnLineSchemaMigrationTableITCase extends MySqlSourceTestBase {
                         TEST_PASSWORD,
                         customerDatabase.getDatabaseName(),
                         "customers",
-                        true,
                         getServerId());
 
         tEnv.executeSql(sourceDDL);

@@ -123,7 +123,6 @@ public class MySqlBinlogParseITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'server-time-zone' = 'UTC',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
@@ -134,7 +133,6 @@ public class MySqlBinlogParseITCase extends MySqlSourceTestBase {
                         userDatabase1.getPassword(),
                         userDatabase1.getDatabaseName(),
                         "user_table_.*",
-                        true,
                         getServerId(),
                         getSplitSize());
 

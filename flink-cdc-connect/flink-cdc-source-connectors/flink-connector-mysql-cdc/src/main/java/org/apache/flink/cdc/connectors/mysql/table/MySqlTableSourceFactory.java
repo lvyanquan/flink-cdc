@@ -75,7 +75,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE;
@@ -153,8 +152,6 @@ public class MySqlTableSourceFactory
                 config.getOptional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN)
                         .orElse(null);
 
-        boolean enableParallelRead =
-                config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
         boolean closeIdleReaders =
                 config.get(MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         boolean skipSnapshotBackFill =
@@ -171,8 +168,7 @@ public class MySqlTableSourceFactory
         checkEvolvingScanNewlyAddedTableOption(
                 evolvingScanNewlyAddedTableEnabled, closeIdleReaders);
 
-        if (enableParallelRead) {
-            /*
+        /*
             Users can create the MySQL cdc source and MySQL lookup source with the same identifier 'mysql' in flink-connector-mysql.
             MySQL cdc source request to have a primary key or set the 'scan.incremental.snapshot.chunk.key-column' for tables without primary key.
             MySQL lookup source has no limit on this.
@@ -180,18 +176,17 @@ public class MySqlTableSourceFactory
             We skip the validation(validatePrimaryKeyIfEnableParallel) on the primary key for cdc sources here.
             The validation is moved to the SourceProvider when not merging sources.
             The validation lies in the ChunkUtils when merging sources.
-            */
-            validateIntegerOption(
-                    MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
-            validateIntegerOption(MySqlSourceOptions.CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
-            validateIntegerOption(MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE, fetchSize, 1);
-            validateIntegerOption(MySqlSourceOptions.CONNECTION_POOL_SIZE, connectionPoolSize, 1);
-            validateIntegerOption(MySqlSourceOptions.CONNECT_MAX_RETRIES, connectMaxRetries, 0);
-            validateDistributionFactorUpper(distributionFactorUpper);
-            validateDistributionFactorLower(distributionFactorLower);
-            validateDurationOption(
-                    MySqlSourceOptions.CONNECT_TIMEOUT, connectTimeout, Duration.ofMillis(250));
-        }
+        */
+        validateIntegerOption(
+                MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
+        validateIntegerOption(MySqlSourceOptions.CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
+        validateIntegerOption(MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE, fetchSize, 1);
+        validateIntegerOption(MySqlSourceOptions.CONNECTION_POOL_SIZE, connectionPoolSize, 1);
+        validateIntegerOption(MySqlSourceOptions.CONNECT_MAX_RETRIES, connectMaxRetries, 0);
+        validateDistributionFactorUpper(distributionFactorUpper);
+        validateDistributionFactorLower(distributionFactorLower);
+        validateDurationOption(
+                MySqlSourceOptions.CONNECT_TIMEOUT, connectTimeout, Duration.ofMillis(250));
 
         boolean isShardingTable = config.get(INTERNAL_IS_SHARDING_TABLE);
         boolean scanOnlyDeserializeCapturedTablesChangelog =
@@ -217,7 +212,6 @@ public class MySqlTableSourceFactory
                 serverTimeZone,
                 getDebeziumProperties(context.getCatalogTable().getOptions()),
                 serverId,
-                enableParallelRead,
                 splitSize,
                 splitMetaGroupSize,
                 fetchSize,
@@ -274,7 +268,6 @@ public class MySqlTableSourceFactory
         options.add(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS);
         options.add(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS);
         options.add(MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS);
-        options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE);
         options.add(MySqlSourceOptions.CHUNK_META_GROUP_SIZE);
         options.add(MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE);
@@ -412,9 +405,8 @@ public class MySqlTableSourceFactory
         if (chunkKeyColumn == null && !physicalSchema.getPrimaryKey().isPresent()) {
             throw new ValidationException(
                     String.format(
-                            "'%s' is required for table without primary key when '%s' enabled.",
-                            MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
-                            MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED.key()));
+                            "'%s' is required for table without primary key.",
+                            MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()));
         }
     }
 
@@ -605,7 +597,6 @@ public class MySqlTableSourceFactory
                         SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS,
                         SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS,
                         SCAN_STARTUP_TIMESTAMP_MILLIS,
-                        SCAN_INCREMENTAL_SNAPSHOT_ENABLED,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN,
                         SCAN_READ_CHANGELOG_AS_APPEND_ONLY_ENABLED)

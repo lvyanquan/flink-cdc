@@ -29,8 +29,6 @@ import org.apache.flink.util.CloseableIterator;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
@@ -53,7 +51,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase.a
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase.buildMySqlConfigWithTimezone;
 
 /** Integration tests to check mysql-cdc works well under different MySQL server timezone. */
-@RunWith(Parameterized.class)
 public class MySqlTimezoneITCase {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlTimezoneITCase.class);
@@ -63,13 +60,6 @@ public class MySqlTimezoneITCase {
     private final StreamTableEnvironment tEnv =
             StreamTableEnvironment.create(
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
-
-    @Parameterized.Parameter public Boolean incrementalSnapshot;
-
-    @Parameterized.Parameters(name = "incrementalSnapshot: {0}")
-    public static List<Boolean> parameters() {
-        return Arrays.asList(true, false);
-    }
 
     @Before
     public void setup() throws Exception {
@@ -81,12 +71,8 @@ public class MySqlTimezoneITCase {
                                                         .getResource("."))
                                         .toURI())
                         .toFile();
-        if (incrementalSnapshot) {
-            env.setParallelism(4);
-            env.enableCheckpointing(200);
-        } else {
-            env.setParallelism(1);
-        }
+        env.setParallelism(4);
+        env.enableCheckpointing(200);
     }
 
     @Test
@@ -153,7 +139,6 @@ public class MySqlTimezoneITCase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s',"
                                 + " 'server-time-zone'='%s'"
@@ -164,7 +149,6 @@ public class MySqlTimezoneITCase {
                         fullTypesDatabase.getPassword(),
                         fullTypesDatabase.getDatabaseName(),
                         "full_types",
-                        incrementalSnapshot,
                         getServerId(),
                         getSplitSize(),
                         timezone);
@@ -206,18 +190,11 @@ public class MySqlTimezoneITCase {
     private String getServerId() {
         final Random random = new Random();
         int serverId = random.nextInt(100) + 5400;
-        if (incrementalSnapshot) {
-            return serverId + "-" + (serverId + env.getParallelism());
-        }
-        return String.valueOf(serverId);
+        return serverId + "-" + (serverId + env.getParallelism());
     }
 
     private int getSplitSize() {
-        if (incrementalSnapshot) {
-            // test parallel read
-            return 4;
-        }
-        return 0;
+        return 4;
     }
 
     private static List<String> fetchRows(Iterator<Row> iter, int size) {

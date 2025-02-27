@@ -83,25 +83,12 @@ public class MySqlSourceOptions {
                     .withDescription(
                             "A numeric ID or a numeric ID range of this database client, "
                                     + "The numeric ID syntax is like '5400', the numeric ID range syntax "
-                                    + "is like '5400-5408', The numeric ID range syntax is recommended when "
-                                    + "'scan.incremental.snapshot.enabled' enabled. Every ID must be unique across all "
+                                    + "is like '5400-5408', The numeric ID range syntax is recommended "
+                                    + ". Every ID must be unique across all "
                                     + "currently-running database processes in the MySQL cluster. This connector"
                                     + " joins the MySQL  cluster as another server (with this unique ID) "
                                     + "so it can read the binlog. By default, a random number is generated between"
                                     + " 5400 and 6400, though we recommend setting an explicit value.");
-
-    public static final ConfigOption<Boolean> SCAN_INCREMENTAL_SNAPSHOT_ENABLED =
-            ConfigOptions.key("scan.incremental.snapshot.enabled")
-                    .booleanType()
-                    .defaultValue(true)
-                    .withDescription(
-                            "Incremental snapshot is a new mechanism to read snapshot of a table. "
-                                    + "Compared to the old snapshot mechanism, the incremental snapshot has many advantages, including:\n"
-                                    + "(1) source can be parallel during snapshot reading, \n"
-                                    + "(2) source can perform checkpoints in the chunk granularity during snapshot reading, \n"
-                                    + "(3) source doesn't need to acquire global read lock (FLUSH TABLES WITH READ LOCK) before snapshot reading.\n"
-                                    + "If you would like the source run in parallel, each parallel reader should have an unique server id, "
-                                    + "so the 'server-id' must be a range like '5400-6400', and the range must be larger than the parallelism.");
 
     public static final ConfigOption<Integer> SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE =
             ConfigOptions.key("scan.incremental.snapshot.chunk.size")
@@ -316,7 +303,7 @@ public class MySqlSourceOptions {
             SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED =
                     ConfigOptions.key("scan.only.deserialize.captured.tables.changelog.enabled")
                             .booleanType()
-                            .defaultValue(false)
+                            .defaultValue(true)
                             .withDescription(
                                     "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 

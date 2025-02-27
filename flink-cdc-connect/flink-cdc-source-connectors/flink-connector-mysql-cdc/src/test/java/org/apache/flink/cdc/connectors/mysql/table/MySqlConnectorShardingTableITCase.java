@@ -52,7 +52,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Stream;
 
 import static io.debezium.connector.mysql.ExtendedMysqlConnectorConfig.SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED;
@@ -88,22 +87,24 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                     env, EnvironmentSettings.newInstance().inStreamingMode().build());
     @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-    // enable the incrementalSnapshot (i.e: The new source MySqlParallelSource)
-    @Parameterized.Parameter(1)
-    public boolean incrementalSnapshot;
-
-    @Parameterized.Parameters(name = "debeziumProperties: {0}, incrementalSnapshot: {1}")
+    @Parameterized.Parameters(name = "debeziumProperties: {0}")
     public static Object[] parameters() {
-        return new Object[][] {
-            new Object[] {
-                ImmutableMap.<String, String>builder()
-                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
-                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
-                        .build(),
-                true
-            },
-            new Object[] {new HashMap<>(), false},
-            new Object[] {new HashMap<>(), true}
+        return new Object[] {
+            ImmutableMap.<String, String>builder()
+                    .put(
+                            SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(),
+                            String.valueOf(
+                                    !((Boolean)
+                                            SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED
+                                                    .defaultValue())))
+                    .put(
+                            SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(),
+                            String.valueOf(
+                                    !((Boolean)
+                                            SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED
+                                                    .defaultValue())))
+                    .build(),
+            new HashMap<>()
         };
     }
 
@@ -125,12 +126,8 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
     public void before() {
         TestValuesTableFactory.clearAllData();
         tEnv.registerCatalog("mycat", new TestValuesEvolvingCatalog("mycat", "mydb", false));
-        if (incrementalSnapshot) {
-            env.setParallelism(DEFAULT_PARALLELISM);
-            env.enableCheckpointing(200);
-        } else {
-            env.setParallelism(1);
-        }
+        env.setParallelism(DEFAULT_PARALLELISM);
+        env.enableCheckpointing(200);
     }
 
     @Test
@@ -163,7 +160,6 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
@@ -174,7 +170,6 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                         fullTypesMySql57Database.getPassword(),
                         fullTypesMySql57Database.getDatabaseName(),
                         "sharding_table_.*",
-                        incrementalSnapshot,
                         getServerId(),
                         getSystemTimeZone(),
                         getSplitSize());
@@ -245,7 +240,6 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-time-zone' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
@@ -258,7 +252,6 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
                                 "(%s|%s)",
                                 userDatabase1.getDatabaseName(), userDatabase2.getDatabaseName()),
                         "user_table_.*",
-                        incrementalSnapshot,
                         getSystemTimeZone(),
                         getServerId(),
                         getSplitSize());
@@ -298,29 +291,12 @@ public class MySqlConnectorShardingTableITCase extends MySqlSourceTestBase {
 
     // ------------------------------------------------------------------------------------
 
-    @Override
-    protected String getServerId() {
-        if (incrementalSnapshot) {
-            return super.getServerId();
-        }
-        final Random random = new Random();
-        int serverId = random.nextInt(100) + 5400;
-        return String.valueOf(serverId);
-    }
-
     protected String getServerId(int base) {
-        if (incrementalSnapshot) {
-            return base + "-" + (base + DEFAULT_PARALLELISM);
-        }
-        return String.valueOf(base);
+        return base + "-" + (base + DEFAULT_PARALLELISM);
     }
 
     private int getSplitSize() {
-        if (incrementalSnapshot) {
-            // test parallel read
-            return 4;
-        }
-        return 0;
+        return 4;
     }
 
     private static String buildColumnsDDL(

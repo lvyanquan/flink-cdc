@@ -34,7 +34,7 @@ public class ExtendedMysqlConnectorConfig {
                     .withType(ConfigDef.Type.BOOLEAN)
                     .withWidth(ConfigDef.Width.SHORT)
                     .withImportance(ConfigDef.Importance.MEDIUM)
-                    .withDefault(false)
+                    .withDefault(true)
                     .withDescription(
                             "If set to true, we will only deserialize changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 

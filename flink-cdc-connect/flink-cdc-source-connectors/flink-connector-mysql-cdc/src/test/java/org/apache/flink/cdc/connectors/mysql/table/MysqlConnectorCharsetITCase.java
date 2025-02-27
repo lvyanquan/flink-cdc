@@ -374,7 +374,6 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'server-time-zone' = '%s',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
@@ -386,7 +385,6 @@ public class MysqlConnectorCharsetITCase extends MySqlSourceTestBase {
                         charsetTestDatabase.getPassword(),
                         charsetTestDatabase.getDatabaseName(),
                         testName,
-                        true,
                         getServerId(),
                         getSystemTimeZone(),
                         4);

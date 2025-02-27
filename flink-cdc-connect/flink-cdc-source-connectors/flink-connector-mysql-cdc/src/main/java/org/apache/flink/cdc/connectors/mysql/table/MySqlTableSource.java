@@ -28,7 +28,6 @@ import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
-import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
 import org.apache.flink.table.api.ValidationException;
@@ -41,7 +40,6 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.EvolvingSourceProvider;
 import org.apache.flink.table.connector.source.MergedSourceProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
-import org.apache.flink.table.connector.source.SourceFunctionProvider;
 import org.apache.flink.table.connector.source.SourceProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.abilities.SupportsReportProcessingBacklog;
@@ -80,7 +78,6 @@ import static io.debezium.config.CommonConnectorConfig.TOMBSTONES_ON_DELETE;
 import static io.debezium.connector.mysql.MySqlConnectorConfig.SNAPSHOT_MODE;
 import static io.debezium.engine.DebeziumEngine.OFFSET_FLUSH_INTERVAL_MS_PROP;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.utils.SerializerUtils.getMetadataConverters;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -114,7 +111,6 @@ public class MySqlTableSource
     private final String tableName;
     private final ZoneId serverTimeZone;
     private final Properties dbzProperties;
-    private final boolean enableParallelRead;
     private final int splitSize;
     private final int splitMetaGroupSize;
     private final int fetchSize;
@@ -177,7 +173,6 @@ public class MySqlTableSource
             ZoneId serverTimeZone,
             Properties dbzProperties,
             @Nullable String serverId,
-            boolean enableParallelRead,
             int splitSize,
             int splitMetaGroupSize,
             int fetchSize,
@@ -213,7 +208,6 @@ public class MySqlTableSource
         this.serverId = serverId;
         this.serverTimeZone = serverTimeZone;
         this.dbzProperties = dbzProperties;
-        this.enableParallelRead = enableParallelRead;
         this.splitSize = splitSize;
         this.splitMetaGroupSize = splitMetaGroupSize;
         this.fetchSize = fetchSize;
@@ -268,11 +262,6 @@ public class MySqlTableSource
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext scanContext) {
-        if (!enableParallelRead && isEvolvingSource) {
-            throw new IllegalArgumentException(
-                    "MySql CDC as evolving source only works for the parallel source.");
-        }
-
         List<String> databases = new ArrayList<>();
         List<String> tableNames = new ArrayList<>();
         Map<MySqlTableSpec, DebeziumDeserializationSchema<RowData>> deserializers = new HashMap<>();
@@ -331,104 +320,85 @@ public class MySqlTableSource
 
         boolean isMergedSource = capturedTables.size() > 1;
 
-        if (enableParallelRead) {
-            final MySqlSourceBuilder<?> parallelSourceBuilder =
-                    isEvolvingSource || isMergedSource
-                            ? MySqlSource.<SourceRecord>builder()
-                            : MySqlSource.<RowData>builder();
-            parallelSourceBuilder
-                    .hostname(hostname)
-                    .port(port)
-                    .databaseList(databases.toArray(new String[0]))
-                    .tableList(tableNames.toArray(new String[0]))
-                    .username(username)
-                    .password(password)
-                    .serverTimeZone(serverTimeZone.toString())
-                    .serverId(serverId)
-                    .splitSize(splitSize)
-                    .splitMetaGroupSize(splitMetaGroupSize)
-                    .distributionFactorUpper(distributionFactorUpper)
-                    .distributionFactorLower(distributionFactorLower)
-                    .fetchSize(fetchSize)
-                    .connectTimeout(connectTimeout)
-                    .connectMaxRetries(connectMaxRetries)
-                    .connectionPoolSize(connectionPoolSize)
-                    .debeziumProperties(getParallelDbzProperties(dbzProperties))
-                    .startupOptions(startupOptions)
-                    .closeIdleReaders(closeIdleReaders)
-                    .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
-                    .jdbcProperties(jdbcProperties)
-                    .heartbeatInterval(heartbeatInterval)
-                    .skipSnapshotBackfill(skipSnapshotBackFill)
-                    .parseOnLineSchemaChanges(parseOnlineSchemaChanges)
-                    .useLegacyJsonFormat(useLegacyJsonFormat)
-                    .chunkKeyColumns(chunkKeyColumns)
-                    .scanOnlyDeserializeCapturedTablesChangelog(
-                            scanOnlyDeserializeCapturedTablesChangelog)
-                    .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
-                    .scanChunkAssignStrategy(scanChunkAssignStrategy)
-                    .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
-            if (rdsConfig != null) {
-                parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
-            }
-
-            if (isEvolvingSource) {
-                final MySqlEvolvingSourceDeserializeSchema evolvingSourceDeserializeSchema =
-                        new MySqlEvolvingSourceDeserializeSchema(
-                                capturedTables,
-                                serverTimeZone,
-                                scanContext.getEvolvingSourceTypeInfo(),
-                                Boolean.parseBoolean(
-                                        jdbcProperties.getProperty("tinyInt1isBit", "true")),
-                                readChangelogAsAppend);
-                return EvolvingSourceProvider.of(
-                        ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
-                                .deserializer(evolvingSourceDeserializeSchema)
-                                .build());
-            }
-
-            if (isMergedSource) {
-                final MySqlMergedSourceDeserializeSchema mergedSourceDeserializeSchema =
-                        new MySqlMergedSourceDeserializeSchema(
-                                capturedTables,
-                                deserializers,
-                                schemas,
-                                scanContext.getMergedSourceTypeInfo());
-
-                return getMergedSourceProviderWithCheckPK(
-                        ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
-                                .deserializer(mergedSourceDeserializeSchema)
-                                .build(),
-                        physicalSchemas,
-                        chunkKeyColumns);
-            }
-
-            checkArgument(capturedTables.size() == 1, "There should be one table to scan.");
-            MySqlTableSpec tableSpec = capturedTables.iterator().next();
-            return getParallelSourceProviderWithCheckPK(
-                    ((MySqlSourceBuilder<RowData>) parallelSourceBuilder)
-                            .deserializer(deserializers.get(tableSpec))
-                            .build(),
-                    physicalSchemas.get(tableSpec),
-                    chunkKeyColumns.get(tableSpec.getTablePathInMySql()));
-        } else {
-            org.apache.flink.cdc.connectors.mysql.MySqlSource.Builder<RowData> builder =
-                    org.apache.flink.cdc.connectors.mysql.MySqlSource.<RowData>builder()
-                            .hostname(hostname)
-                            .port(port)
-                            .databaseList(database)
-                            .tableList(database + "\\." + tableName)
-                            .username(username)
-                            .password(password)
-                            .serverTimeZone(serverTimeZone.toString())
-                            .debeziumProperties(dbzProperties)
-                            .startupOptions(startupOptions)
-                            .deserializer(deserializers.values().iterator().next());
-            Optional.ofNullable(serverId)
-                    .ifPresent(serverId -> builder.serverId(Integer.parseInt(serverId)));
-            DebeziumSourceFunction<RowData> sourceFunction = builder.build();
-            return SourceFunctionProvider.of(sourceFunction, false);
+        final MySqlSourceBuilder<?> parallelSourceBuilder =
+                isEvolvingSource || isMergedSource
+                        ? MySqlSource.<SourceRecord>builder()
+                        : MySqlSource.<RowData>builder();
+        parallelSourceBuilder
+                .hostname(hostname)
+                .port(port)
+                .databaseList(databases.toArray(new String[0]))
+                .tableList(tableNames.toArray(new String[0]))
+                .username(username)
+                .password(password)
+                .serverTimeZone(serverTimeZone.toString())
+                .serverId(serverId)
+                .splitSize(splitSize)
+                .splitMetaGroupSize(splitMetaGroupSize)
+                .distributionFactorUpper(distributionFactorUpper)
+                .distributionFactorLower(distributionFactorLower)
+                .fetchSize(fetchSize)
+                .connectTimeout(connectTimeout)
+                .connectMaxRetries(connectMaxRetries)
+                .connectionPoolSize(connectionPoolSize)
+                .debeziumProperties(getParallelDbzProperties(dbzProperties))
+                .startupOptions(startupOptions)
+                .closeIdleReaders(closeIdleReaders)
+                .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                .jdbcProperties(jdbcProperties)
+                .heartbeatInterval(heartbeatInterval)
+                .skipSnapshotBackfill(skipSnapshotBackFill)
+                .parseOnLineSchemaChanges(parseOnlineSchemaChanges)
+                .useLegacyJsonFormat(useLegacyJsonFormat)
+                .chunkKeyColumns(chunkKeyColumns)
+                .scanOnlyDeserializeCapturedTablesChangelog(
+                        scanOnlyDeserializeCapturedTablesChangelog)
+                .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
+                .scanChunkAssignStrategy(scanChunkAssignStrategy)
+                .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
+        if (rdsConfig != null) {
+            parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
         }
+
+        if (isEvolvingSource) {
+            final MySqlEvolvingSourceDeserializeSchema evolvingSourceDeserializeSchema =
+                    new MySqlEvolvingSourceDeserializeSchema(
+                            capturedTables,
+                            serverTimeZone,
+                            scanContext.getEvolvingSourceTypeInfo(),
+                            Boolean.parseBoolean(
+                                    jdbcProperties.getProperty("tinyInt1isBit", "true")),
+                            readChangelogAsAppend);
+            return EvolvingSourceProvider.of(
+                    ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
+                            .deserializer(evolvingSourceDeserializeSchema)
+                            .build());
+        }
+
+        if (isMergedSource) {
+            final MySqlMergedSourceDeserializeSchema mergedSourceDeserializeSchema =
+                    new MySqlMergedSourceDeserializeSchema(
+                            capturedTables,
+                            deserializers,
+                            schemas,
+                            scanContext.getMergedSourceTypeInfo());
+
+            return getMergedSourceProviderWithCheckPK(
+                    ((MySqlSourceBuilder<SourceRecord>) parallelSourceBuilder)
+                            .deserializer(mergedSourceDeserializeSchema)
+                            .build(),
+                    physicalSchemas,
+                    chunkKeyColumns);
+        }
+
+        checkArgument(capturedTables.size() == 1, "There should be one table to scan.");
+        MySqlTableSpec tableSpec = capturedTables.iterator().next();
+        return getParallelSourceProviderWithCheckPK(
+                ((MySqlSourceBuilder<RowData>) parallelSourceBuilder)
+                        .deserializer(deserializers.get(tableSpec))
+                        .build(),
+                physicalSchemas.get(tableSpec),
+                chunkKeyColumns.get(tableSpec.getTablePathInMySql()));
     }
 
     @Override
@@ -472,7 +442,6 @@ public class MySqlTableSource
                         serverTimeZone,
                         dbzProperties,
                         serverId,
-                        enableParallelRead,
                         splitSize,
                         splitMetaGroupSize,
                         fetchSize,
@@ -517,7 +486,6 @@ public class MySqlTableSource
         }
         MySqlTableSource that = (MySqlTableSource) o;
         return port == that.port
-                && enableParallelRead == that.enableParallelRead
                 && splitSize == that.splitSize
                 && splitMetaGroupSize == that.splitMetaGroupSize
                 && fetchSize == that.fetchSize
@@ -575,7 +543,6 @@ public class MySqlTableSource
                 tableName,
                 serverTimeZone,
                 dbzProperties,
-                enableParallelRead,
                 splitSize,
                 splitMetaGroupSize,
                 fetchSize,
@@ -621,9 +588,6 @@ public class MySqlTableSource
     public boolean applyTableSource(ScanTableSource anotherScanTableSource) {
         if (anotherScanTableSource instanceof MySqlTableSource) {
             MySqlTableSource anotherMySQLTableSource = (MySqlTableSource) anotherScanTableSource;
-            if (!(enableParallelRead && anotherMySQLTableSource.enableParallelRead)) {
-                return false;
-            }
 
             if (hostname.equals(anotherMySQLTableSource.hostname)
                     && port == anotherMySQLTableSource.port
@@ -716,9 +680,8 @@ public class MySqlTableSource
         if (chunkKeyColumn == null && !physicalSchema.getPrimaryKey().isPresent()) {
             throw new ValidationException(
                     String.format(
-                            "'%s' is required for table without primary key when '%s' enabled.",
-                            SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
-                            SCAN_INCREMENTAL_SNAPSHOT_ENABLED.key()));
+                            "'%s' is required for table without primary key.",
+                            SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()));
         }
     }
 

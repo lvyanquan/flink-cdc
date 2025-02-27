@@ -319,7 +319,7 @@ public class MySqlDataSourceOptions {
             SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED =
                     ConfigOptions.key("scan.only.deserialize.captured.tables.changelog.enabled")
                             .booleanType()
-                            .defaultValue(false)
+                            .defaultValue(true)
                             .withDescription(
                                     "Whether to deserialize only changelog Events of user defined captured tables, thus we can speed up the binlog process procedure.");
 

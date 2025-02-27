@@ -71,8 +71,18 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
         return new Object[][] {
             new Object[] {
                 ImmutableMap.<String, String>builder()
-                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
-                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .put(
+                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED
+                                                        .defaultValue())))
+                        .put(
+                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED
+                                                        .defaultValue())))
                         .build(),
                 true,
                 false
@@ -112,7 +122,6 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'server-id' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -154,7 +163,6 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'server-id' = '%s'"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -294,7 +302,6 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'scan.read-changelog-as-append-only.enabled' = 'true',"
                                 + " 'server-id' = '%s'"
                                 + ")",
@@ -339,7 +346,6 @@ public class MySqlSourceMergeITCase extends MySqlSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'scan.read-changelog-as-append-only.enabled' = 'true',"
                                 + " 'server-id' = '%s'"
                                 + ")",

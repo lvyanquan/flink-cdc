@@ -193,7 +193,6 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                                 + " 'password' = '%s',"
                                 + " 'database-name' = '%s',"
                                 + " 'table-name' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = '%s',"
                                 + " 'server-id' = '%s',"
                                 + " 'server-time-zone' = 'Asia/Shanghai',"
                                 + " 'scan.incremental.snapshot.chunk.size' = '%s'"
@@ -205,7 +204,6 @@ public class PolardbxCharsetITCase extends PolardbxSourceTestBase {
                         PASSWORD,
                         DATABASE,
                         testName,
-                        true,
                         getServerId(),
                         4);
         tEnv.executeSql(sourceDDL);

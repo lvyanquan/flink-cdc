@@ -60,7 +60,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.USE_LEGACY_JSON_FORMAT;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
@@ -122,7 +121,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -143,7 +141,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -154,7 +152,6 @@ public class MySqlTableSourceFactoryTest {
     @Test
     public void testEnableParallelReadSource() {
         Map<String, String> properties = getAllOptions();
-        properties.put("scan.incremental.snapshot.enabled", "true");
         properties.put("server-id", "123-126");
         properties.put("scan.incremental.snapshot.chunk.size", "8000");
         properties.put("chunk-meta.group.size", "3000");
@@ -178,7 +175,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         "123-126",
-                        true,
                         8000,
                         3000,
                         100,
@@ -199,7 +195,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -210,7 +206,6 @@ public class MySqlTableSourceFactoryTest {
     @Test
     public void testEnableParallelReadSourceWithSingleServerId() {
         Map<String, String> properties = getAllOptions();
-        properties.put("scan.incremental.snapshot.enabled", "true");
         properties.put("server-id", "123");
         properties.put("scan.incremental.snapshot.chunk.size", "8000");
         properties.put("scan.snapshot.fetch.size", "100");
@@ -230,7 +225,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         "123",
-                        true,
                         8000,
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         100,
@@ -251,7 +245,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -262,7 +256,6 @@ public class MySqlTableSourceFactoryTest {
     @Test
     public void testEnableParallelReadSourceLatestOffset() {
         Map<String, String> properties = getAllOptions();
-        properties.put("scan.incremental.snapshot.enabled", "true");
         properties.put("server-id", "123-126");
         properties.put("scan.startup.mode", "latest-offset");
 
@@ -280,7 +273,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         "123-126",
-                        SCAN_INCREMENTAL_SNAPSHOT_ENABLED.defaultValue(),
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -301,7 +293,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -326,7 +318,7 @@ public class MySqlTableSourceFactoryTest {
         options.put("scan.incremental.close-idle-reader.enabled", "true");
         options.put("scan.incremental.snapshot.backfill.skip", "true");
         options.put("use.legacy.json.format", "true");
-        options.put("scan.only.deserialize.captured.tables.changelog.enabled", "true");
+        options.put("scan.only.deserialize.captured.tables.changelog.enabled", "false");
         options.put("scan.read-changelog-as-append-only.enabled", "true");
         options.put("scan.parallel-deserialize-changelog.enabled", "true");
         options.put("scan.parallel-deserialize-changelog.handler.size", "4");
@@ -351,7 +343,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.of("Asia/Shanghai"),
                         dbzProperties,
                         "4321",
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -373,7 +364,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         true,
                         null,
-                        true,
+                        false,
                         true,
                         true,
                         AssignStrategy.DESCENDING_ORDER,
@@ -416,7 +407,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         "4321",
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -437,7 +427,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -464,7 +454,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -485,7 +474,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -513,7 +502,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -534,7 +522,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -563,7 +551,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -584,7 +571,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -611,7 +598,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -632,7 +618,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -664,7 +650,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -685,7 +670,7 @@ public class MySqlTableSourceFactoryTest {
                         PARSE_ONLINE_SCHEMA_CHANGES.defaultValue(),
                         USE_LEGACY_JSON_FORMAT.defaultValue(),
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -700,7 +685,6 @@ public class MySqlTableSourceFactoryTest {
     @Test
     public void testMergeTableSource() {
         Map<String, String> options = getAllOptions();
-        options.put("scan.incremental.snapshot.enabled", String.valueOf(true));
         options.put("database-name", "user_db_*");
         options.put("table-name", "user_*");
         ObjectIdentifier table1 = ObjectIdentifier.of("default", "user_db", "user");
@@ -745,17 +729,9 @@ public class MySqlTableSourceFactoryTest {
 
         // test case 2: can't merge table source
         options = getAllOptions();
-        options.put("scan.incremental.snapshot.enabled", String.valueOf(true));
         options.put("hostname", MY_LOCALHOST + "_merge_test");
         MySqlTableSource expectedNotMergedTable = (MySqlTableSource) createTableSource(options);
         Assert.assertFalse(source.applyTableSource(expectedNotMergedTable));
-
-        // test case 3: merge failed when try to merge table source with incremental snapshot
-        Map<String, String> incrementalSnapshotDisableOptions = getAllOptions();
-        incrementalSnapshotDisableOptions.put("scan.incremental.snapshot.enabled", "false");
-        MySqlTableSource incrementalSnapshotDisableSource =
-                (MySqlTableSource) createTableSource(incrementalSnapshotDisableOptions);
-        Assert.assertFalse(source.applyTableSource(incrementalSnapshotDisableSource));
     }
 
     @Test
@@ -797,7 +773,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -818,7 +793,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         true,
                         expectedConfig,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -876,7 +851,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal connect.timeout
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("connect.timeout", "240ms");
 
             createTableSource(properties);
@@ -892,7 +866,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal split size
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("scan.incremental.snapshot.chunk.size", "1");
 
             createTableSource(properties);
@@ -907,7 +880,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal fetch size
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("scan.snapshot.fetch.size", "1");
 
             createTableSource(properties);
@@ -922,7 +894,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal split meta group size
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("chunk-meta.group.size", "1");
 
             createTableSource(properties);
@@ -937,7 +908,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal split meta group size
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("split-key.even-distribution.factor.upper-bound", "0.8");
 
             createTableSource(properties);
@@ -952,7 +922,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal connection pool size
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("connection.pool.size", "1");
 
             createTableSource(properties);
@@ -967,7 +936,6 @@ public class MySqlTableSourceFactoryTest {
         // validate illegal connect max retry times
         try {
             Map<String, String> properties = getAllOptions();
-            properties.put("scan.incremental.snapshot.enabled", "true");
             properties.put("connect.max-retries", "0");
 
             createTableSource(properties);
@@ -1082,7 +1050,6 @@ public class MySqlTableSourceFactoryTest {
                         ZoneId.systemDefault(),
                         PROPERTIES,
                         null,
-                        false,
                         SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue(),
                         CHUNK_META_GROUP_SIZE.defaultValue(),
                         SCAN_SNAPSHOT_FETCH_SIZE.defaultValue(),
@@ -1103,7 +1070,7 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         true,
                         null,
-                        false,
+                        true,
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
@@ -1119,7 +1086,6 @@ public class MySqlTableSourceFactoryTest {
         options.put("table-name", MY_TABLE);
         options.put("username", MY_USERNAME);
         options.put("password", MY_PASSWORD);
-        options.put("scan.incremental.snapshot.enabled", String.valueOf(false));
         return options;
     }
 

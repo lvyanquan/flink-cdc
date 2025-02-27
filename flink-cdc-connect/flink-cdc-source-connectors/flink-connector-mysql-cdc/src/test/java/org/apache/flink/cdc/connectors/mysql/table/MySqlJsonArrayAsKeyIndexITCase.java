@@ -119,8 +119,7 @@ public class MySqlJsonArrayAsKeyIndexITCase extends MySqlSourceTestBase {
                                 + " 'table-name' = '%s',"
                                 + " 'scan.startup.mode' = 'earliest-offset',"
                                 + " 'server-time-zone' = 'UTC',"
-                                + " 'server-id' = '%s',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true'"
+                                + " 'server-id' = '%s'"
                                 + ")",
                         container.getHost(),
                         container.getDatabasePort(),

@@ -181,7 +181,6 @@ public class MysqlDebeziumTimeConverterITCase {
                                 + "primary key (id) not enforced"
                                 + ") WITH ("
                                 + " 'connector' = 'mysql-cdc',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'hostname' = '%s',"
                                 + " 'port' = '%s',"
                                 + " 'username' = '%s',"

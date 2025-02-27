@@ -213,8 +213,18 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
         return new Object[][] {
             new Object[] {
                 ImmutableMap.<String, String>builder()
-                        .put(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(), "true")
-                        .put(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(), "true")
+                        .put(
+                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED
+                                                        .defaultValue())))
+                        .put(
+                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED.name(),
+                                String.valueOf(
+                                        !((Boolean)
+                                                SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED
+                                                        .defaultValue())))
                         .build(),
                 "customers",
                 null
@@ -1481,7 +1491,6 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                         : ", primary key (id) not enforced")
                                 + ") WITH ("
                                 + " 'connector' = 'mysql-cdc',"
-                                + " 'scan.incremental.snapshot.enabled' = 'true',"
                                 + " 'hostname' = '%s',"
                                 + " 'port' = '%s',"
                                 + " 'username' = '%s',"

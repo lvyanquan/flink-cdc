@@ -26,7 +26,6 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.OperatorStateStore;
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.connectors.utils.TestSourceContext;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
@@ -54,22 +53,6 @@ import static org.junit.Assert.assertTrue;
 
 /** Utils to help test. */
 public class MySqlTestUtils {
-
-    public static MySqlSource.Builder<SourceRecord> basicSourceBuilder(
-            UniqueDatabase database, String serverTimezone, boolean useLegacyImplementation) {
-        Properties debeziumProps = createDebeziumProperties(useLegacyImplementation);
-        return MySqlSource.<SourceRecord>builder()
-                .hostname(database.getHost())
-                .port(database.getDatabasePort())
-                .databaseList(database.getDatabaseName())
-                .tableList(
-                        database.getDatabaseName() + "." + "products") // monitor table "products"
-                .username(database.getUsername())
-                .password(database.getPassword())
-                .deserializer(new ForwardDeserializeSchema())
-                .serverTimeZone(serverTimezone)
-                .debeziumProperties(debeziumProps);
-    }
 
     public static <T> void setupSource(DebeziumSourceFunction<T> source) throws Exception {
         setupSource(
