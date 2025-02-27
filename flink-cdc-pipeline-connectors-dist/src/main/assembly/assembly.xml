@@ -71,6 +71,27 @@ limitations under the License.
                 <include>org.apache.flink:flink-cdc-pipeline-connector-values:jar:${project.version}</include>
             </includes>
         </dependencySet>
+
+        <dependencySet>
+            <outputDirectory>flink-cdc/opt/pipeline-connectors/doris</outputDirectory>
+            <includes>
+                <include>org.apache.flink:flink-cdc-pipeline-connector-doris:jar:${project.version}</include>
+            </includes>
+        </dependencySet>
+
+        <dependencySet>
+            <outputDirectory>flink-cdc/opt/pipeline-connectors/maxcompute</outputDirectory>
+            <includes>
+                <include>org.apache.flink:flink-cdc-pipeline-connector-maxcompute:jar:${project.version}</include>
+            </includes>
+        </dependencySet>
+
+        <dependencySet>
+            <outputDirectory>flink-cdc/opt/pipeline-connectors/oceanbase</outputDirectory>
+            <includes>
+                <include>org.apache.flink:flink-cdc-pipeline-connector-oceanbase:jar:${project.version}</include>
+            </includes>
+        </dependencySet>
     </dependencySets>
 
 </assembly>
