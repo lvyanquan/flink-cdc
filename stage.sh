@@ -37,7 +37,11 @@ flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-mys
 flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-doris,\
 flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-starrocks,\
 flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-kafka,\
-flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-paimon"
+flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-paimon,\
+flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-oceanbase,\
+flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-maxcompute,\
+flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-hologres,\
+flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-sls"
 
 MODULES_MONGODB="\
 flink-cdc-connect/flink-cdc-source-connectors/flink-connector-mongodb-cdc,\
