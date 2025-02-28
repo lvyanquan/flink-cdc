@@ -586,7 +586,8 @@ public class RecordUtils {
             if (ddl.startsWith("alter")) {
                 String tableName =
                         value.getStruct(Envelope.FieldName.SOURCE).getString(TABLE_NAME_KEY);
-                return OSC_TABLE_ID_PATTERN.matcher(tableName).matches();
+                return RDS_OGT_TABLE_ID_PATTERN.matcher(tableName).matches()
+                        || OSC_TABLE_ID_PATTERN.matcher(tableName).matches();
             }
 
             return false;
@@ -596,12 +597,20 @@ public class RecordUtils {
     }
 
     private static final Pattern OSC_TABLE_ID_PATTERN = Pattern.compile("^_(.*)_(gho|new)$");
+    private static final Pattern RDS_OGT_TABLE_ID_PATTERN = Pattern.compile("^tp_\\d*_ogt_(.*)$");
 
     /** This utility method peels out gh-ost/pt-osc mangled tableId to the original one. */
     public static TableId peelTableId(TableId tableId) {
-        Matcher matchingResult = OSC_TABLE_ID_PATTERN.matcher(tableId.table());
-        if (matchingResult.matches()) {
-            return new TableId(tableId.catalog(), tableId.schema(), matchingResult.group(1));
+        // Try matching RDS style online schema change DDL
+        Matcher rdsMatchingResult = RDS_OGT_TABLE_ID_PATTERN.matcher(tableId.table());
+        if (rdsMatchingResult.matches()) {
+            return new TableId(tableId.catalog(), tableId.schema(), rdsMatchingResult.group(1));
+        }
+
+        // Try parsing gh-ost/pt-osc style mangled tableId
+        Matcher ghostMatchingResult = OSC_TABLE_ID_PATTERN.matcher(tableId.table());
+        if (ghostMatchingResult.matches()) {
+            return new TableId(tableId.catalog(), tableId.schema(), ghostMatchingResult.group(1));
         }
         return tableId;
     }
