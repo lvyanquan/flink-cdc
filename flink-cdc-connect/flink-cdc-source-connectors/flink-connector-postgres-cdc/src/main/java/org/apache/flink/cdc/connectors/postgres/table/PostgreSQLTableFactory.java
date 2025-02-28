@@ -27,14 +27,22 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.connector.OptionSnapshot;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.factories.CannotMigrateException;
+import org.apache.flink.table.factories.CannotSnapshotException;
 import org.apache.flink.table.factories.DynamicTableFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.factories.OptionUpgradableTableFactory;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.base.options.JdbcSourceOptions.DATABASE_NAME;
 import static org.apache.flink.cdc.connectors.base.options.JdbcSourceOptions.HOSTNAME;
@@ -70,9 +78,12 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Factory for creating configured instance of {@link PostgreSQLTableSource}. */
-public class PostgreSQLTableFactory implements DynamicTableSourceFactory {
+public class PostgreSQLTableFactory
+        implements DynamicTableSourceFactory, OptionUpgradableTableFactory {
 
     private static final String IDENTIFIER = "postgres-cdc";
+    // The current snapshot version for vvr compatibility.
+    private static final int CURRENT_SNAPSHOT_VERSION = 1;
 
     @Override
     public DynamicTableSource createDynamicTableSource(DynamicTableFactory.Context context) {
@@ -131,7 +142,7 @@ public class PostgreSQLTableFactory implements DynamicTableSourceFactory {
                     "The Postgres CDC connector does not support 'latest-offset' startup mode when 'scan.incremental.snapshot.enabled' is disabled, you can enable 'scan.incremental.snapshot.enabled' to use this startup mode.");
         }
 
-        OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
+        OptionUtils.printOptions(IDENTIFIER, config.toMap());
 
         return new PostgreSQLTableSource(
                 physicalSchema,
@@ -267,5 +278,89 @@ public class PostgreSQLTableFactory implements DynamicTableSourceFactory {
                         0.0d,
                         1.0d,
                         distributionFactorLower));
+    }
+
+    @Override
+    public OptionSnapshot snapshotOptions(UpgradeContext context) throws CannotSnapshotException {
+        Map<String, String> allOptions = new HashMap<>(context.getCatalogTable().getOptions());
+        allOptions.put(
+                FactoryUtil.PROPERTY_VERSION.key(), String.valueOf(CURRENT_SNAPSHOT_VERSION));
+        // Delete password and sk when saving snapshot
+        allOptions.remove(PASSWORD.key());
+        return new OptionSnapshot(allOptions);
+    }
+
+    @Override
+    public Map<String, String> migrateOptions(UpgradeContext context, OptionSnapshot snapshot)
+            throws CannotMigrateException {
+        FactoryUtil.OptionMigrateHelper helper =
+                FactoryUtil.createOptionMigrateHelper(this, context);
+        Map<String, String> mergedConfig = Configuration.fromMap(snapshot.getOptions()).toMap();
+        // check whether the snapshot version is compatible
+        if (!String.valueOf(CURRENT_SNAPSHOT_VERSION)
+                .equals(mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()))) {
+            throw new CannotMigrateException(
+                    String.format(
+                            "Can not migrate connector because its snapshot version is %s and current version is %s.",
+                            mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()),
+                            CURRENT_SNAPSHOT_VERSION));
+        }
+        mergedConfig.remove(FactoryUtil.PROPERTY_VERSION.key());
+        Map<String, String> allOptions = helper.getEnrichmentOptions().toMap();
+        checkChangedOptions(mergedConfig, allOptions);
+        mergedConfig.putAll(allOptions);
+        return mergedConfig;
+    }
+
+    public Set<String> notAllowedChangedOptions() {
+        return Stream.of(
+                        DATABASE_NAME,
+                        SCHEMA_NAME,
+                        TABLE_NAME,
+                        // change log mode may influence flink topology.
+                        CHANGELOG_MODE,
+                        SCAN_STARTUP_MODE,
+                        SCAN_INCREMENTAL_SNAPSHOT_ENABLED,
+                        // If chunk key column changes, the accuracy may be changed.
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN,
+                        SCAN_NEWLY_ADDED_TABLE_ENABLED,
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP,
+                        SLOT_NAME)
+                .map(ConfigOption::key)
+                .collect(Collectors.toSet());
+    }
+
+    private void checkChangedOptions(
+            Map<String, String> snapshotOptions, Map<String, String> newOptions)
+            throws CannotMigrateException {
+        Set<String> notAllowedChangedOptions = notAllowedChangedOptions();
+        Set<String> addedOptions = new HashSet<>(newOptions.keySet());
+        addedOptions.removeAll(snapshotOptions.keySet());
+        Set<String> removedOptions = new HashSet<>(snapshotOptions.keySet());
+        removedOptions.removeAll(newOptions.keySet());
+        for (String key : removedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is removed.",
+                                key));
+            }
+        }
+        for (String key : addedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is added.", key));
+            }
+        }
+        for (String key : snapshotOptions.keySet()) {
+            if (notAllowedChangedOptions.contains(key)
+                    && (!snapshotOptions.get(key).equals(newOptions.get(key)))) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is changed from %s to %s.",
+                                key, snapshotOptions.get(key), newOptions.get(key)));
+            }
+        }
     }
 }
