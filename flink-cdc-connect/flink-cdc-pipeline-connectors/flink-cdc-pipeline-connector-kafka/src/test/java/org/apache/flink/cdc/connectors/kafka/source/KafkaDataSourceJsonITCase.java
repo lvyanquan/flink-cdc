@@ -31,6 +31,10 @@ import org.apache.flink.cdc.connectors.kafka.TestUtil;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.util.CloseableIterator;
 
+import org.apache.flink.shaded.guava31.com.google.common.io.BaseEncoding;
+
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -421,6 +425,80 @@ public class KafkaDataSourceJsonITCase extends KafkaDataSourceITCaseBase {
                         String.format(
                                 "DataChangeEvent{tableId=%s, before=[], after=[12, product12, 12.12], op=INSERT, meta=()}",
                                 topic));
+        assertThat(actualReadableEvents).isEqualTo(expected);
+    }
+
+    @Test
+    @Timeout(120)
+    public void testHeadersMetadataColumn() throws Exception {
+        List<Header> headers = new ArrayList<>();
+        // Record without header
+        prepareRecord(JSONS.get(0), headers);
+        headers.clear();
+        // Record with header
+        headers.add(new RecordHeader("header_key_0", "header_value".getBytes()));
+        headers.add(new RecordHeader("header_key_1", new byte[] {0, 1, 2, 3}));
+        prepareRecord(JSONS.get(1), headers);
+
+        Map<String, String> config = new HashMap<>();
+        Properties properties = getKafkaClientConfiguration();
+        properties.forEach(
+                (key, value) ->
+                        config.put(
+                                KafkaDataSourceOptions.PROPERTIES_PREFIX + key.toString(),
+                                value.toString()));
+        config.put(KafkaDataSourceOptions.TOPIC.key(), topic);
+        config.put(KafkaDataSourceOptions.KEY_FORMAT.key(), "json");
+        config.put(KafkaDataSourceOptions.VALUE_FORMAT.key(), "json");
+        config.put(SchemaInferenceSourceOptions.SCHEMA_INFERENCE_STRATEGY.key(), "static");
+        config.put(KafkaDataSourceOptions.SCAN_STARTUP_MODE.key(), "earliest-offset");
+        config.put(KafkaDataSourceOptions.METADATA_LIST.key(), "headers");
+
+        KafkaDataSourceFactory sourceFactory = new KafkaDataSourceFactory();
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        sourceFactory
+                                .createDataSource(
+                                        new FactoryHelper.DefaultContext(
+                                                Configuration.fromMap(config),
+                                                Configuration.fromMap(new HashMap<>()),
+                                                this.getClass().getClassLoader()))
+                                .getEventSourceProvider();
+
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                KafkaDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        int expectedSize = 3;
+        List<Event> actual = fetchResults(events, expectedSize);
+
+        Schema expectedSchema = Schema.newBuilder().build();
+        List<String> actualReadableEvents = new ArrayList<>();
+        for (Event event : actual) {
+            if (event instanceof SchemaChangeEvent) {
+                expectedSchema =
+                        SchemaUtils.applySchemaChangeEvent(
+                                expectedSchema, (SchemaChangeEvent) event);
+            }
+            actualReadableEvents.add(TestUtil.convertEventToStr(event, expectedSchema));
+        }
+        List<String> expected =
+                Arrays.asList(
+                        String.format(
+                                "CreateTableEvent{tableId=%s, schema=columns={`id` BIGINT,`name` STRING,`weight` DOUBLE}, primaryKeys=, options=()}",
+                                topic),
+                        String.format(
+                                "DataChangeEvent{tableId=%s, before=[], after=[1, product1, 3.1], op=INSERT, meta=({headers={}})}",
+                                topic),
+                        String.format(
+                                "DataChangeEvent{tableId=%s, before=[], after=[2, product2, 3.2], op=INSERT, meta=({headers={\"header_key_1\":\"%s\",\"header_key_0\":\"%s\"}})}",
+                                topic,
+                                BaseEncoding.base64().encode(new byte[] {0, 1, 2, 3}),
+                                BaseEncoding.base64().encode("header_value".getBytes())));
         assertThat(actualReadableEvents).isEqualTo(expected);
     }
 }

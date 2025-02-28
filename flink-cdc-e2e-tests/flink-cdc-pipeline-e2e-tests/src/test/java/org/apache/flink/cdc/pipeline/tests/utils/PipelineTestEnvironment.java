@@ -123,13 +123,11 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     public void before() throws Exception {
         LOG.info("Starting containers...");
         jobManagerConsumer = new ToStringConsumer();
-        // These cmds will put the FLINK_PROPERTIES to flink-conf.yaml
+        // These cmds will put the FLINK_PROPERTIES to config.yaml
         List<String> cmds = new ArrayList<>();
-        cmds.add("cp /opt/flink/conf/flink-conf.yaml /opt/flink/conf/flink-conf.yaml.tmp");
         for (String prop : EXTERNAL_PROPS) {
-            cmds.add(String.format("echo '%s' >> /opt/flink/conf/flink-conf.yaml.tmp", prop));
+            cmds.add(String.format("echo '%s' >> /opt/flink/conf/config.yaml", prop));
         }
-        cmds.add("mv /opt/flink/conf/flink-conf.yaml.tmp /opt/flink/conf/flink-conf.yaml");
         String preCmd = String.join(" && ", cmds);
         jobManager =
                 new GenericContainer<>(getFlinkDockerImageTag())
@@ -270,7 +268,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     }
 
     protected String getFlinkDockerImageTag() {
-        return "reg.docker.alibaba-inc.com/ververica/vvr:1.17-vvr-8.0-SNAPSHOT-vvp-hadoop3-20240531015410_3503";
+        return "reg.docker.alibaba-inc.com/ververica/vvr:1.20-vvr-11.0-SNAPSHOT-vvp-hadoop3-20250226152205_5660";
     }
 
     private void runInContainerAsRoot(GenericContainer<?> container, String... command)

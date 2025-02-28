@@ -31,6 +31,7 @@ import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.utils.SchemaMergingUtils;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.connectors.kafka.source.KafkaDataSource;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.HeadersMapSerializer;
 import org.apache.flink.cdc.connectors.kafka.source.metadata.KafkaReadableMetadata;
 import org.apache.flink.cdc.connectors.kafka.source.schema.SchemaAware;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
@@ -263,7 +264,14 @@ public class KafkaEventDeserializationSchema
                 readableMetadataList.forEach(
                         readableMetadata -> {
                             Object metadata = readableMetadata.getConverter().read(inputRecord);
-                            meta.put(readableMetadata.getKey(), String.valueOf(metadata));
+                            if (KafkaReadableMetadata.HEADERS.equals(readableMetadata)) {
+                                meta.put(
+                                        readableMetadata.getKey(),
+                                        HeadersMapSerializer.serialize(
+                                                (Map<String, byte[]>) metadata));
+                            } else {
+                                meta.put(readableMetadata.getKey(), String.valueOf(metadata));
+                            }
                         });
                 collector.collect(DataChangeEvent.replaceMeta(dataChangeEvent, meta));
             } else {

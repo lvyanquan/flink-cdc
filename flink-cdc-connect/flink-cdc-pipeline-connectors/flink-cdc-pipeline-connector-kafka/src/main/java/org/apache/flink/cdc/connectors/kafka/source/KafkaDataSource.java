@@ -25,6 +25,7 @@ import org.apache.flink.cdc.common.source.EventSourceProvider;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.source.MetadataAccessor;
 import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
+import org.apache.flink.cdc.connectors.kafka.source.metadata.HeadersMetadataColumn;
 import org.apache.flink.cdc.connectors.kafka.source.metadata.KafkaReadableMetadata;
 import org.apache.flink.cdc.connectors.kafka.source.metadata.OffsetMetadataColumn;
 import org.apache.flink.cdc.connectors.kafka.source.metadata.PartitionMetadataColumn;
@@ -224,7 +225,8 @@ public class KafkaDataSource implements DataSource {
             new TopicMetadataColumn(),
             new PartitionMetadataColumn(),
             new OffsetMetadataColumn(),
-            new TimestampMetadataColumn()
+            new TimestampMetadataColumn(),
+            new HeadersMetadataColumn()
         };
     }
 

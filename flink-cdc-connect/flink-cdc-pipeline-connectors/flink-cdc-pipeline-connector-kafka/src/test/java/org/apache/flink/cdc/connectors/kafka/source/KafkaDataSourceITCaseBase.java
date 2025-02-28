@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -67,7 +68,7 @@ public abstract class KafkaDataSourceITCaseBase extends TestLogger {
     protected static final int ZK_TIMEOUT_MILLIS = 30000;
     protected static final short TOPIC_REPLICATION_FACTOR = 1;
     protected static AdminClient admin;
-    protected static final String KAFKA = "reg.docker.alibaba-inc.com/confluentinc/cp-kafka:7.2.2";
+    protected static final String KAFKA = "confluentinc/cp-kafka:7.2.2";
 
     protected final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
@@ -133,6 +134,12 @@ public abstract class KafkaDataSourceITCaseBase extends TestLogger {
                             new ProducerRecord<>(topic, 0, record.f0, record.f1);
                     producer.send(producerRecord);
                 });
+    }
+
+    protected void prepareRecord(Tuple2<String, String> record, List<Header> headers) {
+        ProducerRecord<String, String> producerRecord =
+                new ProducerRecord<>(topic, 0, record.f0, record.f1, headers);
+        producer.send(producerRecord);
     }
 
     protected void createTestTopic(String topic, int numPartitions, short replicationFactor)

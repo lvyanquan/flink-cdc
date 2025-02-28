@@ -20,8 +20,11 @@ package org.apache.flink.cdc.connectors.kafka.source.metadata;
 import org.apache.flink.cdc.connectors.kafka.source.KafkaDataSource;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
 
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Defines the supported metadata columns for {@link KafkaDataSource}. */
 public enum KafkaReadableMetadata {
@@ -66,6 +69,21 @@ public enum KafkaReadableMetadata {
                 @Override
                 public Long read(ConsumerRecord<?, ?> record) {
                     return record.timestamp();
+                }
+            }),
+
+    HEADERS(
+            "headers",
+            new MetadataConverter() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object read(ConsumerRecord<?, ?> record) {
+                    Map<String, byte[]> map = new HashMap<>();
+                    for (Header header : record.headers()) {
+                        map.put(header.key(), header.value());
+                    }
+                    return map;
                 }
             });
 

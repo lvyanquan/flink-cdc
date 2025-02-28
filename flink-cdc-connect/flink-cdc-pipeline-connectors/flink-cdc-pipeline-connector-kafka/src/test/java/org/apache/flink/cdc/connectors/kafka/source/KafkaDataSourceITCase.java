@@ -647,12 +647,6 @@ public class KafkaDataSourceITCase extends KafkaDataSourceITCaseBase {
     }
 
     @Test
-    public void testJsonFormatContinuousInferenceStrategy() {}
-
-    @Test
-    public void testJsonFormatStaticInferenceStrategy() {}
-
-    @Test
     @Timeout(120)
     public void testMetadataColumn() throws Exception {
         prepareValues(readLines("canal-data-schema-change.txt"));

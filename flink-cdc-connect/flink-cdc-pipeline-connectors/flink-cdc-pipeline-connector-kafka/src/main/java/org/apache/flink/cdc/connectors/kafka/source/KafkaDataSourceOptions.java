@@ -163,5 +163,5 @@ public class KafkaDataSourceOptions {
                     .noDefaultValue()
                     .withDescription(
                             "List of readable metadata from ConsumerRecord to be passed to downstream, split by `,`. "
-                                    + "Available readable metadata are: topic,partition,offset,timestamp.");
+                                    + "Available readable metadata are: topic,partition,offset,timestamp,headers.");
 }
