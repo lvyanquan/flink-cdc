@@ -29,7 +29,8 @@ MODULES_CORE="\
 flink-cdc-cli,\
 flink-cdc-common,\
 flink-cdc-composer,\
-flink-cdc-runtime"
+flink-cdc-runtime,\
+flink-cdc-services"
 
 MODULES_PIPELINE_CONNECTORS="\
 flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-values,\

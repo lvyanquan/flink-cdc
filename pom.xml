@@ -44,6 +44,7 @@ limitations under the License.
         <module>flink-cdc-cli-bundle</module>
         <module>flink-cdc-pipeline-udf-examples</module>
         <module>flink-cdc-pipeline-model</module>
+        <module>flink-cdc-services</module>
     </modules>
 
     <licenses>
@@ -109,6 +110,7 @@ limitations under the License.
         <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
         <!-- Keep jackson bom version update with Flink definition -->
         <jackson-bom.version>2.14.3</jackson-bom.version>
+        <snakeyaml.version>2.6</snakeyaml.version>
     </properties>
 
     <dependencyManagement>

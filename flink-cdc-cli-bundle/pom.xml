@@ -55,10 +55,6 @@ limitations under the License.
                                     <include>org.apache.flink:flink-cdc-*</include>
                                     <include>commons-cli:commons-cli</include>
                                     <include>org.snakeyaml:snakeyaml-engine</include>
-
-                                    <!-- Calcite's dependencies -->
-                                    <include>org.apache.calcite:*</include>
-                                    <include>org.apache.calcite.avatica:*</include>
                                     <include>com.esri.geometry:esri-geometry-api</include>
                                     <include>org.locationtech.jts:jts-core</include>
                                     <include>commons-codec:commons-codec</include>
@@ -78,12 +74,6 @@ limitations under the License.
                                 <relocation>
                                     <pattern>org.apache.commons.cli</pattern>
                                     <shadedPattern>org.apache.flink.cdc.shaded.com.apache.commons.cli</shadedPattern>
-                                </relocation>
-
-                                <!-- Calcite's dependencies -->
-                                <relocation>
-                                    <pattern>org.apache.calcite</pattern>
-                                    <shadedPattern>org.apache.flink.cdc.calcite.shaded.org.apache.calcite</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.commons.codec</pattern>

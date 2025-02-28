@@ -19,6 +19,7 @@
 package org.apache.flink.cdc.rest;
 
 import org.apache.flink.core.testutils.CommonTestUtils;
+import org.apache.flink.table.catalog.FileCatalogStoreFactoryOptions;
 import org.apache.flink.table.gateway.client.api.SqlGatewayClient;
 import org.apache.flink.table.gateway.client.api.config.CommonSqlGatewayClientConfigOptions;
 import org.apache.flink.table.gateway.client.api.utils.SqlGatewayClientUtils;
@@ -42,12 +43,17 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.apache.flink.configuration.ConfigConstants.ENV_FLINK_CONF_DIR;
+import static org.apache.flink.table.api.config.MaterializedTableConfigOptions.MATERIALIZED_TABLE_EXEC_INFER_SOURCE_PARALLELISM_ENABLED;
+import static org.apache.flink.table.api.config.TableConfigOptions.TABLE_CATALOG_NAME;
+import static org.apache.flink.table.catalog.CommonCatalogOptions.TABLE_CATALOG_STORE_KIND;
+import static org.apache.flink.table.catalog.CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -85,6 +91,9 @@ public class VvrRestAPICaseBase {
     protected static int port = 0;
     protected static OkHttpClient okHttpClient;
     protected static SqlGatewayClient client;
+
+    @TempDir protected static Path fileCatalogStorePath;
+    protected static final String VALIDATOR_CATALOG_NAME = "validatorCat";
 
     @BeforeAll
     static void start(@TempDir File flinkHome) throws Exception {
@@ -124,5 +133,19 @@ public class VvrRestAPICaseBase {
         okHttpClient.dispatcher().executorService().shutdown();
         okHttpClient.connectionPool().evictAll();
         CommonTestUtils.setEnv(originalEnv);
+    }
+
+    protected static Map<String, String> getFileCatalogStoreConfig() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TABLE_CATALOG_STORE_KIND.key(), FileCatalogStoreFactoryOptions.IDENTIFIER);
+        config.put(
+                TABLE_CATALOG_STORE_OPTION_PREFIX
+                        + FileCatalogStoreFactoryOptions.IDENTIFIER
+                        + "."
+                        + FileCatalogStoreFactoryOptions.PATH.key(),
+                fileCatalogStorePath.toUri().toString());
+        config.put(TABLE_CATALOG_NAME.key(), VALIDATOR_CATALOG_NAME);
+        config.put(MATERIALIZED_TABLE_EXEC_INFER_SOURCE_PARALLELISM_ENABLED.key(), "true");
+        return config;
     }
 }

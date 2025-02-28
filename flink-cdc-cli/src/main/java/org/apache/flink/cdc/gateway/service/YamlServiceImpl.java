@@ -26,6 +26,9 @@ import org.apache.flink.cdc.composer.PipelineComposer;
 import org.apache.flink.cdc.composer.PipelineExecution;
 import org.apache.flink.cdc.composer.definition.PipelineDef;
 import org.apache.flink.cdc.composer.flink.FlinkPipelineComposer;
+import org.apache.flink.cdc.services.conversion.CxasToYamlConverter;
+import org.apache.flink.cdc.services.conversion.context.ConvertibleNode;
+import org.apache.flink.cdc.services.conversion.factory.CxasToYamlConverterFactory;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.artifacts.ArtifactFetcher;
@@ -85,25 +88,48 @@ public class YamlServiceImpl implements YamlService {
 
     @Override
     public IdentifierInfo getReferencedCatalogInfo(
-            List<Object> list,
+            List<Object> nodeList,
             Configuration configuration,
             MutableURLClassLoader mutableURLClassLoader,
             ArtifactFetcher artifactFetcher,
             ArtifactFinder artifactFinder)
             throws Exception {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        CxasToYamlConverter converter = CxasToYamlConverterFactory.createConverter();
+        ConvertibleNode node;
+        try {
+            node = converter.validate(nodeList);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Illegal CXAS SQL script provided.", e);
+        }
+        try {
+            return converter.parseIdentifiers(node);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to extract catalog identifiers from CXAS SQL script.", e);
+        }
     }
 
     @Override
     public String convertCxasToCdcYaml(
-            List<Object> list,
+            List<Object> nodeList,
             CatalogOptionsInfo catalogOptionsInfo,
             Configuration configuration,
             MutableURLClassLoader mutableURLClassLoader,
             ArtifactFetcher artifactFetcher,
             ArtifactFinder artifactFinder)
             throws Exception {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        CxasToYamlConverter converter = CxasToYamlConverterFactory.createConverter();
+        ConvertibleNode node;
+        try {
+            node = converter.validate(nodeList);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Illegal CXAS SQL script provided.", e);
+        }
+        try {
+            return converter.convertToYaml(node, catalogOptionsInfo);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to convert CXAS SQL script to CDC YAML.", e);
+        }
     }
 
     @VisibleForTesting
