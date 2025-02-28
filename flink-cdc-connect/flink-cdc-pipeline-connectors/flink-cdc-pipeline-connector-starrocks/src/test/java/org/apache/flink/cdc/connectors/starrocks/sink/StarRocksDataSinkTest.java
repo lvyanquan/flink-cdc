@@ -33,7 +33,7 @@ class StarRocksDataSinkTest {
     @Test
     void testDetectSinkVersion() {
         assertThat(chooseSinkVersionWithOptions(Collections.emptyMap()))
-                .isEqualTo(StarRocksDataSink.SinkVersion.V2);
+                .isEqualTo(StarRocksDataSink.SinkVersion.V1);
         assertThat(chooseSinkVersionWithOptions(ImmutableMap.of("sink.version", "v1")))
                 .isEqualTo(StarRocksDataSink.SinkVersion.V1);
         assertThat(chooseSinkVersionWithOptions(ImmutableMap.of("sink.version", "V1")))

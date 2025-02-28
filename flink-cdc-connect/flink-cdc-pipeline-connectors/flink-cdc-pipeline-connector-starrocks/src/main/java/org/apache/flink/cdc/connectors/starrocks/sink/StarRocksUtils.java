@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.types.BigIntType;
+import org.apache.flink.cdc.common.types.BinaryType;
 import org.apache.flink.cdc.common.types.BooleanType;
 import org.apache.flink.cdc.common.types.CharType;
 import org.apache.flink.cdc.common.types.DataType;
@@ -35,6 +36,7 @@ import org.apache.flink.cdc.common.types.LocalZonedTimestampType;
 import org.apache.flink.cdc.common.types.SmallIntType;
 import org.apache.flink.cdc.common.types.TimestampType;
 import org.apache.flink.cdc.common.types.TinyIntType;
+import org.apache.flink.cdc.common.types.VarBinaryType;
 import org.apache.flink.cdc.common.types.VarCharType;
 
 import com.starrocks.connector.flink.catalog.StarRocksColumn;
@@ -194,6 +196,10 @@ public class StarRocksUtils {
                                         .toLocalDateTime()
                                         .format(DATETIME_FORMATTER);
                 break;
+            case BINARY:
+            case VARBINARY:
+                fieldGetter = record -> new String(record.getBinary(fieldPos));
+                break;
             default:
                 throw new UnsupportedOperationException(
                         "Don't support data type " + fieldType.getTypeRoot());
@@ -228,12 +234,17 @@ public class StarRocksUtils {
     public static final String DATE = "DATE";
     public static final String DATETIME = "DATETIME";
     public static final String JSON = "JSON";
+    public static final String SR_BINARY = "BINARY";
+    public static final String SR_VARBINARY = "VARBINARY";
 
     /** Max size of char type of StarRocks. */
     public static final int MAX_CHAR_SIZE = 255;
 
     /** Max size of varchar type of StarRocks. */
     public static final int MAX_VARCHAR_SIZE = 1048576;
+
+    /** Max size of varbinary type of StarRocks. */
+    public static final int MAX_VARBINARY_LENGTH = 1048576;
 
     /** Transforms CDC {@link DataType} to StarRocks data type. */
     public static class CdcDataTypeTransformer
@@ -378,6 +389,28 @@ public class StarRocksUtils {
         public StarRocksColumn.Builder visit(LocalZonedTimestampType localZonedTimestampType) {
             builder.setDataType(DATETIME);
             builder.setNullable(localZonedTimestampType.isNullable());
+            return builder;
+        }
+
+        @Override
+        public StarRocksColumn.Builder visit(BinaryType binaryType) {
+            // Add extra 2 byte for the padding space in starrocks decoding.
+            // Not quite so sure.
+            int binaryLength = Math.min(binaryType.getLength() + 2, MAX_VARBINARY_LENGTH);
+            builder.setDataType(SR_BINARY);
+            builder.setColumnSize(binaryLength);
+            builder.setNullable(binaryType.isNullable());
+            return builder;
+        }
+
+        @Override
+        public StarRocksColumn.Builder visit(VarBinaryType varBinaryType) {
+            // Add extra 1 byte for the padding space in starrocks decoding.
+            // Not quite so sure.
+            int varbinaryLength = Math.min(varBinaryType.getLength() + 1, MAX_VARBINARY_LENGTH);
+            builder.setDataType(SR_VARBINARY);
+            builder.setColumnSize(varbinaryLength);
+            builder.setNullable(varBinaryType.isNullable());
             return builder;
         }
 

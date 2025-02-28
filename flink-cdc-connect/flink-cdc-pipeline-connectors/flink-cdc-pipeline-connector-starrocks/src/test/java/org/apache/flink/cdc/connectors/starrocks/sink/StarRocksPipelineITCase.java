@@ -92,7 +92,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                         "id INT NOT NULL",
                         "number DOUBLE",
                         "name VARCHAR(51)",
-                        "birthday DATETIME");
+                        "birthday DATETIME",
+                        "binarycol BINARY(5)",
+                        "varbinarycol VARBINARY(5)");
 
         executeSql(
                 String.format(
@@ -129,6 +131,8 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                         .column(new PhysicalColumn("number", DataTypes.DOUBLE(), null))
                         .column(new PhysicalColumn("name", DataTypes.VARCHAR(17), null))
                         .column(new PhysicalColumn("birthday", DataTypes.TIMESTAMP_LTZ(6), null))
+                        .column(new PhysicalColumn("binarycol", DataTypes.BINARY(5), null))
+                        .column(new PhysicalColumn("varbinarycol", DataTypes.VARBINARY(5), null))
                         .primaryKey("id")
                         .build();
         BinaryRecordDataGenerator generator =
@@ -137,7 +141,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                 DataTypes.INT(),
                                 DataTypes.DOUBLE(),
                                 DataTypes.VARCHAR(17),
-                                DataTypes.TIMESTAMP_LTZ(6)));
+                                DataTypes.TIMESTAMP_LTZ(6),
+                                DataTypes.BINARY(5),
+                                DataTypes.VARBINARY(5)));
 
         return Arrays.asList(
                 new CreateTableEvent(tableId, schema),
@@ -149,7 +155,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     3.14,
                                     BinaryStringData.fromString("StarRocks"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 })),
                 DataChangeEvent.insertEvent(
                         tableId,
@@ -159,7 +167,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     2.718,
                                     BinaryStringData.fromString("Que Sera Sera"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 })),
                 DataChangeEvent.insertEvent(
                         tableId,
@@ -169,7 +179,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     1.732,
                                     BinaryStringData.fromString("Disenchanted"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 })),
                 DataChangeEvent.deleteEvent(
                         tableId,
@@ -179,7 +191,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     2.718,
                                     BinaryStringData.fromString("Que Sera Sera"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 })),
                 DataChangeEvent.updateEvent(
                         tableId,
@@ -189,7 +203,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     3.14,
                                     BinaryStringData.fromString("StarRocks"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 }),
                         generator.generate(
                                 new Object[] {
@@ -197,7 +213,9 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
                                     6.28,
                                     BinaryStringData.fromString("StarRocks"),
                                     LocalZonedTimestampData.fromInstant(
-                                            Instant.parse("2023-01-01T00:00:00.000Z"))
+                                            Instant.parse("2023-01-01T00:00:00.000Z")),
+                                    "abcde".getBytes(),
+                                    "abc".getBytes()
                                 })));
     }
 
@@ -235,11 +253,11 @@ public class StarRocksPipelineITCase extends StarRocksSinkTestBase {
 
         env.execute("Values to StarRocks Sink");
 
-        List<String> actual = fetchTableContent(tableId, 4);
+        List<String> actual = fetchTableContent(tableId, 6);
         List<String> expected =
                 Arrays.asList(
-                        "17 | 6.28 | StarRocks | 2023-01-01 00:00:00.0",
-                        "21 | 1.732 | Disenchanted | 2023-01-01 00:00:00.0");
+                        "17 | 6.28 | StarRocks | 2023-01-01 00:00:00.0 | abcde | abc",
+                        "21 | 1.732 | Disenchanted | 2023-01-01 00:00:00.0 | abcde | abc");
 
         assertEqualsInAnyOrder(expected, actual);
     }
