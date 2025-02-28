@@ -51,14 +51,6 @@ public class PaimonHashFunctionProvider implements HashFunctionProvider<DataChan
 
     @Override
     public HashFunction<DataChangeEvent> getHashFunction(@Nullable TableId tableId, Schema schema) {
-        return new PaimonHashFunction(
-                options, tableId, schema, zoneId, parallelism, flinkConf, null);
-    }
-
-    @Override
-    public HashFunction<DataChangeEvent> getHashFunction(
-            @Nullable TableId tableId, Schema schema, String token) {
-        return new PaimonHashFunction(
-                options, tableId, schema, zoneId, parallelism, flinkConf, token);
+        return new PaimonHashFunction(options, tableId, schema, zoneId, parallelism, flinkConf);
     }
 }

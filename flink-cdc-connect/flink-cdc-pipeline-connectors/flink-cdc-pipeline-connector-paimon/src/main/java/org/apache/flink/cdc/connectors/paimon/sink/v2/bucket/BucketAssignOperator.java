@@ -157,10 +157,6 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                 Optional<Schema> schema =
                         schemaEvolutionClient.getLatestEvolvedSchema(dataChangeEvent.tableId());
                 if (schema.isPresent()) {
-                    String token =
-                            schemaEvolutionClient.getLatestToken(
-                                    ((DataChangeEvent) event).tableId());
-                    DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
                     schemaMaps.put(
                             dataChangeEvent.tableId(), new TableSchemaInfo(schema.get(), zoneId));
                 } else {
@@ -206,9 +202,6 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
             output.collect(
                     new StreamRecord<>(new BucketWrapperChangeEvent(bucket, (ChangeEvent) event)));
         } else if (event instanceof CreateTableEvent) {
-            String token =
-                    schemaEvolutionClient.getLatestToken(((SchemaChangeEvent) event).tableId());
-            DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
             CreateTableEvent createTableEvent = (CreateTableEvent) event;
             schemaMaps.put(
                     createTableEvent.tableId(),
@@ -218,9 +211,6 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                         new StreamRecord<>(new BucketWrapperChangeEvent(i, (ChangeEvent) event)));
             }
         } else if (event instanceof SchemaChangeEvent) {
-            String token =
-                    schemaEvolutionClient.getLatestToken(((SchemaChangeEvent) event).tableId());
-            DlfCatalogUtil.setTokenToLocalDir(catalogOptions, flinkConf, token);
             SchemaChangeEvent schemaChangeEvent = (SchemaChangeEvent) event;
             Schema schema =
                     SchemaUtils.applySchemaChangeEvent(

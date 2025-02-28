@@ -94,7 +94,7 @@ public class PaimonHashFunctionTest {
                 new BinaryRecordDataGenerator(schema.getColumnDataTypes().toArray(new DataType[0]));
         PaimonHashFunction hashFunction =
                 new PaimonHashFunction(
-                        catalogOptions, tableId, schema, ZoneId.systemDefault(), 4, null, null);
+                        catalogOptions, tableId, schema, ZoneId.systemDefault(), 4, null);
         DataChangeEvent dataChangeEvent1 =
                 DataChangeEvent.insertEvent(
                         tableId,

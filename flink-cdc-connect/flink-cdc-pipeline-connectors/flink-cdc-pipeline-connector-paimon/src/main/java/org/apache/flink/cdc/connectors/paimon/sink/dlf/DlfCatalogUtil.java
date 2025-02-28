@@ -18,11 +18,6 @@
 package org.apache.flink.cdc.connectors.paimon.sink.dlf;
 
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.runtime.dlf.api.DlfDataToken;
-import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
-
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.paimon.dlf.DlfUtils;
 import org.apache.paimon.options.Options;
@@ -40,22 +35,6 @@ public class DlfCatalogUtil {
             LOGGER.debug("Adding option for dlf-paimon catalog");
             DlfUtils.forwardDlfOptions(flinkConfig, catalogOptions);
             LOGGER.debug("DlfPaimon catalog options: {}", catalogOptions.toMap());
-        }
-    }
-
-    public static void setTokenToLocalDir(Options options, ReadableConfig flinkConf, String token) {
-        if (options.containsKey("metastore") && options.get("metastore").equals("dlf-paimon")) {
-            try {
-                LOGGER.debug("Try to write token: " + token);
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode root = mapper.readTree(token);
-                String identifier = root.get("Identifier").asText();
-                DlfDataToken dlfDataToken = DlfDataToken.fromJson(token, identifier);
-                DlfResourceInfosCollector.setDataTokenLocally(flinkConf, dlfDataToken);
-                LOGGER.debug("Succeed to write token: " + token + " for identifier" + identifier);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
         }
     }
 }

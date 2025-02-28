@@ -36,11 +36,9 @@ import org.apache.flink.cdc.common.types.utils.DataTypeUtils;
 import org.apache.flink.cdc.connectors.paimon.sink.dlf.DlfCatalogUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.runtime.dlf.api.DlfDataToken;
 import org.apache.flink.runtime.dlf.api.DlfResource;
 import org.apache.flink.runtime.dlf.api.DlfResourceInfosCollector;
 import org.apache.flink.runtime.dlf.api.VvrDataLakeConfig;
-import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.guava31.com.google.common.collect.Sets;
 
@@ -104,44 +102,6 @@ public class PaimonMetadataApplier implements MetadataApplier {
         this.partitionMaps = partitionMaps;
         this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
         this.flinkConf = flinkConf;
-    }
-
-    @Override
-    public synchronized String getToken(TableId tableId) {
-        if (!isDlfCatalog()) {
-            return null;
-        }
-        LOG.debug("Try to get token for " + tableId);
-        tryGetDlfTablePermissionIgnoreException(tableId.getSchemaName(), tableId.getTableName());
-        try {
-            String endpoint =
-                    Preconditions.checkNotNull(
-                            catalogOptions.get(VvrDataLakeConfig.DLF_ENDPOINT),
-                            String.format("%s cannot be null", VvrDataLakeConfig.DLF_ENDPOINT));
-            String region =
-                    Preconditions.checkNotNull(
-                            catalogOptions.get(VvrDataLakeConfig.DLF_REGION),
-                            String.format("%s cannot be null", VvrDataLakeConfig.DLF_REGION));
-            // Get the data token and store it to the data token dir locally. This is required
-            // during
-            // sql planning.
-            DlfDataToken token =
-                    DlfResourceInfosCollector.getDataTokenRemotely(
-                            flinkConf,
-                            endpoint,
-                            region,
-                            DlfResource.builder()
-                                    .catalogInstanceId(
-                                            catalogOptions.get(
-                                                    VvrDataLakeConfig.CATALOG_INSTANCE_ID))
-                                    .databaseName(tableId.getSchemaName())
-                                    .tableName(tableId.getTableName())
-                                    .build());
-            LOG.debug("Get table token: " + token + " for table:" + tableId);
-            return token.toJson();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     @Override
@@ -219,7 +179,7 @@ public class PaimonMetadataApplier implements MetadataApplier {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            if (!catalog.databaseExists(event.tableId().getSchemaName())) {
+            if (!catalog.listDatabases().contains(event.tableId().getSchemaName())) {
                 catalog.createDatabase(event.tableId().getSchemaName(), true);
             }
             Schema schema = event.getSchema();

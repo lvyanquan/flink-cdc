@@ -62,12 +62,10 @@ public class PaimonHashFunction implements HashFunction<DataChangeEvent>, Serial
             Schema schema,
             ZoneId zoneId,
             int parallelism,
-            ReadableConfig flinkConf,
-            String token) {
+            ReadableConfig flinkConf) {
         DlfCatalogUtil.convertOptionToDlf(options, flinkConf);
         FileStoreTable table;
         try {
-            DlfCatalogUtil.setTokenToLocalDir(options, flinkConf, token);
             catalog = FlinkCatalogFactory.createPaimonCatalog(options);
             table = (FileStoreTable) catalog.getTable(Identifier.fromString(tableId.toString()));
         } catch (Exception e) {
