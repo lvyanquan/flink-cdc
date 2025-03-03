@@ -27,13 +27,21 @@ import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
+import org.apache.flink.table.connector.OptionSnapshot;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.factories.CannotMigrateException;
+import org.apache.flink.table.factories.CannotSnapshotException;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.factories.OptionUpgradableTableFactory;
 
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.CHUNK_META_GROUP_SIZE;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
@@ -66,11 +74,14 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Factory for creating configured instance of {@link MongoDBTableSource}. */
-public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
+public class MongoDBTableSourceFactory
+        implements DynamicTableSourceFactory, OptionUpgradableTableFactory {
 
     private static final String IDENTIFIER = "mongodb-cdc";
 
     private static final String DOCUMENT_ID_FIELD = "_id";
+
+    private static final int CURRENT_SNAPSHOT_VERSION = 1;
 
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {
@@ -255,5 +266,88 @@ public class MongoDBTableSourceFactory implements DynamicTableSourceFactory {
         options.add(SCAN_PRIMITIVE_AS_STRING);
         options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
         return options;
+    }
+
+    // These options could not be altered during option migrations.
+    public Set<String> notAllowedChangedOptions() {
+        return Stream.of(
+                        DATABASE,
+                        COLLECTION,
+                        SCAN_STARTUP_MODE,
+                        SCAN_STARTUP_TIMESTAMP_MILLIS,
+                        SCAN_INCREMENTAL_SNAPSHOT_ENABLED,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE_MB,
+                        SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SAMPLES,
+                        SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED,
+                        SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP,
+                        CHUNK_META_GROUP_SIZE)
+                .map(ConfigOption::key)
+                .collect(Collectors.toSet());
+    }
+
+    @Override
+    public OptionSnapshot snapshotOptions(UpgradeContext context) throws CannotSnapshotException {
+        Map<String, String> allOptions = new HashMap<>(context.getCatalogTable().getOptions());
+        allOptions.put(
+                FactoryUtil.PROPERTY_VERSION.key(), String.valueOf(CURRENT_SNAPSHOT_VERSION));
+        // Delete password when saving snapshot
+        allOptions.remove(PASSWORD.key());
+        return new OptionSnapshot(allOptions);
+    }
+
+    @Override
+    public Map<String, String> migrateOptions(UpgradeContext context, OptionSnapshot snapshot)
+            throws CannotMigrateException {
+        FactoryUtil.OptionMigrateHelper helper =
+                FactoryUtil.createOptionMigrateHelper(this, context);
+        Map<String, String> mergedConfig = Configuration.fromMap(snapshot.getOptions()).toMap();
+        // check whether the snapshot version is compatible
+        if (!String.valueOf(CURRENT_SNAPSHOT_VERSION)
+                .equals(mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()))) {
+            throw new CannotMigrateException(
+                    String.format(
+                            "Can not migrate connector because its snapshot version is %s and current version is %s.",
+                            mergedConfig.get(FactoryUtil.PROPERTY_VERSION.key()),
+                            CURRENT_SNAPSHOT_VERSION));
+        }
+        mergedConfig.remove(FactoryUtil.PROPERTY_VERSION.key());
+        Map<String, String> allOptions = helper.getEnrichmentOptions().toMap();
+        checkChangedOptions(mergedConfig, allOptions);
+        mergedConfig.putAll(allOptions);
+        return mergedConfig;
+    }
+
+    private void checkChangedOptions(
+            Map<String, String> snapshotOptions, Map<String, String> newOptions)
+            throws CannotMigrateException {
+        Set<String> notAllowedChangedOptions = notAllowedChangedOptions();
+        Set<String> addedOptions = new HashSet<>(newOptions.keySet());
+        addedOptions.removeAll(snapshotOptions.keySet());
+        Set<String> removedOptions = new HashSet<>(snapshotOptions.keySet());
+        removedOptions.removeAll(newOptions.keySet());
+        for (String key : removedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is removed.",
+                                key));
+            }
+        }
+        for (String key : addedOptions) {
+            if (notAllowedChangedOptions.contains(key)) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is added.", key));
+            }
+        }
+        for (String key : snapshotOptions.keySet()) {
+            if (notAllowedChangedOptions.contains(key)
+                    && (!snapshotOptions.get(key).equals(newOptions.get(key)))) {
+                throw new CannotMigrateException(
+                        String.format(
+                                "Can not migrate connector because the option %s is changed from %s to %s.",
+                                key, snapshotOptions.get(key), newOptions.get(key)));
+            }
+        }
     }
 }
