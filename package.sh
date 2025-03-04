@@ -29,34 +29,26 @@ function getOsName() {
 }
 
 osName=""
-jdkVersion=""
 vvrVersion=""
 scalaVersion=""
-if [ $# -eq 3 ]; then
-  jdkVersion=$1
-  vvrVersion=$2
-  scalaVersion=$3
+if [ $# -eq 2 ]; then
+  vvrVersion=$1
+  scalaVersion=$2
   osName=$(getOsName)
 else
   osName=$1
-  jdkVersion=$2
-  vvrVersion=$3
-  scalaVersion=$4
+  vvrVersion=$2
+  scalaVersion=$3
 fi
-echo "$osName, $jdkVersion, $vvrVersion, $scalaVersion"
+echo "$osName, $vvrVersion, $scalaVersion"
 
 package() {
   osName=$1
   scalaVersion=$2
-  jdkVersion=$3
 
   buildCmd="mvn clean install -U -Dmaven.compile.fork=true -DskipTests --batch-mode --errors --show-version -Dcheckstyle.skip -Dgpg.skip -Dmaven.javadoc.skip -Drat.ignoreErrors -Dscala-${scalaVersion} -DskipTests -Prelease -Dververica.password=\"wRa9MVxNfg3@dNbXgpfE8_D?\" -Dververica.salt=\"alibaba-ververica\""
 
   buildArmCmd="$buildCmd -Darch_classifier=aarch_64 "
-  if [[ "${jdkVersion}" == "jdk11" ]]; then
-    cmd="export JAVA_HOME=${JAVA_HOME_JDK11};export PATH=$JAVA_HOME/bin:$PATH;"
-    eval $cmd
-  fi
   java -version
   mvn -version
   if [[ ${osName} == "arm" ]]; then
@@ -79,13 +71,12 @@ buildTar() {
 
 main() {
   osName=$1
-  jdkVersion=$2
-  versionName=$3
-  echo "--main:$osName, $jdkVersion,$versionName"
+  versionName=$2
+  echo "--main:$osName,$versionName"
 
-  package "$osName" "$scalaVersion" "$jdkVersion"
+  package "$osName" "$scalaVersion"
 
   buildTar
 }
 
-main $osName $jdkVersion $vvrVersion
+main $osName $vvrVersion
