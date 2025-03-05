@@ -268,7 +268,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     }
 
     protected String getFlinkDockerImageTag() {
-        return "reg.docker.alibaba-inc.com/ververica/vvr:1.20-vvr-11.0-SNAPSHOT-vvp-hadoop3-20250226152205_5660";
+        return "reg.docker.alibaba-inc.com/ververica/vvr:1.20-vvr-11.0-jdk11-SNAPSHOT-20250304185841_63";
     }
 
     private void runInContainerAsRoot(GenericContainer<?> container, String... command)

@@ -787,6 +787,7 @@ public class NewlyAddedTableITCase extends MySqlSourceTestBase {
                     getStreamExecutionEnvironment(finishedSavePointPath, parallelism);
             StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
 
+            tEnv.executeSql("SET 'table.exec.sink.keyed-shuffle' = 'FORCE';");
             String createTableStatement =
                     getCreateTableStatement(sourceOptions, captureTablesThisRound);
             tEnv.executeSql(createTableStatement);

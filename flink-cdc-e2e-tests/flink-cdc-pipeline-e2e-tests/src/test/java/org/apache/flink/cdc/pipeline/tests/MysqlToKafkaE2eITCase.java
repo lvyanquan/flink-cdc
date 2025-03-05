@@ -17,7 +17,6 @@
 
 package org.apache.flink.cdc.pipeline.tests;
 
-import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.test.utils.TestUtils;
 import org.apache.flink.cdc.connectors.kafka.KafkaUtil;
 import org.apache.flink.cdc.connectors.mysql.testutils.MySqlContainer;
@@ -89,7 +88,6 @@ public class MysqlToKafkaE2eITCase extends PipelineTestEnvironment {
     private static final String INTER_CONTAINER_KAFKA_ALIAS = "kafka";
     private static final int ZK_TIMEOUT_MILLIS = 30000;
     private static final short TOPIC_REPLICATION_FACTOR = 1;
-    private TableId table;
     private String topic;
     private KafkaConsumer<byte[], byte[]> consumer;
 
@@ -134,11 +132,14 @@ public class MysqlToKafkaE2eITCase extends PipelineTestEnvironment {
     @Before
     public void before() throws Exception {
         super.before();
-        createTestTopic(1, TOPIC_REPLICATION_FACTOR);
+        mysqlInventoryDatabase.createAndInitialize();
+    }
+
+    private void beforeTest(String topicName) throws Exception {
+        createTestTopic(topicName, 1, TOPIC_REPLICATION_FACTOR);
         Properties properties = getKafkaClientConfiguration();
         consumer = new KafkaConsumer<>(properties);
         consumer.subscribe(Collections.singletonList(topic));
-        mysqlInventoryDatabase.createAndInitialize();
     }
 
     @After
@@ -151,6 +152,7 @@ public class MysqlToKafkaE2eITCase extends PipelineTestEnvironment {
 
     @Test
     public void testSyncWholeDatabaseWithDebeziumJson() throws Exception {
+        beforeTest("SyncDbWithDbzJson");
         String pipelineJob =
                 String.format(
                         "source:\n"
@@ -226,6 +228,7 @@ public class MysqlToKafkaE2eITCase extends PipelineTestEnvironment {
 
     @Test
     public void testSyncWholeDatabaseWithCanalJson() throws Exception {
+        beforeTest("SyncDbWithCanalJson");
         String pipelineJob =
                 String.format(
                         "source:\n"
@@ -335,12 +338,9 @@ public class MysqlToKafkaE2eITCase extends PipelineTestEnvironment {
         return standardProps;
     }
 
-    private void createTestTopic(int numPartitions, short replicationFactor)
+    private void createTestTopic(String topicName, int numPartitions, short replicationFactor)
             throws ExecutionException, InterruptedException {
-        table =
-                TableId.tableId(
-                        "default_namespace", "default_schema", UUID.randomUUID().toString());
-        topic = table.toString();
+        topic = topicName + UUID.randomUUID() + parallelism;
         final CreateTopicsResult result =
                 admin.createTopics(
                         Collections.singletonList(

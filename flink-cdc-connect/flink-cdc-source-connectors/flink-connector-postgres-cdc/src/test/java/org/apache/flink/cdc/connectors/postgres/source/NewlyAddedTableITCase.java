@@ -663,6 +663,7 @@ public class NewlyAddedTableITCase extends PostgresTestBase {
                     getStreamExecutionEnvironmentFromSavePoint(finishedSavePointPath, parallelism);
             StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
 
+            tEnv.executeSql("SET 'table.exec.sink.keyed-shuffle' = 'FORCE';");
             String createTableStatement =
                     getCreateTableStatement(sourceOptions, captureTablesThisRound);
             tEnv.executeSql(createTableStatement);
