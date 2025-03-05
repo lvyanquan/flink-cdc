@@ -234,7 +234,7 @@ public class MongoDBTableFactoryTest {
                         false,
                         SOURCE_TABLE_IDENTIFIER,
                         SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
-                    true);
+                        true);
         assertEquals(expectedSource, actualSource);
     }
 

@@ -497,7 +497,7 @@ public class MySqlSourceConfigFactory implements Serializable {
                 useLegacyJsonFormat,
                 rdsConfig,
                 scanChunkAssignStrategy,
-            assignEndingChunkFirst);
+                assignEndingChunkFirst);
     }
 
     private void validateCapturingMode() {

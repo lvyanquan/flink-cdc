@@ -119,6 +119,16 @@ public abstract class PipelineTestEnvironment extends TestLogger {
 
     protected ToStringConsumer taskManagerConsumer;
 
+    @Parameterized.Parameters(name = "flinkVersion: {0}")
+    public static List<String> getFlinkVersion() {
+        String flinkVersion = System.getProperty("specifiedFlinkVersion");
+        if (flinkVersion != null) {
+            return Collections.singletonList(flinkVersion);
+        } else {
+            return Arrays.asList("1.19.2", "1.20.1");
+        }
+    }
+
     @Before
     public void before() throws Exception {
         LOG.info("Starting containers...");

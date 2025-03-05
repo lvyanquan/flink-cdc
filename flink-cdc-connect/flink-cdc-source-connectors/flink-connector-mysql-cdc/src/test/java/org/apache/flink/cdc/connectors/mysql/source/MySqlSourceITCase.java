@@ -210,7 +210,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
 
     private static final int USE_POST_HIGHWATERMARK_HOOK = 3;
 
-    @Parameterized.Parameters(name = "debeziumProperties: {0}, table: {1}, chunkColumn: {2}, assignEndingFirst: {3}")
+    @Parameterized.Parameters(
+            name = "debeziumProperties: {0}, table: {1}, chunkColumn: {2}, assignEndingFirst: {3}")
     public static Object[] parameters() {
         return new Object[][] {
             new Object[] {
@@ -229,7 +230,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                                         .defaultValue())))
                         .build(),
                 "customers",
-                null, "true"
+                null,
+                "true"
             },
             new Object[] {new HashMap<>(), "customers", "id", "true"},
             new Object[] {new HashMap<>(), "customers_no_pk", "id", "true"}
@@ -1503,8 +1505,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
                                 + " 'scan.incremental.snapshot.backfill.skip' = '%s',"
                                 + " 'server-time-zone' = '%s',"
-                            + " 'scan.incremental.snapshot.unbounded-chunk-first.enabled' = '%s',"
-                            + " 'server-id' = '%s'"
+                                + " 'scan.incremental.snapshot.unbounded-chunk-first.enabled' = '%s',"
+                                + " 'server-id' = '%s'"
                                 + " %s"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),

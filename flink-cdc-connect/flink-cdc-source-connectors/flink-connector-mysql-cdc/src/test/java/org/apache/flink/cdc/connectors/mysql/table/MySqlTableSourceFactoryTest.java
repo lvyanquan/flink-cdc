@@ -202,7 +202,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -253,7 +253,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -302,7 +302,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
 
         assertEquals(expectedSource, actualSource);
     }
@@ -375,7 +375,7 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         AssignStrategy.DESCENDING_ORDER,
                         4,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
 
         assertEquals(expectedSource, actualSource);
         assertTrue(actualSource instanceof MySqlTableSource);
@@ -440,7 +440,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -488,7 +488,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -537,7 +537,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -635,7 +635,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -688,7 +688,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         expectedSource.applyReadableMetadata(
                 Arrays.asList("op_ts", "database_name"),
                 SCHEMA_WITH_METADATA.toSourceRowDataType());
@@ -812,7 +812,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expected, actual);
     }
 
@@ -1089,8 +1089,8 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         false,
                         AssignStrategy.DESCENDING_ORDER,
-                    2,
-                    SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        2,
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
 
         assertEquals(expectedSource, actualSource);
     }
