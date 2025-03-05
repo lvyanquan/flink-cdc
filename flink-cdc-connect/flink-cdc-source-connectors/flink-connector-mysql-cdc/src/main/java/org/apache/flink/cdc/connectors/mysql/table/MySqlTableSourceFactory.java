@@ -164,6 +164,8 @@ public class MySqlTableSourceFactory
                 config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_ENABLED);
         int scanParallelDeserializeHandlerSize =
                 config.get(SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE);
+        boolean assignEndingChunkFirst =
+                config.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         checkEvolvingScanNewlyAddedTableOption(
                 evolvingScanNewlyAddedTableEnabled, closeIdleReaders);
@@ -236,7 +238,8 @@ public class MySqlTableSourceFactory
                 readChangelogAsAppend,
                 scanParallelDeserializeChangelog,
                 scanChunkAssignStrategy,
-                scanParallelDeserializeHandlerSize);
+                scanParallelDeserializeHandlerSize,
+                assignEndingChunkFirst);
     }
 
     @Override
@@ -299,6 +302,7 @@ public class MySqlTableSourceFactory
         options.add(RDS_MAIN_DB_ID);
         options.add(RDS_BINLOG_ENDPOINT);
         options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
+        options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
         return options;
     }
 

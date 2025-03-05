@@ -58,6 +58,7 @@ public class MongoDBSourceConfig implements SourceConfig {
     private final AssignStrategy scanChunkAssignStrategy;
 
     private final boolean isScanNewlyAddedTableEnabled;
+    private final boolean assignEndingChunkFirst;
 
     MongoDBSourceConfig(
             String scheme,
@@ -81,7 +82,8 @@ public class MongoDBSourceConfig implements SourceConfig {
             boolean disableCursorTimeout,
             boolean skipSnapshotBackfill,
             boolean isScanNewlyAddedTableEnabled,
-            AssignStrategy scanChunkAssignStrategy) {
+            AssignStrategy scanChunkAssignStrategy,
+            boolean assignEndingChunkFirst) {
         this.scheme = checkNotNull(scheme);
         this.hosts = checkNotNull(hosts);
         this.username = username;
@@ -105,6 +107,7 @@ public class MongoDBSourceConfig implements SourceConfig {
         this.skipSnapshotBackfill = skipSnapshotBackfill;
         this.isScanNewlyAddedTableEnabled = isScanNewlyAddedTableEnabled;
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
+        this.assignEndingChunkFirst = assignEndingChunkFirst;
     }
 
     public String getScheme() {
@@ -210,6 +213,10 @@ public class MongoDBSourceConfig implements SourceConfig {
         return scanChunkAssignStrategy;
     }
 
+    public boolean isAssignEndingChunkFirst() {
+        return assignEndingChunkFirst;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -229,6 +236,7 @@ public class MongoDBSourceConfig implements SourceConfig {
                 && splitSizeMB == that.splitSizeMB
                 && samplesPerChunk == that.samplesPerChunk
                 && closeIdleReaders == that.closeIdleReaders
+                && assignEndingChunkFirst == that.assignEndingChunkFirst
                 && Objects.equals(scheme, that.scheme)
                 && Objects.equals(hosts, that.hosts)
                 && Objects.equals(username, that.username)
@@ -263,6 +271,7 @@ public class MongoDBSourceConfig implements SourceConfig {
                 closeIdleReaders,
                 skipSnapshotBackfill,
                 isScanNewlyAddedTableEnabled,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+                assignEndingChunkFirst);
     }
 }

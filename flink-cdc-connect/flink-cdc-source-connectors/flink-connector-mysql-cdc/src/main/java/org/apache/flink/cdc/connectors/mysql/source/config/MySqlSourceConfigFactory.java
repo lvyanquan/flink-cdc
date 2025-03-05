@@ -92,6 +92,7 @@ public class MySqlSourceConfigFactory implements Serializable {
             SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE.defaultValue();
 
     private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
+    private boolean assignEndingChunkFirst = false;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
@@ -374,6 +375,14 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
+    /**
+     * Whether to assign the ending chunk first during snapshot reading phase. Defaults to false.
+     */
+    public MySqlSourceConfigFactory assignEndingChunkFirst(boolean assignEndingChunkFirst) {
+        this.assignEndingChunkFirst = assignEndingChunkFirst;
+        return this;
+    }
+
     /** Creates a new {@link MySqlSourceConfig} for the given subtask {@code subtaskId}. */
     public MySqlSourceConfig createConfig(int subtaskId) {
         // hard code server name, because we don't need to distinguish it, docs:
@@ -487,7 +496,8 @@ public class MySqlSourceConfigFactory implements Serializable {
                 treatTinyInt1AsBoolean,
                 useLegacyJsonFormat,
                 rdsConfig,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+            assignEndingChunkFirst);
     }
 
     private void validateCapturingMode() {

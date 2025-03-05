@@ -66,6 +66,7 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
 
     protected boolean scanNewlyAddedTableEnabled = false;
     protected AssignStrategy scanChunkAssignStrategy = SCAN_CHUNK_ASSIGN_STRATEGY.defaultValue();
+    protected boolean assignEndingChunkFirst = false;
 
     /** The protocol connected to MongoDB. For example mongodb or mongodb+srv. */
     public MongoDBSourceConfigFactory scheme(String scheme) {
@@ -281,6 +282,14 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
         return this;
     }
 
+    /**
+     * Whether to assign the ending chunk first during snapshot reading phase. Defaults to false.
+     */
+    public MongoDBSourceConfigFactory assignEndingChunkFirst(boolean assignEndingChunkFirst) {
+        this.assignEndingChunkFirst = assignEndingChunkFirst;
+        return this;
+    }
+
     /** Creates a new {@link MongoDBSourceConfig} for the given subtask {@code subtaskId}. */
     @Override
     public MongoDBSourceConfig create(int subtaskId) {
@@ -307,6 +316,7 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
                 disableCursorTimeout,
                 skipSnapshotBackfill,
                 scanNewlyAddedTableEnabled,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+                assignEndingChunkFirst);
     }
 }

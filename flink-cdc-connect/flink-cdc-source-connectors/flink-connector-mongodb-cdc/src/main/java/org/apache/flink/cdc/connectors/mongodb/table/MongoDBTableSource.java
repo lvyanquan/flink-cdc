@@ -110,6 +110,7 @@ public class MongoDBTableSource
     private final ObjectIdentifier sourceTablePath;
 
     private final AssignStrategy scanChunkAssignStrategy;
+    private final boolean assignEndingChunkFirst;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -154,7 +155,8 @@ public class MongoDBTableSource
             boolean flattenNestedColumns,
             boolean primitiveAsString,
             ObjectIdentifier sourceTablePath,
-            AssignStrategy scanChunkAssignStrategy) {
+            AssignStrategy scanChunkAssignStrategy,
+            boolean assignEndingChunkFirst) {
         this.physicalSchema = physicalSchema;
         this.scheme = checkNotNull(scheme);
         this.hosts = checkNotNull(hosts);
@@ -190,6 +192,7 @@ public class MongoDBTableSource
                 new MongoDBTableSpec(
                         sourceTablePath.toObjectPath(), producedDataType, database, collection));
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
+        this.assignEndingChunkFirst = assignEndingChunkFirst;
     }
 
     @Override
@@ -265,7 +268,8 @@ public class MongoDBTableSource
                     .skipSnapshotBackfill(skipSnapshotBackfill)
                     .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                     .disableCursorTimeout(noCursorTimeout)
-                    .scanChunkAssignStrategy(scanChunkAssignStrategy);
+                    .scanChunkAssignStrategy(scanChunkAssignStrategy)
+                    .assignEndingChunkFirst(assignEndingChunkFirst);
 
             Optional.ofNullable(databaseList).ifPresent(builder::databaseList);
             Optional.ofNullable(collectionList).ifPresent(builder::collectionList);
@@ -427,7 +431,8 @@ public class MongoDBTableSource
                         flattenNestedColumns,
                         primitiveAsString,
                         sourceTablePath,
-                        scanChunkAssignStrategy);
+                        scanChunkAssignStrategy,
+                        assignEndingChunkFirst);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         source.isEvolvingSource = isEvolvingSource;
@@ -510,7 +515,8 @@ public class MongoDBTableSource
                 primitiveAsString,
                 isEvolvingSource,
                 sourceTablePath,
-                scanChunkAssignStrategy);
+                scanChunkAssignStrategy,
+                assignEndingChunkFirst);
     }
 
     @Override

@@ -51,6 +51,7 @@ import static org.apache.flink.cdc.connectors.base.options.JdbcSourceOptions.SCH
 import static org.apache.flink.cdc.connectors.base.options.JdbcSourceOptions.TABLE_NAME;
 import static org.apache.flink.cdc.connectors.base.options.JdbcSourceOptions.USERNAME;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static org.apache.flink.cdc.connectors.base.utils.ObjectUtils.doubleCompare;
@@ -127,6 +128,8 @@ public class PostgreSQLTableFactory
         boolean skipSnapshotBackfill = config.get(SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
         boolean isScanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         int lsnCommitCheckpointsDelay = config.get(SCAN_LSN_COMMIT_CHECKPOINTS_DELAY);
+        boolean assignEndingChunkFirst =
+                config.get(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         if (enableParallelRead) {
             validateIntegerOption(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
@@ -172,7 +175,8 @@ public class PostgreSQLTableFactory
                 closeIdlerReaders,
                 skipSnapshotBackfill,
                 isScanNewlyAddedTableEnabled,
-                lsnCommitCheckpointsDelay);
+                lsnCommitCheckpointsDelay,
+                assignEndingChunkFirst);
     }
 
     @Override
@@ -215,6 +219,7 @@ public class PostgreSQLTableFactory
         options.add(SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(SCAN_LSN_COMMIT_CHECKPOINTS_DELAY);
+        options.add(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
         return options;
     }
 

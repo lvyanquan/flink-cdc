@@ -329,4 +329,12 @@ public class MySqlSourceOptions {
                     .intType()
                     .defaultValue(2)
                     .withDescription("The size of the event handler during parallel conversion.");
+
+    @Experimental
+    public static final ConfigOption<Boolean> SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST =
+            ConfigOptions.key("scan.incremental.snapshot.unbounded-chunk-first.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to assign the ending chunk first during snapshot reading phase. This might help reduce the risk of the TaskManager experiencing an out-of-memory (OOM) error when taking a snapshot of the largest unbounded chunk.  Defaults to false.");
 }

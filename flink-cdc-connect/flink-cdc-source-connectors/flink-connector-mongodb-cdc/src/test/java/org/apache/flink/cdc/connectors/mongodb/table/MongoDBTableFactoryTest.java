@@ -49,6 +49,7 @@ import java.util.Map;
 
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.CHUNK_META_GROUP_SIZE;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.base.options.SourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope.MONGODB_SRV_SCHEME;
@@ -175,7 +176,8 @@ public class MongoDBTableFactoryTest {
                         SCAN_FLATTEN_NESTED_COLUMNS_ENABLED_DEFAULT,
                         SCAN_PRIMITIVE_AS_STRING_DEFAULT,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT);
+                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -231,7 +233,8 @@ public class MongoDBTableFactoryTest {
                         true,
                         false,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT);
+                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
+                    true);
         assertEquals(expectedSource, actualSource);
     }
 
@@ -276,7 +279,8 @@ public class MongoDBTableFactoryTest {
                         SCAN_FLATTEN_NESTED_COLUMNS_ENABLED_DEFAULT,
                         SCAN_PRIMITIVE_AS_STRING_DEFAULT,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT);
+                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
+                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
 
         expectedSource.producedDataType = SCHEMA_WITH_METADATA.toSourceRowDataType();
         expectedSource.metadataKeys = Arrays.asList("op_ts", "database_name");

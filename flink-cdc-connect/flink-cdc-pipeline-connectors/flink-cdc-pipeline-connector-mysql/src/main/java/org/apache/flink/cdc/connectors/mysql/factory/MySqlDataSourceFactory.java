@@ -90,6 +90,7 @@ import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOption
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
@@ -169,6 +170,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                 config.get(SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED);
         boolean isParsingOnLineSchemaChanges = config.get(PARSE_ONLINE_SCHEMA_CHANGES);
         boolean useLegacyJsonFormat = config.get(USE_LEGACY_JSON_FORMAT);
+        boolean isAssignEndingChunkFirst =
+                config.get(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         boolean scanOnlyDeserializeCapturedTablesChangelog =
                 config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
@@ -221,14 +224,13 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .connectionPoolSize(connectionPoolSize)
                         .closeIdleReaders(closeIdleReaders)
                         .includeSchemaChanges(includeSchemaChanges)
-                        .scanNewlyAddedTableEnabled(config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED))
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap))
                         .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
-                        .parseOnLineSchemaChanges(isParsingOnLineSchemaChanges)
                         .treatTinyInt1AsBoolean(treatTinyInt1AsBoolean)
                         .useLegacyJsonFormat(useLegacyJsonFormat)
-                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                        .assignEndingChunkFirst(isAssignEndingChunkFirst)
+                        .parseOnLineSchemaChanges(isParsingOnLineSchemaChanges)
                         .scanOnlyDeserializeCapturedTablesChangelog(
                                 scanOnlyDeserializeCapturedTablesChangelog)
                         .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)

@@ -202,13 +202,15 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
     @Parameterized.Parameter(2)
     public String chunkColumnName;
 
+    @Parameterized.Parameter(2)
+    public String assignEndingFirst;
+
     private static final int USE_POST_LOWWATERMARK_HOOK = 1;
     private static final int USE_PRE_HIGHWATERMARK_HOOK = 2;
 
     private static final int USE_POST_HIGHWATERMARK_HOOK = 3;
 
-    @Parameterized.Parameters(
-            name = "debeziumProperties: {0}, tableName: {1}, chunkColumnName: {2}")
+    @Parameterized.Parameters(name = "debeziumProperties: {0}, table: {1}, chunkColumn: {2}, assignEndingFirst: {3}")
     public static Object[] parameters() {
         return new Object[][] {
             new Object[] {
@@ -227,10 +229,10 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                                         .defaultValue())))
                         .build(),
                 "customers",
-                null
+                null, "true"
             },
-            new Object[] {new HashMap<>(), "customers", "id"},
-            new Object[] {new HashMap<>(), "customers_no_pk", "id"}
+            new Object[] {new HashMap<>(), "customers", "id", "true"},
+            new Object[] {new HashMap<>(), "customers_no_pk", "id", "true"}
         };
     }
 
@@ -1501,7 +1503,8 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                                 + " 'scan.incremental.snapshot.chunk.size' = '100',"
                                 + " 'scan.incremental.snapshot.backfill.skip' = '%s',"
                                 + " 'server-time-zone' = '%s',"
-                                + " 'server-id' = '%s'"
+                            + " 'scan.incremental.snapshot.unbounded-chunk-first.enabled' = '%s',"
+                            + " 'server-id' = '%s'"
                                 + " %s"
                                 + ")",
                         MYSQL_CONTAINER.getHost(),
@@ -1513,6 +1516,7 @@ public class MySqlSourceITCase extends MySqlSourceTestBase {
                         scanStartupMode,
                         skipSnapshotBackfill,
                         getSystemTimeZone(),
+                        assignEndingFirst == null ? "false" : "true",
                         getServerId(),
                         chunkColumnName == null
                                 ? ""
