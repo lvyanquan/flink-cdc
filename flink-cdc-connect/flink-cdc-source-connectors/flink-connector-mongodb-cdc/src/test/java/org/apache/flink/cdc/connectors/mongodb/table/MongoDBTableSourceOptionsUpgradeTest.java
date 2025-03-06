@@ -45,6 +45,7 @@ public class MongoDBTableSourceOptionsUpgradeTest extends OptionUpgradeTestBase 
                 .put("connection.options", "connectTimeoutMS=23000&socketTimeoutMS=24000")
                 .put("scan.incremental.snapshot.enabled", "true")
                 .put("scan.startup.mode", "initial")
+                .put("scan.full-changelog", "true")
                 .build();
     }
 
@@ -108,13 +109,11 @@ public class MongoDBTableSourceOptionsUpgradeTest extends OptionUpgradeTestBase 
                 .put("database", "testdb")
                 .put("hosts", "localhost")
                 .put("password", "${new.secret.password}")
-                .put("scan.flatten-nested-columns.enabled", "true")
-                .put("scan.full-changelog", "true")
                 .put("scan.incremental.snapshot.enabled", "true")
-                .put("scan.primitive-as-string", "true")
                 .put("scan.startup.mode", "initial")
                 .put("scheme", "mongodb+srv")
                 .put("username", "root")
+                .put("scan.full-changelog", "true")
                 .build();
     }
 

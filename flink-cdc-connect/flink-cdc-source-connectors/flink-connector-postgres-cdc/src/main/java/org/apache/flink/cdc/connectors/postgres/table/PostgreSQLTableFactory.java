@@ -306,10 +306,8 @@ public class PostgreSQLTableFactory
                             CURRENT_SNAPSHOT_VERSION));
         }
         mergedConfig.remove(FactoryUtil.PROPERTY_VERSION.key());
-        Map<String, String> allOptions = helper.getEnrichmentOptions().toMap();
-        checkChangedOptions(mergedConfig, allOptions);
-        mergedConfig.putAll(allOptions);
-        return mergedConfig;
+        Map<String, String> enrichmentOptions = helper.getEnrichmentOptions().toMap();
+        return checkAndMigrateOptions(notAllowedChangedOptions(), mergedConfig, enrichmentOptions);
     }
 
     public Set<String> notAllowedChangedOptions() {
@@ -330,14 +328,18 @@ public class PostgreSQLTableFactory
                 .collect(Collectors.toSet());
     }
 
-    private void checkChangedOptions(
-            Map<String, String> snapshotOptions, Map<String, String> newOptions)
+    public Map<String, String> checkAndMigrateOptions(
+            Set<String> notAllowedChangedOptions,
+            Map<String, String> snapshotOptions,
+            Map<String, String> newOptions)
             throws CannotMigrateException {
-        Set<String> notAllowedChangedOptions = notAllowedChangedOptions();
         Set<String> addedOptions = new HashSet<>(newOptions.keySet());
         addedOptions.removeAll(snapshotOptions.keySet());
-        Set<String> removedOptions = new HashSet<>(snapshotOptions.keySet());
-        removedOptions.removeAll(newOptions.keySet());
+        Map<String, String> originalOptions = new HashMap<>(snapshotOptions);
+        Set<String> removedOptions =
+                originalOptions.keySet().stream()
+                        .filter(option -> !newOptions.containsKey(option))
+                        .collect(Collectors.toSet());
         for (String key : removedOptions) {
             if (notAllowedChangedOptions.contains(key)) {
                 throw new CannotMigrateException(
@@ -345,6 +347,8 @@ public class PostgreSQLTableFactory
                                 "Can not migrate connector because the option %s is removed.",
                                 key));
             }
+            // remove the option.
+            originalOptions.remove(key);
         }
         for (String key : addedOptions) {
             if (notAllowedChangedOptions.contains(key)) {
@@ -362,5 +366,7 @@ public class PostgreSQLTableFactory
                                 key, snapshotOptions.get(key), newOptions.get(key)));
             }
         }
+        originalOptions.putAll(newOptions);
+        return originalOptions;
     }
 }

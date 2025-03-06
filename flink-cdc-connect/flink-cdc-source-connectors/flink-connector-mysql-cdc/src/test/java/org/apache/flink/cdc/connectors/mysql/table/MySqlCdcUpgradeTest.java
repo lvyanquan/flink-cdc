@@ -105,7 +105,6 @@ public class MySqlCdcUpgradeTest extends OptionUpgradeTestBase {
         options.put("table-name", "test-tbl");
         options.put("scan.startup.mode", "initial");
         options.put("scan.incremental.snapshot.chunk.size", "100");
-        options.put("server-id", "123");
         return options;
     }
 
