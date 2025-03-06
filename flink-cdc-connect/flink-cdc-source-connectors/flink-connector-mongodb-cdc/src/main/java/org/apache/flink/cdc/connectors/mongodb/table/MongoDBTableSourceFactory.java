@@ -122,7 +122,7 @@ public class MongoDBTableSourceFactory
         boolean enableCloseIdleReaders = config.get(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         boolean skipSnapshotBackfill = config.get(SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
         boolean scanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
-        boolean assignEndingChunkFirst =
+        boolean assignUnboundedChunkFirst =
                 config.get(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         int splitSizeMB = config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE_MB);
@@ -182,7 +182,7 @@ public class MongoDBTableSourceFactory
                 primitiveAsString,
                 context.getObjectIdentifier(),
                 assignStrategy,
-                assignEndingChunkFirst);
+            assignUnboundedChunkFirst);
     }
 
     private void checkPrimaryKey(UniqueConstraint pk, String message) {

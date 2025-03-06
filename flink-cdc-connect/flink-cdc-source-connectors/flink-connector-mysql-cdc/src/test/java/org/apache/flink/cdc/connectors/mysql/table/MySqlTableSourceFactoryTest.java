@@ -58,9 +58,10 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.CONNECT_TIMEOUT;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.HEARTBEAT_INTERVAL;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
+import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.USE_LEGACY_JSON_FORMAT;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
@@ -147,7 +148,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -202,7 +203,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -253,7 +254,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -302,8 +303,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
-
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -375,8 +375,7 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         AssignStrategy.DESCENDING_ORDER,
                         4,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
-
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
         assertTrue(actualSource instanceof MySqlTableSource);
         MySqlTableSource actualMySqlTableSource = (MySqlTableSource) actualSource;
@@ -440,7 +439,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                    SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -488,7 +487,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -537,7 +536,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -587,7 +586,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -635,7 +634,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -688,7 +687,7 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                    SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         expectedSource.applyReadableMetadata(
                 Arrays.asList("op_ts", "database_name"),
                 SCHEMA_WITH_METADATA.toSourceRowDataType());

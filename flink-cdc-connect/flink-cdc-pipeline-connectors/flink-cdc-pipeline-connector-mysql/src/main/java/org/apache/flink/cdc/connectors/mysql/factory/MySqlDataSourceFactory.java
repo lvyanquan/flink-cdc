@@ -170,7 +170,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                 config.get(SCAN_BINLOG_NEWLY_ADDED_TABLE_ENABLED);
         boolean isParsingOnLineSchemaChanges = config.get(PARSE_ONLINE_SCHEMA_CHANGES);
         boolean useLegacyJsonFormat = config.get(USE_LEGACY_JSON_FORMAT);
-        boolean isAssignEndingChunkFirst =
+        boolean isAssignUnboundedChunkFirst =
                 config.get(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         boolean scanOnlyDeserializeCapturedTablesChangelog =
@@ -229,12 +229,12 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                         .treatTinyInt1AsBoolean(treatTinyInt1AsBoolean)
                         .useLegacyJsonFormat(useLegacyJsonFormat)
-                        .assignEndingChunkFirst(isAssignEndingChunkFirst)
                         .parseOnLineSchemaChanges(isParsingOnLineSchemaChanges)
                         .scanOnlyDeserializeCapturedTablesChangelog(
                                 scanOnlyDeserializeCapturedTablesChangelog)
                         .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
-                        .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
+                        .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize)
+                        .assignUnboundedChunkFirst(isAssignUnboundedChunkFirst);
 
         List<TableId> tableIds = MySqlSchemaUtils.listTables(configFactory.createConfig(0), null);
 

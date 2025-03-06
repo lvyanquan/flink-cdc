@@ -128,7 +128,7 @@ public class PostgreSQLTableFactory
         boolean skipSnapshotBackfill = config.get(SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
         boolean isScanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         int lsnCommitCheckpointsDelay = config.get(SCAN_LSN_COMMIT_CHECKPOINTS_DELAY);
-        boolean assignEndingChunkFirst =
+        boolean assignUnboundedChunkFirst =
                 config.get(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
 
         if (enableParallelRead) {
@@ -176,7 +176,7 @@ public class PostgreSQLTableFactory
                 skipSnapshotBackfill,
                 isScanNewlyAddedTableEnabled,
                 lsnCommitCheckpointsDelay,
-                assignEndingChunkFirst);
+                assignUnboundedChunkFirst);
     }
 
     @Override

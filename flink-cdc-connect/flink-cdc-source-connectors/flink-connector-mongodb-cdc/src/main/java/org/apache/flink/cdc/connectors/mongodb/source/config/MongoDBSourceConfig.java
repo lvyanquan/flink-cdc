@@ -58,7 +58,7 @@ public class MongoDBSourceConfig implements SourceConfig {
     private final AssignStrategy scanChunkAssignStrategy;
 
     private final boolean isScanNewlyAddedTableEnabled;
-    private final boolean assignEndingChunkFirst;
+    private final boolean assignUnboundedChunkFirst;
 
     MongoDBSourceConfig(
             String scheme,
@@ -83,7 +83,7 @@ public class MongoDBSourceConfig implements SourceConfig {
             boolean skipSnapshotBackfill,
             boolean isScanNewlyAddedTableEnabled,
             AssignStrategy scanChunkAssignStrategy,
-            boolean assignEndingChunkFirst) {
+            boolean assignUnboundedChunkFirst) {
         this.scheme = checkNotNull(scheme);
         this.hosts = checkNotNull(hosts);
         this.username = username;
@@ -107,7 +107,7 @@ public class MongoDBSourceConfig implements SourceConfig {
         this.skipSnapshotBackfill = skipSnapshotBackfill;
         this.isScanNewlyAddedTableEnabled = isScanNewlyAddedTableEnabled;
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
-        this.assignEndingChunkFirst = assignEndingChunkFirst;
+        this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
     }
 
     public String getScheme() {
@@ -213,8 +213,8 @@ public class MongoDBSourceConfig implements SourceConfig {
         return scanChunkAssignStrategy;
     }
 
-    public boolean isAssignEndingChunkFirst() {
-        return assignEndingChunkFirst;
+    public boolean isAssignUnboundedChunkFirst() {
+        return assignUnboundedChunkFirst;
     }
 
     @Override
@@ -236,7 +236,7 @@ public class MongoDBSourceConfig implements SourceConfig {
                 && splitSizeMB == that.splitSizeMB
                 && samplesPerChunk == that.samplesPerChunk
                 && closeIdleReaders == that.closeIdleReaders
-                && assignEndingChunkFirst == that.assignEndingChunkFirst
+                && assignUnboundedChunkFirst == that.assignUnboundedChunkFirst
                 && Objects.equals(scheme, that.scheme)
                 && Objects.equals(hosts, that.hosts)
                 && Objects.equals(username, that.username)
@@ -272,6 +272,6 @@ public class MongoDBSourceConfig implements SourceConfig {
                 skipSnapshotBackfill,
                 isScanNewlyAddedTableEnabled,
                 scanChunkAssignStrategy,
-                assignEndingChunkFirst);
+            assignUnboundedChunkFirst);
     }
 }

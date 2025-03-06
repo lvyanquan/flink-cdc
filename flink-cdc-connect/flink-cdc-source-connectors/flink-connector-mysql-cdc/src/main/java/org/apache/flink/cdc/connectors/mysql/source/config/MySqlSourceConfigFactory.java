@@ -92,7 +92,7 @@ public class MySqlSourceConfigFactory implements Serializable {
             SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE.defaultValue();
 
     private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
-    private boolean assignEndingChunkFirst = false;
+    private boolean assignUnboundedChunkFirst = false;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
@@ -376,10 +376,11 @@ public class MySqlSourceConfigFactory implements Serializable {
     }
 
     /**
-     * Whether to assign the ending chunk first during snapshot reading phase. Defaults to false.
+     * Whether to assign the unbounded chunks first during snapshot reading phase. Defaults to
+     * false.
      */
-    public MySqlSourceConfigFactory assignEndingChunkFirst(boolean assignEndingChunkFirst) {
-        this.assignEndingChunkFirst = assignEndingChunkFirst;
+    public MySqlSourceConfigFactory assignUnboundedChunkFirst(boolean assignUnboundedChunkFirst) {
+        this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
         return this;
     }
 
@@ -497,7 +498,7 @@ public class MySqlSourceConfigFactory implements Serializable {
                 useLegacyJsonFormat,
                 rdsConfig,
                 scanChunkAssignStrategy,
-                assignEndingChunkFirst);
+            assignUnboundedChunkFirst);
     }
 
     private void validateCapturingMode() {

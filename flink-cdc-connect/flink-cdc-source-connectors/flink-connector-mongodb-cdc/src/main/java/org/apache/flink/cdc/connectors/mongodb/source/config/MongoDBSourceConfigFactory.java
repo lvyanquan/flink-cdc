@@ -66,7 +66,7 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
 
     protected boolean scanNewlyAddedTableEnabled = false;
     protected AssignStrategy scanChunkAssignStrategy = SCAN_CHUNK_ASSIGN_STRATEGY.defaultValue();
-    protected boolean assignEndingChunkFirst = false;
+    protected boolean assignUnboundedChunkFirst = false;
 
     /** The protocol connected to MongoDB. For example mongodb or mongodb+srv. */
     public MongoDBSourceConfigFactory scheme(String scheme) {
@@ -283,10 +283,11 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
     }
 
     /**
-     * Whether to assign the ending chunk first during snapshot reading phase. Defaults to false.
+     * Whether to assign the unbounded chunks first during snapshot reading phase. Defaults to
+     * false.
      */
-    public MongoDBSourceConfigFactory assignEndingChunkFirst(boolean assignEndingChunkFirst) {
-        this.assignEndingChunkFirst = assignEndingChunkFirst;
+    public MongoDBSourceConfigFactory assignUnboundedChunkFirst(boolean assignUnboundedChunkFirst) {
+        this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
         return this;
     }
 
@@ -317,6 +318,6 @@ public class MongoDBSourceConfigFactory implements Factory<MongoDBSourceConfig> 
                 skipSnapshotBackfill,
                 scanNewlyAddedTableEnabled,
                 scanChunkAssignStrategy,
-                assignEndingChunkFirst);
+                assignUnboundedChunkFirst);
     }
 }

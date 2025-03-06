@@ -110,7 +110,7 @@ public class MongoDBTableSource
     private final ObjectIdentifier sourceTablePath;
 
     private final AssignStrategy scanChunkAssignStrategy;
-    private final boolean assignEndingChunkFirst;
+    private final boolean assignUnboundedChunkFirst;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -156,7 +156,7 @@ public class MongoDBTableSource
             boolean primitiveAsString,
             ObjectIdentifier sourceTablePath,
             AssignStrategy scanChunkAssignStrategy,
-            boolean assignEndingChunkFirst) {
+            boolean assignUnboundedChunkFirst) {
         this.physicalSchema = physicalSchema;
         this.scheme = checkNotNull(scheme);
         this.hosts = checkNotNull(hosts);
@@ -192,7 +192,7 @@ public class MongoDBTableSource
                 new MongoDBTableSpec(
                         sourceTablePath.toObjectPath(), producedDataType, database, collection));
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
-        this.assignEndingChunkFirst = assignEndingChunkFirst;
+        this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
     }
 
     @Override
@@ -269,7 +269,7 @@ public class MongoDBTableSource
                     .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                     .disableCursorTimeout(noCursorTimeout)
                     .scanChunkAssignStrategy(scanChunkAssignStrategy)
-                    .assignEndingChunkFirst(assignEndingChunkFirst);
+                .assignUnboundedChunkFirst(assignUnboundedChunkFirst);
 
             Optional.ofNullable(databaseList).ifPresent(builder::databaseList);
             Optional.ofNullable(collectionList).ifPresent(builder::collectionList);
@@ -432,7 +432,7 @@ public class MongoDBTableSource
                         primitiveAsString,
                         sourceTablePath,
                         scanChunkAssignStrategy,
-                        assignEndingChunkFirst);
+                    assignUnboundedChunkFirst);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         source.isEvolvingSource = isEvolvingSource;

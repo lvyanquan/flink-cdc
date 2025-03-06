@@ -133,7 +133,7 @@ public class MySqlTableSource
     @Nullable private final AliyunRdsConfig rdsConfig;
 
     private final boolean scanOnlyDeserializeCapturedTablesChangelog;
-    private final boolean assignEndingChunkFirst;
+    private final boolean assignUnboundedChunkFirst;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -199,7 +199,7 @@ public class MySqlTableSource
             boolean scanParallelDeserializeChangelog,
             AssignStrategy scanChunkAssignStrategy,
             int scanParallelDeserializeHandlerSize,
-            boolean assignEndingChunkFirst) {
+            boolean assignUnboundedChunkFirst) {
         this.physicalSchemaWithSystemData = physicalSchemaWithSystemData;
         this.port = port;
         this.hostname = checkNotNull(hostname);
@@ -251,7 +251,7 @@ public class MySqlTableSource
         this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
         this.scanChunkAssignStrategy = scanChunkAssignStrategy;
         this.scanParallelDeserializeHandlerSize = scanParallelDeserializeHandlerSize;
-        this.assignEndingChunkFirst = assignEndingChunkFirst;
+        this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
     }
 
     @Override
@@ -353,7 +353,7 @@ public class MySqlTableSource
                 .skipSnapshotBackfill(skipSnapshotBackFill)
                 .parseOnLineSchemaChanges(parseOnlineSchemaChanges)
                 .useLegacyJsonFormat(useLegacyJsonFormat)
-                .assignEndingChunkFirst(assignEndingChunkFirst)
+                .assignUnboundedChunkFirst(assignUnboundedChunkFirst)
                 .chunkKeyColumns(chunkKeyColumns)
                 .scanOnlyDeserializeCapturedTablesChangelog(
                         scanOnlyDeserializeCapturedTablesChangelog)
@@ -471,7 +471,7 @@ public class MySqlTableSource
                         scanParallelDeserializeChangelog,
                         scanChunkAssignStrategy,
                         scanParallelDeserializeHandlerSize,
-                        assignEndingChunkFirst);
+                    assignUnboundedChunkFirst);
         copiedSource.tablePhysicalSchemas = new HashMap<>(tablePhysicalSchemas);
         copiedSource.metadataKeys = new ArrayList<>(metadataKeys);
         copiedSource.tableProducedDataTypes = new HashMap<>(tableProducedDataTypes);
