@@ -24,70 +24,70 @@ limitations under the License.
 
     <dependencySets>
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/hologres</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/hologres</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-hologres:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/kafka</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/kafka</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-kafka:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/upsert-kafka</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/upsert-kafka</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-kafka:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/mysql</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/mysql</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-mysql:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/paimon</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/paimon</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-paimon:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/starrocks</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/starrocks</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-starrocks:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/values</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/values</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-values:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/doris</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/doris</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-doris:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/maxcompute</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/maxcompute</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-maxcompute:jar:${project.version}</include>
             </includes>
         </dependencySet>
 
         <dependencySet>
-            <outputDirectory>flink-cdc/opt/pipeline-connectors/oceanbase</outputDirectory>
+            <outputDirectory>flink/opt/pipeline-connectors/oceanbase</outputDirectory>
             <includes>
                 <include>org.apache.flink:flink-cdc-pipeline-connector-oceanbase:jar:${project.version}</include>
             </includes>

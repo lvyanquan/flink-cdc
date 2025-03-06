@@ -97,7 +97,7 @@ limitations under the License.
                         <fileset>
                             <directory>${project.basedir}/../</directory>
                             <includes>
-                                <include>tar-building-target</include>
+                                <include>tar-building-target/**</include>
                             </includes>
                             <followSymlinks>false</followSymlinks>
                         </fileset>
@@ -154,7 +154,7 @@ limitations under the License.
                         <configuration>
                             <includePluginDependencies>true</includePluginDependencies>
                             <mainClass>org.apache.flink.cdc.pipeline.connector.distro.AssembledMetaFileGenerator</mainClass>
-                            <commandlineArgs>--binaryPath ${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin --outputPath ${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin/flink-cdc-pipeline-connector-meta.yaml</commandlineArgs>
+                            <commandlineArgs>--binaryPath ${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin --outputPath ${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin/flink/flink-cdc-pipeline-connector-meta.yaml</commandlineArgs>
                         </configuration>
                     </execution>
                     <execution>
@@ -167,7 +167,7 @@ limitations under the License.
                             <executable>ln</executable>
                             <arguments>
                                 <argument>-sfn</argument>
-                                <argument>${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin/flink-cdc-pipeline-connector-meta.yaml</argument>
+                                <argument>${project.basedir}/target/flink-cdc-pipeline-connectors-${project.version}-bin/flink/flink-cdc-pipeline-connector-meta.yaml</argument>
                                 <argument>${project.basedir}/../flink-cdc-pipeline-connector-meta.yaml</argument>
                             </arguments>
                         </configuration>

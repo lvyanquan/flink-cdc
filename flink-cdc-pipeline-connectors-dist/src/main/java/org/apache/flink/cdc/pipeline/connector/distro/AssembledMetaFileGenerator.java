@@ -54,7 +54,7 @@ public class AssembledMetaFileGenerator {
                 binaryPath);
 
         // Paths of meta files and dependencies should be a relative one against "flink"
-        Path relativeRoot = binaryPath.resolve("flink-cdc");
+        Path relativeRoot = binaryPath.resolve("flink");
         Path pipelineConnectorPath = relativeRoot.resolve("opt").resolve("pipeline-connectors");
 
         Map<String, Object> pipelineConnectorsToYaml = new HashMap<>();

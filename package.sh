@@ -69,6 +69,19 @@ buildTar() {
   tar zcvf flink-cdc-pipeline-connectors.tar.gz flink-cdc
 }
 
+# Copy VVR connectors metadata & artifacts in place
+copyVvrConnectors() {
+  cp ../connectors/image-building-target/flink/flink-connector-meta.yaml tar-building-target/flink/flink-connector-meta.yaml
+  cp ../connectors/image-building-target/flink/flink-connector-metrics.yaml tar-building-target/flink/flink-connector-metrics.yaml
+
+  cp -r ../connectors/image-building-target/flink/opt/catalogs tar-building-target/flink/opt/catalogs
+  cp -r ../connectors/image-building-target/flink/opt/connectors tar-building-target/flink/opt/connectors
+  cp -r ../connectors/image-building-target/flink/opt/formats tar-building-target/flink/opt/formats
+
+  echo "tar-building-target contents: "
+  ls -lR tar-building-target
+}
+
 main() {
   osName=$1
   versionName=$2
@@ -77,6 +90,8 @@ main() {
   package "$osName" "$scalaVersion"
 
   buildTar
+
+  copyVvrConnectors
 }
 
 main $osName $vvrVersion
