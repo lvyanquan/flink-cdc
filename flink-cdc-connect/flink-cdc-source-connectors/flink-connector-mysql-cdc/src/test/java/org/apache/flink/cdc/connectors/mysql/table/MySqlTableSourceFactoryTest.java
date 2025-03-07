@@ -18,7 +18,7 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
+import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions;
 import org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -60,7 +60,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PARSE_ONLINE_SCHEMA_CHANGES;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.USE_LEGACY_JSON_FORMAT;
@@ -146,7 +145,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -201,7 +199,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -252,7 +249,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -301,7 +297,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -373,7 +368,6 @@ public class MySqlTableSourceFactoryTest {
                         false,
                         true,
                         true,
-                        AssignStrategy.DESCENDING_ORDER,
                         4,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -437,9 +431,8 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
 
@@ -485,7 +478,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -534,7 +526,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -584,7 +575,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -632,7 +622,6 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
                         SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
@@ -685,9 +674,8 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
-                    SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
+                        SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST.defaultValue());
         expectedSource.applyReadableMetadata(
                 Arrays.asList("op_ts", "database_name"),
                 SCHEMA_WITH_METADATA.toSourceRowDataType());
@@ -809,9 +797,9 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST
+                                .defaultValue());
         assertEquals(expected, actual);
     }
 
@@ -1087,9 +1075,9 @@ public class MySqlTableSourceFactoryTest {
                         true,
                         false,
                         false,
-                        AssignStrategy.DESCENDING_ORDER,
                         2,
-                        SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
+                        MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST
+                                .defaultValue());
 
         assertEquals(expectedSource, actualSource);
     }

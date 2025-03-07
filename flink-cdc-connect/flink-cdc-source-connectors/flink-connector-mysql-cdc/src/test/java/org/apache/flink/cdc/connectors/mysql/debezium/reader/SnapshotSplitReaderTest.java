@@ -20,7 +20,6 @@ package org.apache.flink.cdc.connectors.mysql.debezium.reader;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlSnapshotSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
@@ -95,11 +94,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
     @Test
     public void testReadSingleSnapshotSplit() throws Exception {
         MySqlSourceConfig sourceConfig =
-                getConfig(
-                        customerDatabase,
-                        new String[] {"customers_even_dist"},
-                        4,
-                        AssignStrategy.ASCENDING_ORDER);
+                getConfig(customerDatabase, new String[] {"customers_even_dist"}, 4);
         StatefulTaskContext statefulTaskContext =
                 new StatefulTaskContext(
                         sourceConfig,
@@ -516,12 +511,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
     public void testSnapshotScanSkipBackfillWithPostLowWatermark() throws Exception {
         String tableName = "customers";
         MySqlSourceConfig sourceConfig =
-                getConfig(
-                        customerDatabase,
-                        new String[] {tableName},
-                        10,
-                        true,
-                        AssignStrategy.DESCENDING_ORDER);
+                getConfig(customerDatabase, new String[] {tableName}, 10, true);
 
         String tableId = customerDatabase.getDatabaseName() + "." + tableName;
         String[] changingDataSql =
@@ -581,12 +571,7 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
     public void testSnapshotScanSkipBackfillWithPreHighWatermark() throws Exception {
         String tableName = "customers";
         MySqlSourceConfig sourceConfig =
-                getConfig(
-                        customerDatabase,
-                        new String[] {tableName},
-                        10,
-                        true,
-                        AssignStrategy.DESCENDING_ORDER);
+                getConfig(customerDatabase, new String[] {tableName}, 10, true);
 
         String tableId = customerDatabase.getDatabaseName() + "." + tableName;
         String[] changingDataSql =
@@ -757,24 +742,14 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
 
     public static MySqlSourceConfig getConfig(
             UniqueDatabase database, String[] captureTables, int splitSize) {
-        return getConfig(
-                database, captureTables, splitSize, false, AssignStrategy.DESCENDING_ORDER);
+        return getConfig(database, captureTables, splitSize, false);
     }
 
     public static MySqlSourceConfig getConfig(
             UniqueDatabase database,
             String[] captureTables,
             int splitSize,
-            AssignStrategy assignStrategy) {
-        return getConfig(database, captureTables, splitSize, false, assignStrategy);
-    }
-
-    public static MySqlSourceConfig getConfig(
-            UniqueDatabase database,
-            String[] captureTables,
-            int splitSize,
-            boolean skipSnapshotBackfill,
-            AssignStrategy assignStrategy) {
+            boolean skipSnapshotBackfill) {
         String[] captureTableIds =
                 Arrays.stream(captureTables)
                         .map(tableName -> database.getDatabaseName() + "." + tableName)
@@ -791,7 +766,6 @@ public class SnapshotSplitReaderTest extends MySqlSourceTestBase {
                 .fetchSize(2)
                 .password(database.getPassword())
                 .skipSnapshotBackfill(skipSnapshotBackfill)
-                .scanChunkAssignStrategy(assignStrategy)
                 .createConfig(0);
     }
 

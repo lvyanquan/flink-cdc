@@ -27,7 +27,6 @@ import io.debezium.relational.TableId;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 
 /** The splitter used to split collection into a set of chunks for MongoDB data source. */
 @Experimental
@@ -47,9 +46,6 @@ public class MongoDBChunkSplitter implements ChunkSplitter {
             snapshotSplits.addAll(ShardedSplitStrategy.INSTANCE.split(splitContext));
         }
         snapshotSplits.addAll(SplitVectorSplitStrategy.INSTANCE.split(splitContext));
-        if (AssignStrategy.DESCENDING_ORDER.equals(sourceConfig.getScanChunkAssignStrategy())) {
-            Collections.reverse(snapshotSplits);
-        }
         return snapshotSplits;
     }
 

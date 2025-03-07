@@ -19,7 +19,6 @@ package org.apache.flink.cdc.connectors.mysql.source;
 
 import org.apache.flink.cdc.common.annotation.PublicEvolving;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.source.config.CapturingMode;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
@@ -309,11 +308,6 @@ public class MySqlSourceBuilder<T> {
     /** Whether to parse gh-ost utility generated schema change events. Defaults to false. */
     public MySqlSourceBuilder<T> parseOnLineSchemaChanges(boolean parseOnLineSchemaChanges) {
         this.configFactory.parseOnLineSchemaChanges(parseOnLineSchemaChanges);
-        return this;
-    }
-
-    public MySqlSourceBuilder<T> scanChunkAssignStrategy(AssignStrategy scanChunkAssignStrategy) {
-        this.configFactory.scanChunkAssignStrategy(scanChunkAssignStrategy);
         return this;
     }
 

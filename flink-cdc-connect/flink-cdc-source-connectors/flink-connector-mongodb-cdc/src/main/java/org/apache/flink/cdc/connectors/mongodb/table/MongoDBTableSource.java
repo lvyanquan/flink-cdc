@@ -24,7 +24,6 @@ import org.apache.flink.cdc.connectors.base.options.StartupOptions;
 import org.apache.flink.cdc.connectors.mongodb.internal.MongoDBEnvelope;
 import org.apache.flink.cdc.connectors.mongodb.source.MongoDBSource;
 import org.apache.flink.cdc.connectors.mongodb.source.MongoDBSourceBuilder;
-import org.apache.flink.cdc.connectors.mongodb.source.assigners.splitters.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
@@ -109,7 +108,6 @@ public class MongoDBTableSource
     private final boolean primitiveAsString;
     private final ObjectIdentifier sourceTablePath;
 
-    private final AssignStrategy scanChunkAssignStrategy;
     private final boolean assignUnboundedChunkFirst;
 
     // --------------------------------------------------------------------------------------------
@@ -155,7 +153,6 @@ public class MongoDBTableSource
             boolean flattenNestedColumns,
             boolean primitiveAsString,
             ObjectIdentifier sourceTablePath,
-            AssignStrategy scanChunkAssignStrategy,
             boolean assignUnboundedChunkFirst) {
         this.physicalSchema = physicalSchema;
         this.scheme = checkNotNull(scheme);
@@ -191,7 +188,6 @@ public class MongoDBTableSource
         capturedTables.add(
                 new MongoDBTableSpec(
                         sourceTablePath.toObjectPath(), producedDataType, database, collection));
-        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
         this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
     }
 
@@ -268,8 +264,7 @@ public class MongoDBTableSource
                     .skipSnapshotBackfill(skipSnapshotBackfill)
                     .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
                     .disableCursorTimeout(noCursorTimeout)
-                    .scanChunkAssignStrategy(scanChunkAssignStrategy)
-                .assignUnboundedChunkFirst(assignUnboundedChunkFirst);
+                    .assignUnboundedChunkFirst(assignUnboundedChunkFirst);
 
             Optional.ofNullable(databaseList).ifPresent(builder::databaseList);
             Optional.ofNullable(collectionList).ifPresent(builder::collectionList);
@@ -431,8 +426,7 @@ public class MongoDBTableSource
                         flattenNestedColumns,
                         primitiveAsString,
                         sourceTablePath,
-                        scanChunkAssignStrategy,
-                    assignUnboundedChunkFirst);
+                        assignUnboundedChunkFirst);
         source.metadataKeys = metadataKeys;
         source.producedDataType = producedDataType;
         source.isEvolvingSource = isEvolvingSource;
@@ -479,7 +473,7 @@ public class MongoDBTableSource
                 && Objects.equals(primitiveAsString, that.primitiveAsString)
                 && Objects.equals(isEvolvingSource, that.isEvolvingSource)
                 && Objects.equals(sourceTablePath, that.sourceTablePath)
-                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy);
+                && Objects.equals(assignUnboundedChunkFirst, that.assignUnboundedChunkFirst);
     }
 
     @Override
@@ -515,8 +509,7 @@ public class MongoDBTableSource
                 primitiveAsString,
                 isEvolvingSource,
                 sourceTablePath,
-                scanChunkAssignStrategy,
-                assignEndingChunkFirst);
+                assignUnboundedChunkFirst);
     }
 
     @Override

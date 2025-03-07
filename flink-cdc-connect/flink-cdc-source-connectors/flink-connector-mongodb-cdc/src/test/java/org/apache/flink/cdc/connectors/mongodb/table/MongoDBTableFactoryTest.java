@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.connectors.mongodb.table;
 
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
-import org.apache.flink.cdc.connectors.mongodb.source.assigners.splitters.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumSourceFunction;
 import org.apache.flink.cdc.debezium.utils.ResolvedSchemaUtils;
 import org.apache.flink.configuration.Configuration;
@@ -58,7 +57,6 @@ import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourc
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.HEARTBEAT_INTERVAL_MILLIS;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_AWAIT_TIME_MILLIS;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_MAX_BATCH_SIZE;
-import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_FLATTEN_NESTED_COLUMNS_ENABLED;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SAMPLES;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE_MB;
@@ -138,9 +136,6 @@ public class MongoDBTableFactoryTest {
     private static final boolean SCAN_PRIMITIVE_AS_STRING_DEFAULT =
             SCAN_PRIMITIVE_AS_STRING.defaultValue();
 
-    private static final AssignStrategy SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT =
-            SCAN_CHUNK_ASSIGN_STRATEGY.defaultValue();
-
     @Test
     public void testCommonProperties() {
         Map<String, String> properties = getAllOptions();
@@ -176,7 +171,6 @@ public class MongoDBTableFactoryTest {
                         SCAN_FLATTEN_NESTED_COLUMNS_ENABLED_DEFAULT,
                         SCAN_PRIMITIVE_AS_STRING_DEFAULT,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
                         SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
         assertEquals(expectedSource, actualSource);
     }
@@ -233,7 +227,6 @@ public class MongoDBTableFactoryTest {
                         true,
                         false,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
                         true);
         assertEquals(expectedSource, actualSource);
     }
@@ -279,7 +272,6 @@ public class MongoDBTableFactoryTest {
                         SCAN_FLATTEN_NESTED_COLUMNS_ENABLED_DEFAULT,
                         SCAN_PRIMITIVE_AS_STRING_DEFAULT,
                         SOURCE_TABLE_IDENTIFIER,
-                        SCAN_CHUNK_ASSIGN_STRATEGY_DEFAULT,
                         SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST.defaultValue());
 
         expectedSource.producedDataType = SCHEMA_WITH_METADATA.toSourceRowDataType();

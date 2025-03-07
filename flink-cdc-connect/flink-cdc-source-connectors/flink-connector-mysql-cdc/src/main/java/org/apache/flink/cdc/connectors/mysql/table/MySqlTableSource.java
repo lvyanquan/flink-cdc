@@ -26,7 +26,6 @@ import org.apache.flink.cdc.connectors.mysql.source.MySqlEvolvingSourceDeseriali
 import org.apache.flink.cdc.connectors.mysql.source.MySqlMergedSourceDeserializeSchema;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceBuilder;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
@@ -161,8 +160,6 @@ public class MySqlTableSource
 
     protected int scanParallelDeserializeHandlerSize;
 
-    private AssignStrategy scanChunkAssignStrategy;
-
     public MySqlTableSource(
             ResolvedSchema physicalSchemaWithSystemData,
             int port,
@@ -197,7 +194,6 @@ public class MySqlTableSource
             boolean scanOnlyDeserializeCapturedTablesChangelog,
             boolean readChangelogAsAppend,
             boolean scanParallelDeserializeChangelog,
-            AssignStrategy scanChunkAssignStrategy,
             int scanParallelDeserializeHandlerSize,
             boolean assignUnboundedChunkFirst) {
         this.physicalSchemaWithSystemData = physicalSchemaWithSystemData;
@@ -249,7 +245,6 @@ public class MySqlTableSource
                 scanOnlyDeserializeCapturedTablesChangelog;
         this.readChangelogAsAppend = readChangelogAsAppend;
         this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
-        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
         this.scanParallelDeserializeHandlerSize = scanParallelDeserializeHandlerSize;
         this.assignUnboundedChunkFirst = assignUnboundedChunkFirst;
     }
@@ -358,7 +353,6 @@ public class MySqlTableSource
                 .scanOnlyDeserializeCapturedTablesChangelog(
                         scanOnlyDeserializeCapturedTablesChangelog)
                 .scanParallelDeserializeChangelog(scanParallelDeserializeChangelog)
-                .scanChunkAssignStrategy(scanChunkAssignStrategy)
                 .scanParallelDeserializeHandlerSize(scanParallelDeserializeHandlerSize);
         if (rdsConfig != null) {
             parallelSourceBuilder.enableReadingRdsArchivedBinlog(rdsConfig);
@@ -469,9 +463,8 @@ public class MySqlTableSource
                         scanOnlyDeserializeCapturedTablesChangelog,
                         readChangelogAsAppend,
                         scanParallelDeserializeChangelog,
-                        scanChunkAssignStrategy,
                         scanParallelDeserializeHandlerSize,
-                    assignUnboundedChunkFirst);
+                        assignUnboundedChunkFirst);
         copiedSource.tablePhysicalSchemas = new HashMap<>(tablePhysicalSchemas);
         copiedSource.metadataKeys = new ArrayList<>(metadataKeys);
         copiedSource.tableProducedDataTypes = new HashMap<>(tableProducedDataTypes);
@@ -530,7 +523,7 @@ public class MySqlTableSource
                 && Objects.equals(readChangelogAsAppend, that.readChangelogAsAppend)
                 && Objects.equals(
                         scanParallelDeserializeChangelog, that.scanParallelDeserializeChangelog)
-                && Objects.equals(scanChunkAssignStrategy, that.scanChunkAssignStrategy)
+                && Objects.equals(assignUnboundedChunkFirst, that.assignUnboundedChunkFirst)
                 && Objects.equals(
                         scanParallelDeserializeHandlerSize,
                         that.scanParallelDeserializeHandlerSize);
@@ -575,7 +568,7 @@ public class MySqlTableSource
                 rdsConfig,
                 readChangelogAsAppend,
                 scanParallelDeserializeChangelog,
-                scanChunkAssignStrategy,
+                assignUnboundedChunkFirst,
                 scanParallelDeserializeHandlerSize);
     }
 
@@ -628,8 +621,8 @@ public class MySqlTableSource
                                             == anotherMySQLTableSource
                                                     .scanParallelDeserializeChangelog)
                             && Objects.equals(
-                                    scanChunkAssignStrategy,
-                                    anotherMySQLTableSource.scanChunkAssignStrategy)) {
+                                    assignUnboundedChunkFirst,
+                                    anotherMySQLTableSource.assignUnboundedChunkFirst)) {
                         return false;
                     }
                 }

@@ -22,7 +22,6 @@ import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDisp
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.exception.SchemaOutOfSyncException;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSourceTestBase;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.assigners.MySqlSnapshotSplitAssigner;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceConfig;
@@ -915,10 +914,7 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
         customerDatabaseNoGtid.createAndInitialize();
         MySqlSourceConfig sourceConfig =
                 getConfig(
-                        MYSQL_CONTAINER_NOGTID,
-                        customerDatabaseNoGtid,
-                        new String[] {"customers"},
-                        AssignStrategy.ASCENDING_ORDER);
+                        MYSQL_CONTAINER_NOGTID, customerDatabaseNoGtid, new String[] {"customers"});
         binaryLogClient = DebeziumUtils.createBinaryClient(sourceConfig.getDbzConfiguration());
         mySqlConnection = DebeziumUtils.createMySqlConnection(sourceConfig);
 
@@ -1410,16 +1406,6 @@ public class BinlogSplitReaderTest extends MySqlSourceTestBase {
     private MySqlSourceConfig getConfig(
             MySqlContainer container, UniqueDatabase database, String[] captureTables) {
         return getConfigFactory(container, database, captureTables).createConfig(0);
-    }
-
-    private MySqlSourceConfig getConfig(
-            MySqlContainer container,
-            UniqueDatabase database,
-            String[] captureTables,
-            AssignStrategy assignStrategy) {
-        return getConfigFactory(container, database, captureTables)
-                .scanChunkAssignStrategy(assignStrategy)
-                .createConfig(0);
     }
 
     private MySqlSourceConfigFactory getConfigFactory(

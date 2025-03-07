@@ -46,7 +46,6 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -383,10 +382,6 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                         splits.stream()
                                 .map(MySqlSnapshotSplit::toSchemalessSnapshotSplit)
                                 .collect(Collectors.toList());
-                if (AssignStrategy.DESCENDING_ORDER.equals(
-                        sourceConfig.getScanChunkAssignStrategy())) {
-                    Collections.reverse(schemaLessSnapshotSplits);
-                }
                 chunkNum += splits.size();
                 remainingSplits.addAll(schemaLessSnapshotSplits);
                 enumeratorMetrics

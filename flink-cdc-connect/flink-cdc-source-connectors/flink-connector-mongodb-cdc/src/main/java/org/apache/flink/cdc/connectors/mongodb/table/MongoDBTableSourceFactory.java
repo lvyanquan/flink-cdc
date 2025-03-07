@@ -19,7 +19,6 @@ package org.apache.flink.cdc.connectors.mongodb.table;
 
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
 import org.apache.flink.cdc.connectors.base.utils.OptionUtils;
-import org.apache.flink.cdc.connectors.mongodb.source.assigners.splitters.AssignStrategy;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -61,7 +60,6 @@ import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourc
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_AWAIT_TIME_MILLIS;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.POLL_MAX_BATCH_SIZE;
-import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_FLATTEN_NESTED_COLUMNS_ENABLED;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SAMPLES;
 import static org.apache.flink.cdc.connectors.mongodb.source.config.MongoDBSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE_MB;
@@ -138,7 +136,6 @@ public class MongoDBTableSourceFactory
         boolean primitiveAsString = config.getOptional(SCAN_PRIMITIVE_AS_STRING).orElse(false);
         ResolvedSchema physicalSchema =
                 getPhysicalSchema(context.getCatalogTable().getResolvedSchema());
-        AssignStrategy assignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
 
         /*
         checkArgument(physicalSchema.getPrimaryKey().isPresent(), "Primary key must be present");
@@ -181,8 +178,7 @@ public class MongoDBTableSourceFactory
                 flattenNestedColumns,
                 primitiveAsString,
                 context.getObjectIdentifier(),
-                assignStrategy,
-            assignUnboundedChunkFirst);
+                assignUnboundedChunkFirst);
     }
 
     private void checkPrimaryKey(UniqueConstraint pk, String message) {
@@ -268,7 +264,6 @@ public class MongoDBTableSourceFactory
         // options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(SCAN_FLATTEN_NESTED_COLUMNS_ENABLED);
         options.add(SCAN_PRIMITIVE_AS_STRING);
-        options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_ASSIGN_ENDING_CHUNK_FIRST);
         return options;
     }

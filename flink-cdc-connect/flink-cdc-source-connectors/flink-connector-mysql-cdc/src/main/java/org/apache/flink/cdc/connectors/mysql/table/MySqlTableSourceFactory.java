@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.connectors.mysql.table;
 
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions;
 import org.apache.flink.cdc.connectors.mysql.source.config.ServerIdRange;
 import org.apache.flink.cdc.connectors.mysql.source.offset.BinlogOffset;
@@ -71,7 +70,6 @@ import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOpt
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_IS_SHARDING_TABLE;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.INTERNAL_PREFIX;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.PASSWORD;
-import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_CHUNK_ASSIGN_STRATEGY;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static org.apache.flink.cdc.connectors.mysql.source.config.MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
@@ -195,7 +193,6 @@ public class MySqlTableSourceFactory
                 config.get(SCAN_ONLY_DESERIALIZE_CAPTURED_TABLES_CHANGELOG_ENABLED);
 
         OptionUtils.printOptions(IDENTIFIER, ((Configuration) config).toMap());
-        AssignStrategy scanChunkAssignStrategy = config.get(SCAN_CHUNK_ASSIGN_STRATEGY);
 
         // RDS related options
         AliyunRdsConfig rdsConfig = null;
@@ -237,9 +234,8 @@ public class MySqlTableSourceFactory
                 scanOnlyDeserializeCapturedTablesChangelog,
                 readChangelogAsAppend,
                 scanParallelDeserializeChangelog,
-                scanChunkAssignStrategy,
                 scanParallelDeserializeHandlerSize,
-            assignUnboundedChunkFirst);
+                assignUnboundedChunkFirst);
     }
 
     @Override
@@ -301,7 +297,6 @@ public class MySqlTableSourceFactory
         options.add(RDS_USE_INTRANET_LINK);
         options.add(RDS_MAIN_DB_ID);
         options.add(RDS_BINLOG_ENDPOINT);
-        options.add(SCAN_CHUNK_ASSIGN_STRATEGY);
         options.add(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_UNBOUNDED_CHUNK_FIRST);
         return options;
     }

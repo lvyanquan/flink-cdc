@@ -21,7 +21,6 @@ import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.connectors.mysql.debezium.EmbeddedFlinkDatabaseHistory;
 import org.apache.flink.cdc.connectors.mysql.rds.config.AliyunRdsConfig;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
-import org.apache.flink.cdc.connectors.mysql.source.assigners.AssignStrategy;
 import org.apache.flink.cdc.connectors.mysql.table.StartupMode;
 import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -91,7 +90,6 @@ public class MySqlSourceConfigFactory implements Serializable {
     private int scanParallelDeserializeHandlerSize =
             SCAN_PARALLEL_DESERIALIZE_CHANGELOG_HANDLER_SIZE.defaultValue();
 
-    private AssignStrategy scanChunkAssignStrategy = AssignStrategy.DESCENDING_ORDER;
     private boolean assignUnboundedChunkFirst = false;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
@@ -363,12 +361,6 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
-    public MySqlSourceConfigFactory scanChunkAssignStrategy(
-            AssignStrategy scanChunkAssignStrategy) {
-        this.scanChunkAssignStrategy = scanChunkAssignStrategy;
-        return this;
-    }
-
     public MySqlSourceConfigFactory scanParallelDeserializeChangelog(
             boolean scanParallelDeserializeChangelog) {
         this.scanParallelDeserializeChangelog = scanParallelDeserializeChangelog;
@@ -497,8 +489,7 @@ public class MySqlSourceConfigFactory implements Serializable {
                 treatTinyInt1AsBoolean,
                 useLegacyJsonFormat,
                 rdsConfig,
-                scanChunkAssignStrategy,
-            assignUnboundedChunkFirst);
+                assignUnboundedChunkFirst);
     }
 
     private void validateCapturingMode() {
