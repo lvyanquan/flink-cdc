@@ -31,16 +31,19 @@ function getOsName() {
 osName=""
 vvrVersion=""
 scalaVersion=""
-if [ $# -eq 2 ]; then
+connectorHome=""
+if [ $# -eq 3 ]; then
   vvrVersion=$1
   scalaVersion=$2
+  connectorHome=$3
   osName=$(getOsName)
 else
   osName=$1
   vvrVersion=$2
   scalaVersion=$3
+  connectorHome=$4
 fi
-echo "$osName, $vvrVersion, $scalaVersion"
+echo "$osName, $vvrVersion, $scalaVersion, $connectorHome"
 
 package() {
   osName=$1
@@ -71,12 +74,14 @@ buildTar() {
 
 # Copy VVR connectors metadata & artifacts in place
 copyVvrConnectors() {
-  cp ../connectors/image-building-target/flink/flink-connector-meta.yaml tar-building-target/flink/flink-connector-meta.yaml
-  cp ../connectors/image-building-target/flink/flink-connector-metrics.yaml tar-building-target/flink/flink-connector-metrics.yaml
+  connectorHome=$1
 
-  cp -r ../connectors/image-building-target/flink/opt/catalogs tar-building-target/flink/opt/catalogs
-  cp -r ../connectors/image-building-target/flink/opt/connectors tar-building-target/flink/opt/connectors
-  cp -r ../connectors/image-building-target/flink/opt/formats tar-building-target/flink/opt/formats
+  cp $connectorHome/image-building-target/flink/flink-connector-meta.yaml tar-building-target/flink/flink-connector-meta.yaml
+  cp $connectorHome/image-building-target/flink/flink-connector-metrics.yaml tar-building-target/flink/flink-connector-metrics.yaml
+
+  cp -r $connectorHome/image-building-target/flink/opt/catalogs tar-building-target/flink/opt/catalogs
+  cp -r $connectorHome/image-building-target/flink/opt/connectors tar-building-target/flink/opt/connectors
+  cp -r $connectorHome/image-building-target/flink/opt/formats tar-building-target/flink/opt/formats
 
   echo "tar-building-target contents: "
   ls -lR tar-building-target
@@ -85,13 +90,14 @@ copyVvrConnectors() {
 main() {
   osName=$1
   versionName=$2
-  echo "--main:$osName,$versionName"
+  connectorHome=$3
+  echo "--main:$osName,$versionName,$connectorHome"
 
   package "$osName" "$scalaVersion"
 
   buildTar
 
-  copyVvrConnectors
+  copyVvrConnectors $connectorHome
 }
 
-main $osName $vvrVersion
+main $osName $vvrVersion $connectorHome
