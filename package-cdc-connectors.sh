@@ -51,18 +51,20 @@ flink-cdc-connect/flink-cdc-source-connectors/flink-sql-connector-tidb-cdc,\
 flink-cdc-connect/flink-cdc-source-connectors/flink-sql-connector-vitess-cdc"
 
 osName=""
+jdkVersion=""
 vvrVersion=""
-scalaVersion=""
+scalaVersion="2.12"
+
 if [ $# -eq 2 ]; then
   vvrVersion=$1
-  scalaVersion=$2
+  jdkVersion=$2
   osName=$(getOsName)
 else
   osName=$1
-  vvrVersion=$2
-  scalaVersion=$3
+  jdkVersion=$2
+  vvrVersion=$3
 fi
-echo "$osName, $vvrVersion, $scalaVersion"
+echo "$osName, $jdkVersion, $vvrVersion, $scalaVersion"
 
 package() {
   osName=$1

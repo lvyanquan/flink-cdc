@@ -28,22 +28,25 @@ function getOsName() {
   fi
 }
 
+jdkVersion=""
 osName=""
 vvrVersion=""
 scalaVersion=""
 connectorHome=""
-if [ $# -eq 3 ]; then
-  vvrVersion=$1
-  scalaVersion=$2
-  connectorHome=$3
-  osName=$(getOsName)
-else
-  osName=$1
+if [ $# -eq 4 ]; then
+  jdkVersion=$1
   vvrVersion=$2
   scalaVersion=$3
   connectorHome=$4
+  osName=$(getOsName)
+else
+  osName=$1
+  jdkVersion=$2
+  vvrVersion=$3
+  scalaVersion=$4
+  connectorHome=$5
 fi
-echo "$osName, $vvrVersion, $scalaVersion, $connectorHome"
+echo "$osName, $jdkVersion, $vvrVersion, $scalaVersion, $connectorHome"
 
 package() {
   osName=$1
@@ -67,9 +70,9 @@ package() {
 }
 
 buildTar() {
-  cp -r tar-building-target/flink-cdc ./
-  cp flink-cdc-pipeline-connector-meta.yaml flink-cdc/
-  tar zcvf flink-cdc-pipeline-connectors.tar.gz flink-cdc
+  cp -r tar-building-target/flink ./
+  cp flink-cdc-pipeline-connector-meta.yaml flink/
+  tar zcvf flink-cdc-pipeline-connectors.tar.gz flink
 }
 
 # Copy VVR connectors metadata & artifacts in place
