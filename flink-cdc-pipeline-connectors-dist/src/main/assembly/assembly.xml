@@ -92,6 +92,13 @@ limitations under the License.
                 <include>org.apache.flink:flink-cdc-pipeline-connector-oceanbase:jar:${project.version}</include>
             </includes>
         </dependencySet>
+
+        <dependencySet>
+            <outputDirectory>flink/opt/pipeline-connectors/sls</outputDirectory>
+            <includes>
+                <include>org.apache.flink:flink-cdc-pipeline-connector-sls:jar:${project.version}</include>
+            </includes>
+        </dependencySet>
     </dependencySets>
 
 </assembly>
