@@ -45,7 +45,7 @@ import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.output.ToStringConsumer;
 import org.testcontainers.lifecycle.Startables;
 
-import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -104,7 +104,9 @@ public class MySqlToIcebergE2eITCase extends PipelineTestEnvironment {
     @BeforeEach
     public void before() throws Exception {
         LOG.info("Starting containers...");
-        warehouse = new File(temporaryFolder.toFile(), UUID.randomUUID().toString()).toString();
+        warehouse =
+                Files.createDirectory(temporaryFolder.resolve(UUID.randomUUID().toString()))
+                        .toString();
         jobManagerConsumer = new ToStringConsumer();
         jobManager =
                 new GenericContainer<>(getFlinkDockerImageTag())
