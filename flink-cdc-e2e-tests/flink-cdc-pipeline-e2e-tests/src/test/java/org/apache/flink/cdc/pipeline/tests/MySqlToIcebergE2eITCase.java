@@ -47,6 +47,9 @@ import org.testcontainers.lifecycle.Startables;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -59,6 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -104,8 +108,10 @@ public class MySqlToIcebergE2eITCase extends PipelineTestEnvironment {
     @BeforeEach
     public void before() throws Exception {
         LOG.info("Starting containers...");
+        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
+        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
         warehouse =
-                Files.createDirectory(temporaryFolder.resolve(UUID.randomUUID().toString()))
+                Files.createDirectory(temporaryFolder.resolve(UUID.randomUUID().toString()), attr)
                         .toString();
         jobManagerConsumer = new ToStringConsumer();
         jobManager =
