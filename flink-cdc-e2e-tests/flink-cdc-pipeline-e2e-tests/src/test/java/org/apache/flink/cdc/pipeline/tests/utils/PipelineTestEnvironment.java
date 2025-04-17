@@ -60,7 +60,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -126,12 +125,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     protected String flinkVersion = getFlinkVersion();
 
     public static String getFlinkVersion() {
-        String flinkVersion = System.getProperty("specifiedFlinkVersion");
-        if (Objects.isNull(flinkVersion)) {
-            throw new IllegalArgumentException(
-                    "No Flink version specified to run this test. Please use -DspecifiedFlinkVersion to pass one.");
-        }
-        return flinkVersion;
+        return "1.19.1";
     }
 
     @BeforeEach
@@ -306,7 +300,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
                         "env.java.opts.all: -Doracle.jdbc.timezoneAsRegion=false"));
     }
 
-    private void runInContainerAsRoot(GenericContainer<?> container, String... command)
+    public void runInContainerAsRoot(GenericContainer<?> container, String... command)
             throws InterruptedException {
         ToStringConsumer stdoutConsumer = new ToStringConsumer();
         ToStringConsumer stderrConsumer = new ToStringConsumer();
