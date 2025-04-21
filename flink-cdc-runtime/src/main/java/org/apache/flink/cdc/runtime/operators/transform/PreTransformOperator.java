@@ -420,6 +420,7 @@ public class PreTransformOperator extends AbstractStreamOperator<Event>
                                 transformSchemaMetaData(
                                         createTableEvent.getSchema(), transform.f1));
             }
+            break;
         }
 
         cachePreTransformProcessor(tableId, createTableEvent.getSchema());

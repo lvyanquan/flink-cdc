@@ -556,6 +556,15 @@ class PreTransformOperatorTest {
                         .addTransform(
                                 METADATA_TABLEID.identifier(),
                                 "*, __namespace_name__ || '.' || __schema_name__ || '.' || __table_name__ identifier_name, __namespace_name__, __schema_name__, __table_name__",
+                                " __table_name__ = 'metadata_table' ",
+                                "id",
+                                "age",
+                                "key1=value1,key2=value2",
+                                null,
+                                null)
+                        .addTransform(
+                                METADATA_TABLEID.identifier(),
+                                "*, __namespace_name__ || '.' || __schema_name__ || '.' || __table_name__ identifier_name, __namespace_name__, __schema_name__, __table_name__",
                                 " __table_name__ = 'metadata_table' ")
                         .build();
 
@@ -568,11 +577,20 @@ class PreTransformOperatorTest {
         CreateTableEvent createTableEvent = new CreateTableEvent(METADATA_TABLEID, METADATA_SCHEMA);
         transform.processElement(new StreamRecord<>(createTableEvent));
 
+        Schema expectedSchema =
+                Schema.newBuilder()
+                        .physicalColumn("id", DataTypes.STRING().notNull())
+                        .physicalColumn("age", DataTypes.INT())
+                        .physicalColumn("name", DataTypes.STRING())
+                        .primaryKey("id")
+                        .partitionKey("age")
+                        .options(ImmutableMap.of("key1", "value1", "key2", "value2"))
+                        .build();
+
         Assertions.assertThat(
                         transformFunctionEventEventOperatorTestHarness.getOutputRecords().poll())
                 .isEqualTo(
-                        new StreamRecord<>(
-                                new CreateTableEvent(METADATA_TABLEID, EXPECTED_METADATA_SCHEMA)));
+                        new StreamRecord<>(new CreateTableEvent(METADATA_TABLEID, expectedSchema)));
         transformFunctionEventEventOperatorTestHarness.close();
     }
 
