@@ -94,9 +94,9 @@ public class PostgresSchemaUtils {
     }
 
     public static PostgresDialect getPostgresDialect(PostgresSourceConfig sourceConfig) {
-        if (postgresDialect == null) { //
+        if (postgresDialect == null) {
             synchronized (PostgresSchemaUtils.class) {
-                if (postgresDialect == null) { //
+                if (postgresDialect == null) {
                     postgresDialect = new PostgresDialect(sourceConfig);
                 }
             }

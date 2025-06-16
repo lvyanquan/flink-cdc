@@ -19,11 +19,15 @@ package org.apache.flink.cdc.connectors.postgres.source;
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
 import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.common.factories.Factory;
+import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.source.FlinkSourceProvider;
 import org.apache.flink.cdc.common.types.DataType;
@@ -48,10 +52,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.lifecycle.Startables;
 
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -129,6 +138,174 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
         List<Event> actual = fetchResultsExcept(events, expectedSnapshot.size(), createTableEvent);
         assertThat(actual.subList(0, expectedSnapshot.size()))
                 .containsExactlyInAnyOrder(expectedSnapshot.toArray(new Event[0]));
+    }
+
+    @Test
+    public void testInitialStartupModeWithOpts() throws Exception {
+        inventoryDatabase.createAndInitialize();
+        Configuration sourceConfiguration = new Configuration();
+        sourceConfiguration.set(PostgresDataSourceOptions.HOSTNAME, POSTGRES_CONTAINER.getHost());
+        sourceConfiguration.set(
+                PostgresDataSourceOptions.PG_PORT,
+                POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT));
+        sourceConfiguration.set(PostgresDataSourceOptions.USERNAME, TEST_USER);
+        sourceConfiguration.set(PostgresDataSourceOptions.PASSWORD, TEST_PASSWORD);
+        sourceConfiguration.set(PostgresDataSourceOptions.SLOT_NAME, getSlotName());
+        sourceConfiguration.set(PostgresDataSourceOptions.DECODING_PLUGIN_NAME, "pgoutput");
+        sourceConfiguration.set(
+                PostgresDataSourceOptions.TABLES,
+                inventoryDatabase.getDatabaseName() + ".inventory.products");
+        sourceConfiguration.set(PostgresDataSourceOptions.SERVER_TIME_ZONE, "UTC");
+        sourceConfiguration.set(PostgresDataSourceOptions.METADATA_LIST, "op_ts");
+
+        Factory.Context context =
+                new FactoryHelper.DefaultContext(
+                        sourceConfiguration, new Configuration(), this.getClass().getClassLoader());
+        FlinkSourceProvider sourceProvider =
+                (FlinkSourceProvider)
+                        new PostgresDataSourceFactory()
+                                .createDataSource(context)
+                                .getEventSourceProvider();
+        CloseableIterator<Event> events =
+                env.fromSource(
+                                sourceProvider.getSource(),
+                                WatermarkStrategy.noWatermarks(),
+                                PostgresDataSourceFactory.IDENTIFIER,
+                                new EventTypeInfo())
+                        .executeAndCollect();
+
+        TableId tableId = TableId.tableId("inventory", "products");
+        CreateTableEvent createTableEvent = getProductsCreateTableEvent(tableId);
+
+        // generate snapshot data
+        Map<String, String> meta = new HashMap<>();
+        meta.put("op_ts", "0");
+
+        // generate snapshot data
+        List<Event> expectedSnapshot =
+                getSnapshotExpected(tableId).stream()
+                        .map(
+                                event -> {
+                                    DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
+                                    return DataChangeEvent.insertEvent(
+                                            dataChangeEvent.tableId(),
+                                            dataChangeEvent.after(),
+                                            meta);
+                                })
+                        .collect(Collectors.toList());
+
+        String startTime = String.valueOf(System.currentTimeMillis());
+        Thread.sleep(1000);
+
+        List<Event> expectedlog = new ArrayList<>();
+
+        try (Connection connection =
+                        getJdbcConnection(POSTGRES_CONTAINER, inventoryDatabase.getDatabaseName());
+                Statement statement = connection.createStatement()) {
+            RowType rowType =
+                    RowType.of(
+                            new DataType[] {
+                                DataTypes.INT().notNull(),
+                                DataTypes.VARCHAR(255).notNull(),
+                                DataTypes.VARCHAR(45),
+                                DataTypes.FLOAT()
+                            },
+                            new String[] {"id", "name", "description", "weight"});
+            BinaryRecordDataGenerator generator = new BinaryRecordDataGenerator(rowType);
+            statement.execute(
+                    String.format(
+                            "INSERT INTO %s VALUES (default,'scooter','c-2',5.5);",
+                            "inventory.products")); // 110
+            expectedlog.add(
+                    DataChangeEvent.insertEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        BinaryStringData.fromString("c-2"),
+                                        5.5f
+                                    })));
+            statement.execute(
+                    String.format(
+                            "INSERT INTO %s VALUES (default,'football','c-11',6.6);",
+                            "inventory.products")); // 111
+            expectedlog.add(
+                    DataChangeEvent.insertEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        111,
+                                        BinaryStringData.fromString("football"),
+                                        BinaryStringData.fromString("c-11"),
+                                        6.6f
+                                    })));
+            statement.execute(
+                    String.format(
+                            "UPDATE %s SET description='c-12' WHERE id=110;",
+                            "inventory.products"));
+
+            expectedlog.add(
+                    DataChangeEvent.updateEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        BinaryStringData.fromString("c-2"),
+                                        5.5f
+                                    }),
+                            generator.generate(
+                                    new Object[] {
+                                        110,
+                                        BinaryStringData.fromString("scooter"),
+                                        BinaryStringData.fromString("c-12"),
+                                        5.5f
+                                    })));
+
+            statement.execute(
+                    String.format("DELETE FROM %s WHERE id = 111;", "inventory.products"));
+            expectedlog.add(
+                    DataChangeEvent.deleteEvent(
+                            tableId,
+                            generator.generate(
+                                    new Object[] {
+                                        111,
+                                        BinaryStringData.fromString("football"),
+                                        BinaryStringData.fromString("c-11"),
+                                        6.6f
+                                    })));
+        }
+
+        // In this configuration, several subtasks might emit their corresponding CreateTableEvent
+        // to downstream. Since it is not possible to predict how many CreateTableEvents should we
+        // expect, we simply filter them out from expected sets, and assert there's at least one.
+        int snapshotRecordsCount = expectedSnapshot.size();
+        int logRecordsCount = expectedlog.size();
+
+        // Ditto, CreateTableEvent might be emitted in multiple partitions.
+        List<Event> actual =
+                fetchResultsExcept(
+                        events, snapshotRecordsCount + logRecordsCount, createTableEvent);
+
+        List<Event> actualSnapshotEvents = actual.subList(0, snapshotRecordsCount);
+        List<Event> actuallogEvents = actual.subList(snapshotRecordsCount, actual.size());
+
+        assertThat(actualSnapshotEvents).containsExactlyInAnyOrderElementsOf(expectedSnapshot);
+        assertThat(actuallogEvents).hasSize(logRecordsCount);
+
+        for (int i = 0; i < logRecordsCount; i++) {
+            if (expectedlog.get(i) instanceof SchemaChangeEvent) {
+                assertThat(actuallogEvents.get(i)).isEqualTo(expectedlog.get(i));
+            } else {
+                DataChangeEvent expectedEvent = (DataChangeEvent) expectedlog.get(i);
+                DataChangeEvent actualEvent = (DataChangeEvent) actuallogEvents.get(i);
+                assertThat(actualEvent.op()).isEqualTo(expectedEvent.op());
+                assertThat(actualEvent.before()).isEqualTo(expectedEvent.before());
+                assertThat(actualEvent.after()).isEqualTo(expectedEvent.after());
+                assertThat(actualEvent.meta().get("op_ts")).isGreaterThanOrEqualTo(startTime);
+            }
+        }
     }
 
     private static <T> List<T> fetchResultsExcept(Iterator<T> iter, int size, T sideEvent) {

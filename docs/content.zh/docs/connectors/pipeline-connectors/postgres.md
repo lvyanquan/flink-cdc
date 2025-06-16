@@ -27,6 +27,7 @@ under the License.
 # Postgres Connector
 
 Postgres CDC Pipeline 连接器允许从 Postgres 数据库读取快照数据和增量数据，并提供端到端的整库数据同步能力。 本文描述了如何设置 Postgres CDC Pipeline 连接器。
+注意：因为Postgres的wal log日志中展示没有办法解析表结构变更记录，因此Postgres CDC Pipeline 不支持表结构变更。
 
 ## 示例
 
@@ -37,7 +38,7 @@ source:
    type: posgtres
    name: Postgres Source
    hostname: 127.0.0.1
-   port: 3306
+   port: 5432
    username: admin
    password: pass
    tables: adb.\.*.\.*, bdb.user_schema_[0-9].user_table_[0-9]+, [app|web].schema_\.*.order_\.*
@@ -80,7 +81,7 @@ pipeline:
     <tr>
       <td>port</td>
       <td>optional</td>
-      <td style="word-wrap: break-word;">3306</td>
+      <td style="word-wrap: break-word;">5432</td>
       <td>Integer</td>
       <td>Postgres 数据库服务器的整数端口号。</td>
     </tr>
@@ -163,9 +164,9 @@ pipeline:
       <td>Boolean</td>
       <td>
         是否在快照读取阶段跳过 backfill 。<br>
-        如果跳过 backfill ，快照阶段捕获表的更改将在稍后的 binlog 读取阶段被回放，而不是合并到快照中。<br>
-        警告：跳过 backfill 可能会导致数据不一致，因为快照阶段发生的某些 binlog 事件可能会被重放（仅保证 at-least-once ）。
-        例如，更新快照阶段已更新的值，或删除快照阶段已删除的数据。这些重放的 binlog 事件应进行特殊处理。
+        如果跳过 backfill ，快照阶段捕获表的更改将在稍后的 wal log 读取阶段被回放，而不是合并到快照中。<br>
+        警告：跳过 backfill 可能会导致数据不一致，因为快照阶段发生的某些wal log事件可能会被重放（仅保证 at-least-once ）。
+        例如，更新快照阶段已更新的值，或删除快照阶段已删除的数据。这些重放的wal log事件应进行特殊处理。
     </tr>
     <tr>
       <td>scan.lsn-commit.checkpoints-num-delay</td>
@@ -235,6 +236,15 @@ pipeline:
       <td>String</td>
       <td>
         分块元数据的组大小，如果元数据大小超过该组大小，则元数据将被划分为多个组。
+      </td>
+    </tr>
+<tr>
+      <td>metadata.list</td>
+      <td>optional</td>
+      <td style="word-wrap: break-word;">false</td>
+      <td>String</td>
+      <td>
+        源记录中可读取的元数据列表，将传递给下游并在转换模块中使用，各字段以逗号分隔。可用的可读元数据包括：op_ts。
       </td>
     </tr>
     </tbody>

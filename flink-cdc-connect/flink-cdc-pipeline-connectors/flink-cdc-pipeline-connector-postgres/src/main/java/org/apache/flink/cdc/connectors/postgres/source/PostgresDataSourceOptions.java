@@ -247,4 +247,13 @@ public class PostgresDataSourceOptions {
                                     + "By setting this to higher value, the offset that is consumed by global slot will be "
                                     + "committed after multiple checkpoint delays instead of after each checkpoint completion.\n"
                                     + "This allows continuous recycle of log files in stream phase.");
+
+    @Experimental
+    public static final ConfigOption<String> METADATA_LIST =
+            ConfigOptions.key("metadata.list")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "List of readable metadata from SourceRecord to be passed to downstream, split by `,`. "
+                                    + "Available readable metadata are: op_ts.");
 }

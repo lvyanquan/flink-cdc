@@ -26,11 +26,13 @@ import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
 import org.apache.flink.cdc.common.schema.Selectors;
 import org.apache.flink.cdc.common.source.DataSource;
+import org.apache.flink.cdc.common.utils.StringUtils;
 import org.apache.flink.cdc.connectors.base.options.SourceOptions;
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
 import org.apache.flink.cdc.connectors.postgres.source.PostgresDataSource;
 import org.apache.flink.cdc.connectors.postgres.source.PostgresSourceBuilder;
 import org.apache.flink.cdc.connectors.postgres.source.config.PostgresSourceConfigFactory;
+import org.apache.flink.cdc.connectors.postgres.table.PostgreSQLReadableMetadata;
 import org.apache.flink.cdc.connectors.postgres.utils.PostgresSchemaUtils;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.data.RowData;
@@ -42,6 +44,8 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +63,7 @@ import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSource
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.DECODING_PLUGIN_NAME;
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.HEARTBEAT_INTERVAL;
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.HOSTNAME;
+import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.METADATA_LIST;
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.PASSWORD;
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.PG_PORT;
 import static org.apache.flink.cdc.connectors.postgres.source.PostgresDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
@@ -185,7 +190,34 @@ public class PostgresDataSourceFactory implements DataSourceFactory {
         }
         configFactory.tableList(capturedTables.toArray(new String[0]));
 
-        return new PostgresDataSource(configFactory);
+        String metadataList = config.get(METADATA_LIST);
+        List<PostgreSQLReadableMetadata> readableMetadataList = listReadableMetadata(metadataList);
+
+        return new PostgresDataSource(configFactory, readableMetadataList);
+    }
+
+    private List<PostgreSQLReadableMetadata> listReadableMetadata(String metadataList) {
+        if (StringUtils.isNullOrWhitespaceOnly(metadataList)) {
+            return new ArrayList<>();
+        }
+        Set<String> readableMetadataList =
+                Arrays.stream(metadataList.split(","))
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+        List<PostgreSQLReadableMetadata> foundMetadata = new ArrayList<>();
+        for (PostgreSQLReadableMetadata metadata : PostgreSQLReadableMetadata.values()) {
+            if (readableMetadataList.contains(metadata.getKey())) {
+                foundMetadata.add(metadata);
+                readableMetadataList.remove(metadata.getKey());
+            }
+        }
+        if (readableMetadataList.isEmpty()) {
+            return foundMetadata;
+        }
+        throw new IllegalArgumentException(
+                String.format(
+                        "[%s] cannot be found in postgresSQL metadata.",
+                        String.join(", ", readableMetadataList)));
     }
 
     @Override
@@ -218,6 +250,7 @@ public class PostgresDataSourceFactory implements DataSourceFactory {
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         options.add(SCAN_LSN_COMMIT_CHECKPOINTS_DELAY);
+        options.add(METADATA_LIST);
         return options;
     }
 
@@ -248,6 +281,7 @@ public class PostgresDataSourceFactory implements DataSourceFactory {
 
     private static final String SCAN_STARTUP_MODE_VALUE_SNAPSHOT = "snapshot";
     private static final String SCAN_STARTUP_MODE_VALUE_LATEST = "latest-offset";
+    private static final String SCAN_STARTUP_MODE_VALUE_COMMITTED_OFFSET = "committed-offset";
 
     private static StartupOptions getStartupOptions(Configuration config) {
         String modeString = config.get(SCAN_STARTUP_MODE);
@@ -259,6 +293,8 @@ public class PostgresDataSourceFactory implements DataSourceFactory {
                 return StartupOptions.snapshot();
             case SCAN_STARTUP_MODE_VALUE_LATEST:
                 return StartupOptions.latest();
+            case SCAN_STARTUP_MODE_VALUE_COMMITTED_OFFSET:
+                return StartupOptions.committed();
 
             default:
                 throw new ValidationException(

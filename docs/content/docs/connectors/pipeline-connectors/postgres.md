@@ -28,7 +28,7 @@ under the License.
 
 Postgres connector allows reading snapshot data and incremental data from Postgres database and provides end-to-end full-database data synchronization capabilities.
 This document describes how to setup the Postgres connector.
-
+Note: Since the Postgres WAL log cannot parse table structure change records, Postgres CDC Pipeline does not support table structure changes.
 
 ## Example
 
@@ -39,7 +39,7 @@ source:
    type: posgtres
    name: Postgres Source
    hostname: 127.0.0.1
-   port: 3306
+   port: 5432
    username: admin
    password: pass
    tables: adb.\.*.\.*, bdb.user_schema_[0-9].user_table_[0-9]+, [app|web].schema_\.*.order_\.*
@@ -210,7 +210,7 @@ pipeline:
       <td>optional</td>
       <td style="word-wrap: break-word;">30s</td>
       <td>Duration</td>
-      <td>The interval of sending heartbeat event for tracing the latest available binlog offsets.</td>
+      <td>The interval of sending heartbeat event for tracing the latest available wal log offsets.</td>
     </tr>
     <tr>
       <td>debezium.*</td>
@@ -228,6 +228,15 @@ pipeline:
       <td>String</td>
       <td>
         The group size of chunk meta, if the meta size exceeds the group size, the meta will be divided into multiple groups.
+      </td>
+    </tr>
+    <tr>
+      <td>metadata.list</td>
+      <td>optional</td>
+      <td style="word-wrap: break-word;">false</td>
+      <td>String</td>
+      <td>
+        List of readable metadata from SourceRecord to be passed to downstream and could be used in transform module, split by `,`. Available readable metadata are: op_ts.
       </td>
     </tr>
     </tbody>

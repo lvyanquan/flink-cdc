@@ -26,14 +26,14 @@ import io.debezium.data.geometry.Geography;
 import io.debezium.data.geometry.Geometry;
 import org.apache.kafka.connect.data.Schema;
 
-/** {@link DataType} inference for MySQL debezium {@link Schema}. */
+/** {@link DataType} inference for PostgresSQL debezium {@link Schema}. */
 @Internal
 public class PostgresSchemaDataTypeInference extends DebeziumSchemaDataTypeInference {
 
     private static final long serialVersionUID = 1L;
 
     protected DataType inferStruct(Object value, Schema schema) {
-        // the Geometry datatype in MySQL will be converted to
+        // the Geometry datatype in PostgresSQL will be converted to
         // a String with Json format
         if (Geography.LOGICAL_NAME.equals(schema.name())
                 || Geometry.LOGICAL_NAME.equals(schema.name())) {

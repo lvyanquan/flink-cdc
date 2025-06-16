@@ -21,8 +21,10 @@ import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
+import org.apache.flink.cdc.connectors.postgres.table.PostgreSQLReadableMetadata;
 import org.apache.flink.cdc.debezium.event.DebeziumEventDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.DebeziumChangelogMode;
+import org.apache.flink.table.data.TimestampData;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.debezium.data.Envelope;
@@ -44,6 +46,7 @@ import java.util.Optional;
 public class PostgresEventDeserializer extends DebeziumEventDeserializationSchema {
 
     private static final long serialVersionUID = 1L;
+    private List<PostgreSQLReadableMetadata> readableMetadataList;
 
     public static final String SRID = "srid";
     public static final String HEXEWKB = "hexewkb";
@@ -51,6 +54,13 @@ public class PostgresEventDeserializer extends DebeziumEventDeserializationSchem
 
     public PostgresEventDeserializer(DebeziumChangelogMode changelogMode) {
         super(new PostgresSchemaDataTypeInference(), changelogMode);
+    }
+
+    public PostgresEventDeserializer(
+            DebeziumChangelogMode changelogMode,
+            List<PostgreSQLReadableMetadata> readableMetadataList) {
+        super(new PostgresSchemaDataTypeInference(), changelogMode);
+        this.readableMetadataList = readableMetadataList;
     }
 
     @Override
@@ -81,7 +91,20 @@ public class PostgresEventDeserializer extends DebeziumEventDeserializationSchem
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        return Collections.emptyMap();
+        Map<String, String> metadataMap = new HashMap<>();
+        readableMetadataList.forEach(
+                (postgresReadableMetadata -> {
+                    Object metadata = postgresReadableMetadata.getConverter().read(record);
+                    if (postgresReadableMetadata.equals(PostgreSQLReadableMetadata.OP_TS)) {
+                        metadataMap.put(
+                                postgresReadableMetadata.getKey(),
+                                String.valueOf(((TimestampData) metadata).getMillisecond()));
+                    } else {
+                        metadataMap.put(
+                                postgresReadableMetadata.getKey(), String.valueOf(metadata));
+                    }
+                }));
+        return metadataMap;
     }
 
     @Override
