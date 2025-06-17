@@ -33,10 +33,11 @@ import org.testcontainers.junit.jupiter.Container;
 
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.function.Function;
+
+import static org.apache.flink.cdc.connectors.postgres.PostgresTestBase.getJdbcConnection;
 
 /** End-to-end tests for postgres cdc pipeline job. */
 public class PostgresE2eITCase extends PipelineTestEnvironment {
@@ -95,17 +96,18 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                                 + "  port: %d\n"
                                 + "  username: %s\n"
                                 + "  password: %s\n"
-                                + "  tables: %s.\\.*.\\.*\n"
+                                + "  tables: %s.inventory.\\.*\n"
                                 + "  slot.name: flinktest\n"
+                                + "  heartbeat.interval: 10s\n"
                                 + "  scan.startup.mode: initial\n"
                                 + "  server-time-zone: UTC\n"
+                                + "  connect.timeout: 120s\n"
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: values\n"
                                 + "\n"
                                 + "pipeline:\n"
-                                + "  parallelism: %d\n"
-                                + "schema.change.behavior: ignore",
+                                + "  parallelism: %d",
                         INTER_CONTAINER_POSTGRES_ALIAS,
                         5432,
                         POSTGRES_TEST_USER,
@@ -137,25 +139,22 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
 
         LOG.info("Begin incremental reading stage.");
 
-        String jdbcUrl =
-                String.format(
-                        "jdbc:postgresql://%s:%s/%s",
-                        postgresInventoryDatabase.getHost(),
-                        postgresInventoryDatabase.getDatabasePort(),
-                        postgresInventoryDatabase.getDatabaseName());
         try (Connection conn =
-                        DriverManager.getConnection(
-                                jdbcUrl, POSTGRES_TEST_USER, POSTGRES_TEST_PASSWORD);
+                        getJdbcConnection(
+                                POSTGRES_CONTAINER, postgresInventoryDatabase.getDatabaseName());
                 Statement stat = conn.createStatement()) {
             stat.execute(
                     "UPDATE inventory.products SET description='18oz carpenter hammer' WHERE id=106;");
             stat.execute("UPDATE inventory.products SET weight='5.1' WHERE id=107;");
 
-            // Perform DDL changes after the binlog is generated
+            // Perform DML changes after the wal log is generated
             waitUntilSpecificEvent(
                     "DataChangeEvent{tableId=inventory.products, before=[106, hammer, 16oz carpenter's hammer, 1.0], after=[106, hammer, 18oz carpenter hammer, 1.0], op=UPDATE, meta=()}");
             waitUntilSpecificEvent(
                     "DataChangeEvent{tableId=inventory.products, before=[107, rocks, box of assorted rocks, 5.3], after=[107, rocks, box of assorted rocks, 5.1], op=UPDATE, meta=()}");
+        } catch (Exception e) {
+            LOG.error("Update table for CDC failed.", e);
+            throw new RuntimeException(e);
         }
     }
 }
