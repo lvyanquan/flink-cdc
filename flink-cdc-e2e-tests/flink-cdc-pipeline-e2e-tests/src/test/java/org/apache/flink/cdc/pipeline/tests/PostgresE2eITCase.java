@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.util.function.Function;
 
 import static org.apache.flink.cdc.connectors.postgres.PostgresTestBase.getJdbcConnection;
+import static org.apache.flink.cdc.connectors.postgres.PostgresTestBase.getSlotName;
 
 /** End-to-end tests for postgres cdc pipeline job. */
 public class PostgresE2eITCase extends PipelineTestEnvironment {
@@ -48,7 +49,6 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
             new PostgreSQLContainer<>(PG_IMAGE)
                     .withNetworkAliases(INTER_CONTAINER_POSTGRES_ALIAS)
                     .withNetwork(NETWORK)
-                    .withDatabaseName("flink-test")
                     .withUsername(POSTGRES_TEST_USER)
                     .withPassword(POSTGRES_TEST_PASSWORD)
                     .withLogConsumer(new Slf4jLogConsumer(LOG))
@@ -97,8 +97,7 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                                 + "  username: %s\n"
                                 + "  password: %s\n"
                                 + "  tables: %s.inventory.\\.*\n"
-                                + "  slot.name: flinktest\n"
-                                + "  heartbeat.interval: 10s\n"
+                                + "  slot.name: %s\n"
                                 + "  scan.startup.mode: initial\n"
                                 + "  server-time-zone: UTC\n"
                                 + "  connect.timeout: 120s\n"
@@ -113,6 +112,7 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                         POSTGRES_TEST_USER,
                         POSTGRES_TEST_PASSWORD,
                         postgresInventoryDatabase.getDatabaseName(),
+                        getSlotName(),
                         parallelism);
         Path postgresCdcJar = TestUtils.getResource("postgres-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, postgresCdcJar);
