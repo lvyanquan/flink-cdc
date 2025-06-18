@@ -23,11 +23,15 @@ import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.Factory;
 import org.apache.flink.cdc.connectors.postgres.PostgresTestBase;
 import org.apache.flink.cdc.connectors.postgres.source.PostgresDataSource;
-import org.apache.flink.cdc.connectors.postgres.testutils.UniqueDatabase;
 import org.apache.flink.table.api.ValidationException;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,21 +55,31 @@ import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 @Internal
 public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
-    private final UniqueDatabase inventoryDatabase =
-            new UniqueDatabase(
-                    POSTGRES_CONTAINER, "inventory", "inventory", TEST_USER, TEST_PASSWORD);
+    private String slotName;
+
+    @BeforeEach
+    public void before() {
+        initializePostgresTable(POSTGRES_CONTAINER, "inventory");
+        slotName = getSlotName();
+    }
+
+    @AfterEach
+    public void after() throws SQLException {
+        try (Connection connection =
+                        PostgresTestBase.getJdbcConnection(POSTGRES_CONTAINER, "postgres");
+                Statement statement = connection.createStatement()) {}
+    }
 
     @Test
     public void testCreateDataSource() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        options.put(SLOT_NAME.key(), slotName);
         Factory.Context context = new MockContext(Configuration.fromMap(options));
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
         PostgresDataSource dataSource = (PostgresDataSource) factory.createDataSource(context);
@@ -75,16 +89,15 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @Test
     public void testNoMatchedTable() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        String tables = inventoryDatabase.getDatabaseName() + ".inventory.test";
+        String tables = POSTGRES_CONTAINER.getDatabaseName() + ".inventory.test";
         options.put(TABLES.key(), tables);
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(SLOT_NAME.key(), slotName);
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
@@ -95,17 +108,16 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @Test
     public void testExcludeTable() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".\\.*.\\.*");
-        String tableExclude = inventoryDatabase.getDatabaseName() + ".inventory.orders";
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".\\.*.\\.*");
+        String tableExclude = POSTGRES_CONTAINER.getDatabaseName() + ".inventory.orders";
         options.put(TABLES_EXCLUDE.key(), tableExclude);
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(SLOT_NAME.key(), slotName);
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
@@ -124,17 +136,16 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @Test
     public void testExcludeAllTable() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        String tableExclude = inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*";
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        String tableExclude = POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*";
         options.put(TABLES_EXCLUDE.key(), tableExclude);
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(SLOT_NAME.key(), slotName);
         Factory.Context context = new MockContext(Configuration.fromMap(options));
 
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
@@ -148,13 +159,13 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     @Test
     public void testLackRequireOption() {
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        options.put(SLOT_NAME.key(), slotName);
 
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
         List<String> requireKeys =
@@ -180,13 +191,13 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     @Test
     public void testUnsupportedOption() {
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
+        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        options.put(SLOT_NAME.key(), slotName);
         options.put("unsupported_key", "unsupported_value");
 
         PostgresDataSourceFactory factory = new PostgresDataSourceFactory();
@@ -202,15 +213,14 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @Test
     public void testOptionalOption() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
         options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        options.put(SLOT_NAME.key(), slotName);
         options.put(TABLES_EXCLUDE.key(), "true");
 
         Factory.Context context = new MockContext(Configuration.fromMap(options));
@@ -224,15 +234,14 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @Test
     public void testPrefixRequireOption() {
-        inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
         options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
         options.put(PASSWORD.key(), TEST_PASSWORD);
-        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".inventory.prod\\.*");
-        options.put(SLOT_NAME.key(), getSlotName());
+        options.put(TABLES.key(), POSTGRES_CONTAINER.getDatabaseName() + ".inventory.prod\\.*");
+        options.put(SLOT_NAME.key(), slotName);
         options.put("jdbc.properties.requireSSL", "true");
         options.put("debezium.snapshot.mode", "initial");
         Factory.Context context = new MockContext(Configuration.fromMap(options));

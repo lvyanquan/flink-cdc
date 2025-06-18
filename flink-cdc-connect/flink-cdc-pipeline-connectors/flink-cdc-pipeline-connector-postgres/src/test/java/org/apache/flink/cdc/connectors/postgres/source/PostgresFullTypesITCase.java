@@ -43,6 +43,7 @@ import org.apache.flink.util.CloseableIterator;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -90,6 +94,8 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
 
+    private String slotName;
+
     @BeforeAll
     public static void startContainers() {
         LOG.info("Starting containers...");
@@ -110,6 +116,17 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
         env.setParallelism(4);
         env.enableCheckpointing(2000);
         env.setRestartStrategy(RestartStrategies.noRestart());
+        slotName = getSlotName();
+    }
+
+    @AfterEach
+    public void after() throws SQLException {
+        String sql = String.format("SELECT pg_drop_replication_slot('%s')", slotName);
+        try (Connection connection =
+                        PostgresTestBase.getJdbcConnection(POSTGIS_CONTAINER, "postgres");
+                Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
     }
 
     @Test
@@ -127,7 +144,7 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
                                 .startupOptions(StartupOptions.initial())
                                 .serverTimeZone("UTC");
         configFactory.database(POSTGRES_CONTAINER.getDatabaseName());
-        configFactory.slotName(getSlotName());
+        configFactory.slotName(slotName);
 
         FlinkSourceProvider sourceProvider =
                 (FlinkSourceProvider)

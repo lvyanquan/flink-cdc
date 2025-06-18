@@ -45,6 +45,7 @@ import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.util.CloseableIterator;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.lifecycle.Startables;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,6 +77,7 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
                     POSTGRES_CONTAINER, "inventory", "inventory", TEST_USER, TEST_PASSWORD);
     private static final StreamExecutionEnvironment env =
             StreamExecutionEnvironment.getExecutionEnvironment();
+    private String slotName;
 
     @BeforeAll
     public static void startContainers() {
@@ -96,6 +99,19 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
         env.setParallelism(4);
         env.enableCheckpointing(2000);
         env.setRestartStrategy(RestartStrategies.noRestart());
+        slotName = getSlotName();
+    }
+
+    @AfterEach
+    public void after() throws SQLException {
+        String sql = String.format("SELECT pg_drop_replication_slot('%s')", slotName);
+        try (Connection connection =
+                        PostgresTestBase.getJdbcConnection(POSTGRES_CONTAINER, "postgres");
+                Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            LOG.warn("Failed to drop replication slot.", e);
+        }
     }
 
     @Test
@@ -113,7 +129,7 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
                                 .startupOptions(StartupOptions.initial())
                                 .serverTimeZone("UTC");
         configFactory.database(inventoryDatabase.getDatabaseName());
-        configFactory.slotName(getSlotName());
+        configFactory.slotName(slotName);
 
         FlinkSourceProvider sourceProvider =
                 (FlinkSourceProvider)
@@ -150,7 +166,7 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
                 POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT));
         sourceConfiguration.set(PostgresDataSourceOptions.USERNAME, TEST_USER);
         sourceConfiguration.set(PostgresDataSourceOptions.PASSWORD, TEST_PASSWORD);
-        sourceConfiguration.set(PostgresDataSourceOptions.SLOT_NAME, getSlotName());
+        sourceConfiguration.set(PostgresDataSourceOptions.SLOT_NAME, slotName);
         sourceConfiguration.set(PostgresDataSourceOptions.DECODING_PLUGIN_NAME, "pgoutput");
         sourceConfiguration.set(
                 PostgresDataSourceOptions.TABLES,
