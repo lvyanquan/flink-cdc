@@ -126,6 +126,8 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
                         PostgresTestBase.getJdbcConnection(POSTGIS_CONTAINER, "postgres");
                 Statement statement = connection.createStatement()) {
             statement.execute(sql);
+        } catch (SQLException e) {
+            LOG.error("Drop replication slot failed.", e);
         }
     }
 

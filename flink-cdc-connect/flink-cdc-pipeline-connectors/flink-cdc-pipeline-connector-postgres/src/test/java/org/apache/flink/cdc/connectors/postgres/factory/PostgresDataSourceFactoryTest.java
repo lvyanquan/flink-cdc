@@ -65,9 +65,14 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
 
     @AfterEach
     public void after() throws SQLException {
+        String sql = String.format("SELECT pg_drop_replication_slot('%s')", slotName);
         try (Connection connection =
                         PostgresTestBase.getJdbcConnection(POSTGRES_CONTAINER, "postgres");
-                Statement statement = connection.createStatement()) {}
+                Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            LOG.error("Drop replication slot failed.", e);
+        }
     }
 
     @Test
