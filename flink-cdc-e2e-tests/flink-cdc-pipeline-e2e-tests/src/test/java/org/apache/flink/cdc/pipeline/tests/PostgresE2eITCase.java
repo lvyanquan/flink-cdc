@@ -113,7 +113,7 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                         POSTGRES_TEST_PASSWORD,
                         postgresInventoryDatabase.getDatabaseName(),
                         getSlotName(),
-                        parallelism);
+                        1);
         Path postgresCdcJar = TestUtils.getResource("postgres-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, postgresCdcJar);
         waitUntilJobRunning(Duration.ofSeconds(30));
