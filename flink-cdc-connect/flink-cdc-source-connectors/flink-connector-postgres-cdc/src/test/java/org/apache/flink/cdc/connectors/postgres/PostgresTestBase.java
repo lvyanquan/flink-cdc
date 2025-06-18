@@ -32,6 +32,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.lifecycle.Startables;
@@ -69,6 +70,7 @@ public abstract class PostgresTestBase extends AbstractTestBase {
     // use official postgresql image to support pgoutput plugin
     protected static final DockerImageName PG_IMAGE =
             DockerImageName.parse("postgres:14").asCompatibleSubstituteFor("postgres");
+    public static final Network NETWORK = Network.newNetwork();
 
     public static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
             new PostgreSQLContainer<>(PG_IMAGE)
@@ -76,6 +78,7 @@ public abstract class PostgresTestBase extends AbstractTestBase {
                     .withUsername(TEST_USER)
                     .withPassword(TEST_PASSWORD)
                     .withLogConsumer(new Slf4jLogConsumer(LOG))
+                    .withNetwork(NETWORK)
                     .withCommand(
                             "postgres",
                             "-c",

@@ -59,7 +59,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     public void testCreateDataSource() {
         inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
@@ -77,7 +77,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     public void testNoMatchedTable() {
         inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
@@ -97,7 +97,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     public void testExcludeTable() {
         inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
@@ -126,7 +126,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     public void testExcludeAllTable() {
         inventoryDatabase.createAndInitialize();
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
@@ -148,7 +148,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     @Test
     public void testLackRequireOption() {
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);
@@ -180,7 +180,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
     @Test
     public void testUnsupportedOption() {
         Map<String, String> options = new HashMap<>();
-        options.put(HOSTNAME.key(), POSTGRES_CONTAINER.getHost());
+        options.put(HOSTNAME.key(), inventoryDatabase.getHost());
         options.put(
                 PG_PORT.key(), String.valueOf(POSTGRES_CONTAINER.getMappedPort(POSTGRESQL_PORT)));
         options.put(USERNAME.key(), TEST_USER);

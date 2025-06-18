@@ -76,6 +76,7 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
                     .withUsername("postgres")
                     .withPassword("postgres")
                     .withLogConsumer(new Slf4jLogConsumer(LOG))
+                    .withNetwork(NETWORK)
                     .withCommand(
                             "postgres",
                             "-c",
