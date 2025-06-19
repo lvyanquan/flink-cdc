@@ -38,6 +38,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /** Utilities for converting from debezium {@link Table} types to {@link Schema}. */
@@ -45,7 +47,8 @@ public class PostgresSchemaUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(PostgresSchemaUtils.class);
 
-    private static volatile PostgresDialect postgresDialect;
+    /** Cache for PostgresDialect. */
+    private static final Map<String, PostgresDialect> dialectCache = new ConcurrentHashMap<>();
 
     public static List<String> listSchemas(PostgresSourceConfig sourceConfig, String namespace) {
         try (JdbcConnection jdbc = getPostgresDialect(sourceConfig).openJdbcConnection()) {
@@ -94,14 +97,8 @@ public class PostgresSchemaUtils {
     }
 
     public static PostgresDialect getPostgresDialect(PostgresSourceConfig sourceConfig) {
-        if (postgresDialect == null) {
-            synchronized (PostgresSchemaUtils.class) {
-                if (postgresDialect == null) {
-                    postgresDialect = new PostgresDialect(sourceConfig);
-                }
-            }
-        }
-        return postgresDialect;
+        String key = sourceConfig.getJdbcUrl();
+        return dialectCache.computeIfAbsent(key, k -> new PostgresDialect(sourceConfig));
     }
 
     public static List<String> listSchemas(JdbcConnection jdbc, String namespace)
@@ -193,6 +190,4 @@ public class PostgresSchemaUtils {
         return org.apache.flink.cdc.common.event.TableId.tableId(
                 dbzTableId.schema(), dbzTableId.table());
     }
-
-    private PostgresSchemaUtils() {}
 }

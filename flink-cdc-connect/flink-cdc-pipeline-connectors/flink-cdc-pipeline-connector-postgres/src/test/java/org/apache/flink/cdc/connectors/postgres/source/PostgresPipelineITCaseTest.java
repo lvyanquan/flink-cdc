@@ -86,14 +86,7 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
 
     @AfterEach
     public void after() throws SQLException {
-        String sql = String.format("SELECT pg_drop_replication_slot('%s')", slotName);
-        try (Connection connection =
-                        PostgresTestBase.getJdbcConnection(POSTGRES_CONTAINER, "postgres");
-                Statement statement = connection.createStatement()) {
-            statement.execute(sql);
-        } catch (SQLException e) {
-            LOG.warn("Failed to drop replication slot.", e);
-        }
+        inventoryDatabase.removeSlot(slotName);
     }
 
     @Test

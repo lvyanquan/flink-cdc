@@ -42,16 +42,14 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.util.CloseableIterator;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
@@ -62,7 +60,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
@@ -96,22 +93,10 @@ public class PostgresFullTypesITCase extends PostgresTestBase {
 
     private String slotName;
 
-    @BeforeAll
-    public static void startContainers() {
-        LOG.info("Starting containers...");
-        Startables.deepStart(Stream.of(POSTGIS_CONTAINER)).join();
-        LOG.info("Containers are started.");
-    }
-
-    @AfterAll
-    public static void stopContainers() {
-        LOG.info("Stopping containers...");
-        POSTGIS_CONTAINER.stop();
-        LOG.info("Containers are stopped.");
-    }
-
     @BeforeEach
     public void before() {
+        POSTGRES_CONTAINER.setWaitStrategy(
+                Wait.forLogMessage(".*database system is ready to accept connections.*", 1));
         TestValuesTableFactory.clearAllData();
         env.setParallelism(4);
         env.enableCheckpointing(2000);

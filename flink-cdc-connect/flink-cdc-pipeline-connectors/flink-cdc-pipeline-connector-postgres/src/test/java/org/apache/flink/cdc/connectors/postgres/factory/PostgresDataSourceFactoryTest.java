@@ -71,7 +71,7 @@ public class PostgresDataSourceFactoryTest extends PostgresTestBase {
                 Statement statement = connection.createStatement()) {
             statement.execute(sql);
         } catch (SQLException e) {
-            LOG.error("Drop replication slot failed.", e);
+            LOG.error("Drop replication slot failed.");
         }
     }
 
