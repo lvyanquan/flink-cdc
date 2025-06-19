@@ -143,7 +143,8 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
         sourceConfiguration.set(PostgresDataSourceOptions.PASSWORD, TEST_PASSWORD);
         sourceConfiguration.set(PostgresDataSourceOptions.SLOT_NAME, slotName);
         sourceConfiguration.set(PostgresDataSourceOptions.DECODING_PLUGIN_NAME, "pgoutput");
-        sourceConfiguration.set(PostgresDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP, false);
+        sourceConfiguration.set(
+                PostgresDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP, false);
         sourceConfiguration.set(
                 PostgresDataSourceOptions.TABLES,
                 inventoryDatabase.getDatabaseName() + ".inventory.products");
