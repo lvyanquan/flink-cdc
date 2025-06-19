@@ -73,16 +73,19 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                     POSTGRES_TEST_PASSWORD);
 
     private final Function<String, String> dbNameFormatter = (s) -> String.format(s, "inventory");
+    private String slotName;
 
     @BeforeEach
     public void before() throws Exception {
         super.before();
+        slotName = getSlotName();
         postgresInventoryDatabase.createAndInitialize();
     }
 
     @AfterEach
     public void after() {
         super.after();
+        postgresInventoryDatabase.removeSlot(slotName);
         postgresInventoryDatabase.dropDatabase();
     }
 
@@ -112,7 +115,7 @@ public class PostgresE2eITCase extends PipelineTestEnvironment {
                         POSTGRES_TEST_USER,
                         POSTGRES_TEST_PASSWORD,
                         postgresInventoryDatabase.getDatabaseName(),
-                        getSlotName(),
+                        slotName,
                         1);
         Path postgresCdcJar = TestUtils.getResource("postgres-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, postgresCdcJar);
