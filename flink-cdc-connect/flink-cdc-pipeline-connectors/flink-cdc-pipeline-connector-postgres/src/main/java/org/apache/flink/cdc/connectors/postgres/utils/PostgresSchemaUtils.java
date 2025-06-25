@@ -22,13 +22,15 @@ import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.connectors.postgres.source.PostgresDialect;
 import org.apache.flink.cdc.connectors.postgres.source.config.PostgresSourceConfig;
-import org.apache.flink.cdc.connectors.postgres.source.utils.CustomPostgresSchema;
 
+import io.debezium.connector.postgresql.PostgresObjectUtils;
 import io.debezium.connector.postgresql.PostgresPartition;
+import io.debezium.connector.postgresql.PostgresSchema;
+import io.debezium.connector.postgresql.PostgresTopicSelector;
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.Table;
-import io.debezium.relational.history.TableChanges;
+import io.debezium.schema.TopicSelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
+import static io.debezium.connector.postgresql.PostgresObjectUtils.newPostgresValueConverterBuilder;
 
 /** Utilities for converting from debezium {@link Table} types to {@link Schema}. */
 public class PostgresSchemaUtils {
@@ -145,21 +149,31 @@ public class PostgresSchemaUtils {
             TableId tableId,
             PostgresSourceConfig sourceConfig,
             PostgresConnection jdbc) {
-        // fetch table schemas
-        CustomPostgresSchema postgresSchema = new CustomPostgresSchema(jdbc, sourceConfig);
-        TableChanges.TableChange tableSchema = postgresSchema.getTableSchema(toDbzTableId(tableId));
-        return toSchema(tableSchema.getTable());
+        return getTableSchema(toDbzTableId(tableId), sourceConfig, jdbc);
     }
 
     public static Schema getTableSchema(
             io.debezium.relational.TableId tableId,
             PostgresSourceConfig sourceConfig,
             PostgresConnection jdbc) {
-        // fetch table schemas
-        CustomPostgresSchema postgresSchema = new CustomPostgresSchema(jdbc, sourceConfig);
-
-        TableChanges.TableChange tableSchema = postgresSchema.getTableSchema(tableId);
-        return toSchema(tableSchema.getTable());
+        try {
+            // fetch table schemas
+            TopicSelector<io.debezium.relational.TableId> topicSelector =
+                    PostgresTopicSelector.create(sourceConfig.getDbzConnectorConfig());
+            PostgresConnection.PostgresValueConverterBuilder valueConverterBuilder =
+                    newPostgresValueConverterBuilder(sourceConfig.getDbzConnectorConfig());
+            PostgresSchema postgresSchema =
+                    PostgresObjectUtils.newSchema(
+                            jdbc,
+                            sourceConfig.getDbzConnectorConfig(),
+                            jdbc.getTypeRegistry(),
+                            topicSelector,
+                            valueConverterBuilder.build(jdbc.getTypeRegistry()));
+            Table tableSchema = postgresSchema.tableFor(tableId);
+            return toSchema(tableSchema);
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to initialize PostgresReplicationConnection", e);
+        }
     }
 
     public static Schema toSchema(Table table) {
@@ -176,8 +190,16 @@ public class PostgresSchemaUtils {
     }
 
     public static Column toColumn(io.debezium.relational.Column column) {
-        return Column.physicalColumn(
-                column.name(), PostgresTypeUtils.fromDbzColumn(column), column.comment());
+        if (column.defaultValueExpression().isEmpty()) {
+            return Column.physicalColumn(
+                    column.name(), PostgresTypeUtils.fromDbzColumn(column), column.comment());
+        } else {
+            return Column.physicalColumn(
+                    column.name(),
+                    PostgresTypeUtils.fromDbzColumn(column),
+                    column.comment(),
+                    column.defaultValueExpression().get());
+        }
     }
 
     public static io.debezium.relational.TableId toDbzTableId(TableId tableId) {
