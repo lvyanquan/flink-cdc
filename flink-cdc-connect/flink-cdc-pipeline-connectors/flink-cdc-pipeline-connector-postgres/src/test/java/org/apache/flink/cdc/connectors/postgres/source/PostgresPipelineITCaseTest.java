@@ -429,8 +429,16 @@ public class PostgresPipelineITCaseTest extends PostgresTestBase {
         return new CreateTableEvent(
                 tableId,
                 Schema.newBuilder()
-                        .physicalColumn("id", DataTypes.INT().notNull())
-                        .physicalColumn("name", DataTypes.VARCHAR(255).notNull(), null)
+                        .physicalColumn(
+                                "id",
+                                DataTypes.INT().notNull(),
+                                null,
+                                "nextval(\'inventory.products_id_seq\'::regclass)")
+                        .physicalColumn(
+                                "name",
+                                DataTypes.VARCHAR(255).notNull(),
+                                null,
+                                "'flink'::character varying")
                         .physicalColumn("description", DataTypes.VARCHAR(512))
                         .physicalColumn("weight", DataTypes.FLOAT())
                         .primaryKey(Collections.singletonList("id"))
