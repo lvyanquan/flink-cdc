@@ -72,9 +72,12 @@ env:
   MODULES_MYSQL_PIPELINE: "\
   flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-mysql"
 
-  MODULES_POSTGRES: "\
+  MODULES_POSTGRES_SOURCE: "\
   flink-cdc-connect/flink-cdc-source-connectors/flink-connector-postgres-cdc,\
   flink-cdc-connect/flink-cdc-source-connectors/flink-sql-connector-postgres-cdc"
+
+  MODULES_POSTGRES_PIPELINE: "\
+  flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-postgres"
 
   MODULES_ORACLE: "\
   flink-cdc-connect/flink-cdc-source-connectors/flink-connector-oracle-cdc,\
@@ -198,8 +201,11 @@ jobs:
               ("mysql-pipeline")
                modules=${{ env.MODULES_MYSQL_PIPELINE }}
               ;;
-              ("postgres")
-               modules=${{ env.MODULES_POSTGRES }}
+              ("postgres-source")
+               modules=${{ env.MODULES_POSTGRES_SOURCE }}
+              ;;
+              ("postgres-pipeline")
+               modules=${{ env.MODULES_POSTGRES_PIPELINE }}
               ;;
               ("oracle")
                modules=${{ env.MODULES_ORACLE }}
