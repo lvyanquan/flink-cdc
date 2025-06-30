@@ -190,15 +190,15 @@ public class PostgresSchemaUtils {
     }
 
     public static Column toColumn(io.debezium.relational.Column column) {
-        if (column.defaultValueExpression().isEmpty()) {
-            return Column.physicalColumn(
-                    column.name(), PostgresTypeUtils.fromDbzColumn(column), column.comment());
-        } else {
+        if (column.defaultValueExpression().isPresent()) {
             return Column.physicalColumn(
                     column.name(),
                     PostgresTypeUtils.fromDbzColumn(column),
                     column.comment(),
                     column.defaultValueExpression().get());
+        } else {
+            return Column.physicalColumn(
+                    column.name(), PostgresTypeUtils.fromDbzColumn(column), column.comment());
         }
     }
 
