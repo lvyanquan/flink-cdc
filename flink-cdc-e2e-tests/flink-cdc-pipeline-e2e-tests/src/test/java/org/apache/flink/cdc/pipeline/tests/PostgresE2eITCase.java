@@ -30,6 +30,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -43,6 +44,17 @@ import static org.apache.flink.cdc.connectors.postgres.PostgresTestBase.getSlotN
 /** End-to-end tests for postgres cdc pipeline job. */
 public class PostgresE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(PostgresE2eITCase.class);
+
+    // ------------------------------------------------------------------------------------------
+    // Postgres Variables (we always use Postgres as the data source for easier verifying)
+    // ------------------------------------------------------------------------------------------
+    protected static final String POSTGRES_TEST_USER = "postgres";
+    protected static final String POSTGRES_TEST_PASSWORD = "postgres";
+    protected static final String INTER_CONTAINER_POSTGRES_ALIAS = "postgres";
+
+    // use official postgresql image to support pgoutput plugin
+    protected static final DockerImageName PG_IMAGE =
+            DockerImageName.parse("postgres:14").asCompatibleSubstituteFor("postgres");
 
     @Container
     public static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
