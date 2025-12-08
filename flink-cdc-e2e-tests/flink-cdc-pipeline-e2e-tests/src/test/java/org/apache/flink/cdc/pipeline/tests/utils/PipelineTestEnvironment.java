@@ -403,7 +403,10 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     }
 
     protected String getFlinkDockerImageTag() {
-        return String.format("flink:%s-scala_2.12", flinkVersion);
+        if (System.getProperty("java.specification.version").equals("17")) {
+            return String.format("flink:%s-scala_2.12-java17", flinkVersion);
+        }
+        return String.format("flink:%s-scala_2.12-java11", flinkVersion);
     }
 
     private ExecResult executeAndCheck(GenericContainer<?> container, String... command) {
