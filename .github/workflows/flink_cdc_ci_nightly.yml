@@ -15,9 +15,20 @@
 
 name: Flink CDC CI Nightly
 on:
-  schedule:
-    - cron: '43 0 * * *' # Run daily, but not at 00:00 UTC to avoid job failure due to network throttle
-  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - release-*
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+  pull_request:
+    branches:
+      - master
+      - release-*
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.number || github.run_id }}
