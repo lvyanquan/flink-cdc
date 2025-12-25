@@ -17,7 +17,9 @@
 
 package org.apache.flink.cdc.connectors.paimon.sink.v2;
 
+import org.apache.flink.cdc.common.event.ChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketAssignOperator;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketWrapper;
 import org.apache.flink.cdc.connectors.paimon.sink.v2.bucket.BucketWrapperChangeEvent;
@@ -33,6 +35,7 @@ import org.apache.paimon.options.Options;
 import org.apache.paimon.table.sink.CommitMessageSerializer;
 
 import java.time.ZoneId;
+import java.util.Objects;
 
 /** A {@link PaimonSink} to process {@link Event}. */
 public class PaimonEventSink extends PaimonSink<Event> implements WithPreWriteTopology<Event> {
@@ -67,10 +70,21 @@ public class PaimonEventSink extends PaimonSink<Event> implements WithPreWriteTo
                         Math::floorMod,
                         (event) -> {
                             if (event instanceof BucketWrapperChangeEvent) {
-                                // Add hash of tableId to avoid data skew.
-                                return ((BucketWrapperChangeEvent) event).getBucket()
-                                        + ((BucketWrapperChangeEvent) event).tableId().hashCode();
+                                BucketWrapperChangeEvent bucketWrapperChangeEvent =
+                                        (BucketWrapperChangeEvent) event;
+                                ChangeEvent innerEvent = bucketWrapperChangeEvent.getInnerEvent();
+                                if (innerEvent instanceof SchemaChangeEvent) {
+                                    // Distribute SchemaChangeEvent to all subtasks.
+                                    return bucketWrapperChangeEvent.getBucket();
+                                } else {
+                                    // Add hash of tableId to avoid data skew.
+                                    return Objects.hash(
+                                            bucketWrapperChangeEvent.getBucket(),
+                                            bucketWrapperChangeEvent.getPartitionHash(),
+                                            bucketWrapperChangeEvent.tableId());
+                                }
                             } else {
+                                // Flush event.
                                 return ((BucketWrapper) event).getBucket();
                             }
                         })

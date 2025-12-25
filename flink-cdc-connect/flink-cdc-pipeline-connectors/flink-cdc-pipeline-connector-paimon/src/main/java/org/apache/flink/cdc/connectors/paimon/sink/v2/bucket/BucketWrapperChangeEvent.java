@@ -27,11 +27,13 @@ import java.util.Objects;
 public class BucketWrapperChangeEvent implements ChangeEvent, BucketWrapper, Serializable {
     private static final long serialVersionUID = 1L;
     private final int bucket;
+    private final int partitionHash;
 
     private final ChangeEvent innerEvent;
 
-    public BucketWrapperChangeEvent(int bucket, ChangeEvent innerEvent) {
+    public BucketWrapperChangeEvent(int bucket, int partitionHash, ChangeEvent innerEvent) {
         this.bucket = bucket;
+        this.partitionHash = partitionHash;
         this.innerEvent = innerEvent;
     }
 
@@ -41,6 +43,10 @@ public class BucketWrapperChangeEvent implements ChangeEvent, BucketWrapper, Ser
 
     public ChangeEvent getInnerEvent() {
         return innerEvent;
+    }
+
+    public int getPartitionHash() {
+        return partitionHash;
     }
 
     @Override
@@ -57,12 +63,14 @@ public class BucketWrapperChangeEvent implements ChangeEvent, BucketWrapper, Ser
             return false;
         }
         BucketWrapperChangeEvent that = (BucketWrapperChangeEvent) o;
-        return bucket == that.bucket && Objects.equals(innerEvent, that.innerEvent);
+        return bucket == that.bucket
+                && partitionHash == that.partitionHash
+                && Objects.equals(innerEvent, that.innerEvent);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(bucket, innerEvent);
+        return Objects.hash(bucket, partitionHash, innerEvent);
     }
 
     @Override
@@ -70,6 +78,8 @@ public class BucketWrapperChangeEvent implements ChangeEvent, BucketWrapper, Ser
         return "BucketWrapperChangeEvent{"
                 + "bucket="
                 + bucket
+                + ", partitionHash="
+                + partitionHash
                 + ", innerEvent="
                 + innerEvent
                 + '}';
