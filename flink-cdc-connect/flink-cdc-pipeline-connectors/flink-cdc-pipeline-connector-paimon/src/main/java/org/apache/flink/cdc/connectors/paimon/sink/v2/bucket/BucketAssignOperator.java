@@ -191,7 +191,11 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                     }
             }
             output.collect(
-                    new StreamRecord<>(new BucketWrapperChangeEvent(bucket, dataChangeEvent)));
+                    new StreamRecord<>(
+                            new BucketWrapperChangeEvent(
+                                    bucket,
+                                    tuple4.f3.partition(genericRow).hashCode(),
+                                    dataChangeEvent)));
         } else {
             // Broadcast SchemachangeEvent.
             for (int index = 0; index < totalTasksNumber; index++) {
@@ -199,6 +203,7 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                         new StreamRecord<>(
                                 new BucketWrapperChangeEvent(
                                         index,
+                                        0,
                                         convertSchemaChangeEvent((SchemaChangeEvent) event))));
             }
         }
@@ -279,6 +284,7 @@ public class BucketAssignOperator extends AbstractStreamOperator<Event>
                             new StreamRecord<>(
                                     new BucketWrapperChangeEvent(
                                             index,
+                                            0,
                                             new CreateTableEvent(
                                                     tableId,
                                                     mixedSchemaInfo.paimonSchemaInfo
