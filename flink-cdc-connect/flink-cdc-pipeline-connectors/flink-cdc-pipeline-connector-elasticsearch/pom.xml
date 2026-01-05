@@ -38,6 +38,8 @@ limitations under the License.
         <flink.connector.elasticsearch.version>3.0.1-1.17</flink.connector.elasticsearch.version>
         <httpclient.version>4.5.13</httpclient.version>
         <jakarta.json.version>2.0.2</jakarta.json.version>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>
@@ -129,7 +131,13 @@ limitations under the License.
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-cdc-composer</artifactId>
+            <artifactId>flink-cdc-runtime-1.x</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-composer-1.x</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

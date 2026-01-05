@@ -179,7 +179,10 @@ public class LocalZonedTimestampDataSerializer extends TypeSerializer<LocalZoned
 
         @Override
         public TypeSerializerSchemaCompatibility<LocalZonedTimestampData>
-                resolveSchemaCompatibility(TypeSerializer<LocalZonedTimestampData> newSerializer) {
+                resolveSchemaCompatibility(
+                        TypeSerializerSnapshot<LocalZonedTimestampData> typeSerializerSnapshot) {
+            TypeSerializer<LocalZonedTimestampData> newSerializer =
+                    typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof LocalZonedTimestampDataSerializer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }

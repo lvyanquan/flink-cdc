@@ -174,7 +174,8 @@ public class NullableSerializerWrapper<T> extends TypeSerializer<T> {
 
         @Override
         public TypeSerializerSchemaCompatibility<T> resolveSchemaCompatibility(
-                TypeSerializer<T> newSerializer) {
+                TypeSerializerSnapshot<T> typeSerializerSnapshot) {
+            TypeSerializer<T> newSerializer = typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof NullableSerializerWrapper)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }

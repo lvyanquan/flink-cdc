@@ -30,6 +30,8 @@ limitations under the License.
 
     <properties>
         <flink.connector.oceanbase>1.2</flink.connector.oceanbase>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>
@@ -60,7 +62,13 @@ limitations under the License.
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-cdc-composer</artifactId>
+            <artifactId>flink-cdc-runtime-1.x</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-composer-1.x</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

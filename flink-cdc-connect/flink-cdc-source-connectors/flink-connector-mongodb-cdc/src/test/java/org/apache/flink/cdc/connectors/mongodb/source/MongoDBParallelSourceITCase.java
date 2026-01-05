@@ -19,7 +19,6 @@ package org.apache.flink.cdc.connectors.mongodb.source;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.cdc.connectors.base.options.StartupOptions;
 import org.apache.flink.cdc.connectors.base.source.utils.hooks.SnapshotPhaseHook;
 import org.apache.flink.cdc.connectors.base.source.utils.hooks.SnapshotPhaseHooks;
@@ -29,6 +28,7 @@ import org.apache.flink.cdc.connectors.mongodb.utils.MongoDBTestUtils.FailoverPh
 import org.apache.flink.cdc.connectors.mongodb.utils.MongoDBTestUtils.FailoverType;
 import org.apache.flink.cdc.connectors.mongodb.utils.TestTable;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.util.RestartStrategyUtils;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -320,7 +320,7 @@ class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
                         "+U[2000, user_21, Pittsburgh, 123567891234]",
                         // delete message only contains _id, sql job contain value because of
                         // changelog normalization
-                        "-D[0, null, null, null]");
+                        "-D[null, null, null, null]");
         assertEqualsInAnyOrder(expectedRecords, records);
     }
 
@@ -358,7 +358,7 @@ class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
                         "+U[2000, user_21, Pittsburgh, 123567891234]",
                         // delete message only contains _id, sql job contain value because of
                         // changelog normalization
-                        "-D[0, null, null, null]");
+                        "-D[null, null, null, null]");
         // when skip backfill, the wal log between (snapshot, high_watermark) will be seen as
         // stream event.
         assertEqualsInAnyOrder(expectedRecords, records);
@@ -398,7 +398,7 @@ class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
                         "+U[2000, user_21, Pittsburgh, 123567891234]",
                         // delete message only contains _id, sql job contain value because of
                         // changelog normalization
-                        "-D[0, null, null, null]");
+                        "-D[null, null, null, null]");
         // when skip backfill, the wal log between (snapshot, high_watermark) will still be
         // seen as stream event. This will occur data duplicate. For example, user_20 will be
         // deleted twice, and user_15213 will be inserted twice.
@@ -523,7 +523,7 @@ class MongoDBParallelSourceITCase extends MongoDBSourceTestBase {
 
         env.setParallelism(parallelism);
         env.enableCheckpointing(200L);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(env, 1, 0);
         String sourceDDL =
                 String.format(
                         "CREATE TABLE customers ("

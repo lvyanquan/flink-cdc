@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.composer.testsource.source;
 
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.cdc.common.data.DecimalData;
 import org.apache.flink.cdc.common.data.LocalZonedTimestampData;
 import org.apache.flink.cdc.common.data.TimeData;
@@ -35,8 +36,7 @@ import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.types.DataTypes;
 import org.apache.flink.cdc.common.utils.SchemaUtils;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.functions.source.legacy.RichParallelSourceFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,11 +76,11 @@ public class DistributedSourceFunction extends RichParallelSourceFunction<Event>
     }
 
     @Override
-    public void open(Configuration parameters) throws Exception {
-        super.open(parameters);
+    public void open(OpenContext openContext) throws Exception {
+        super.open(openContext);
         iotaCounter = 0;
-        subTaskId = getRuntimeContext().getIndexOfThisSubtask();
-        parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
+        subTaskId = getRuntimeContext().getTaskInfo().getIndexOfThisSubtask();
+        parallelism = getRuntimeContext().getTaskInfo().getNumberOfParallelSubtasks();
         if (distributedTables) {
             tables =
                     IntStream.range(0, numOfTables)

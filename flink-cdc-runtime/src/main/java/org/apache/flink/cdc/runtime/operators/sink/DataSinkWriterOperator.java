@@ -36,9 +36,9 @@ import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
+import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
@@ -47,6 +47,7 @@ import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -87,17 +88,20 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
     /** A set of {@link TableId} that already processed {@link CreateTableEvent}. */
     private final Set<TableId> processedTableIds;
 
+    StreamOperatorParameters<CommittableMessage<CommT>> parameters;
+
     public DataSinkWriterOperator(
+            StreamOperatorParameters<CommittableMessage<CommT>> parameters,
             Sink<Event> sink,
             ProcessingTimeService processingTimeService,
             MailboxExecutor mailboxExecutor,
             OperatorID schemaOperatorID) {
+        this.parameters = parameters;
         this.sink = sink;
         this.processingTimeService = processingTimeService;
         this.mailboxExecutor = mailboxExecutor;
         this.schemaOperatorID = schemaOperatorID;
         this.processedTableIds = new HashSet<>();
-        this.chainingStrategy = ChainingStrategy.ALWAYS;
     }
 
     @Override
@@ -107,8 +111,7 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
             Output<StreamRecord<CommittableMessage<CommT>>> output) {
         super.setup(containingTask, config, output);
         flinkWriterOperator = createFlinkWriterOperator();
-        this.<AbstractStreamOperator<CommittableMessage<CommT>>>getFlinkWriterOperator()
-                .setup(containingTask, config, output);
+        setUpFlinkWriterOperator(containingTask, config, output);
         schemaEvolutionClient =
                 new SchemaEvolutionClient(
                         containingTask.getEnvironment().getOperatorCoordinatorEventGateway(),
@@ -123,7 +126,8 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
 
     @Override
     public void initializeState(StateInitializationContext context) throws Exception {
-        schemaEvolutionClient.registerSubtask(getRuntimeContext().getIndexOfThisSubtask());
+        schemaEvolutionClient.registerSubtask(
+                getRuntimeContext().getTaskInfo().getIndexOfThisSubtask());
         this.<AbstractStreamOperator<CommittableMessage<CommT>>>getFlinkWriterOperator()
                 .initializeState(context);
     }
@@ -223,7 +227,8 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
                             });
         }
         schemaEvolutionClient.notifyFlushSuccess(
-                getRuntimeContext().getIndexOfThisSubtask(), event.getSourceSubTaskId());
+                getRuntimeContext().getTaskInfo().getIndexOfThisSubtask(),
+                event.getSourceSubTaskId());
     }
 
     private void emitLatestSchema(TableId tableId) throws Exception {
@@ -252,11 +257,35 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
                                     "org.apache.flink.streaming.runtime.operators.sink.SinkWriterOperator");
             Constructor<?> constructor =
                     flinkWriterClass.getDeclaredConstructor(
-                            Sink.class, ProcessingTimeService.class, MailboxExecutor.class);
+                            StreamOperatorParameters.class,
+                            Sink.class,
+                            ProcessingTimeService.class,
+                            MailboxExecutor.class);
             constructor.setAccessible(true);
-            return constructor.newInstance(sink, processingTimeService, mailboxExecutor);
+            return constructor.newInstance(
+                    parameters, sink, processingTimeService, mailboxExecutor);
         } catch (Exception e) {
             throw new RuntimeException("Failed to create SinkWriterOperator in Flink", e);
+        }
+    }
+
+    private void setUpFlinkWriterOperator(
+            StreamTask<?, ?> containingTask,
+            StreamConfig config,
+            Output<StreamRecord<CommittableMessage<CommT>>> output) {
+        try {
+            Class<?> flinkWriterClass =
+                    getRuntimeContext()
+                            .getUserCodeClassLoader()
+                            .loadClass(
+                                    "org.apache.flink.streaming.runtime.operators.sink.SinkWriterOperator");
+            Method setupMethod =
+                    flinkWriterClass.getDeclaredMethod(
+                            "setup", StreamTask.class, StreamConfig.class, Output.class);
+            setupMethod.setAccessible(true);
+            setupMethod.invoke(flinkWriterOperator, containingTask, config, output);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to setup SinkWriterOperator in Flink", e);
         }
     }
 
