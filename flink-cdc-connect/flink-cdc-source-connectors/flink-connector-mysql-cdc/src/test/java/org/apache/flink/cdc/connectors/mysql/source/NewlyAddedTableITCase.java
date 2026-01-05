@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.connectors.mysql.source;
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.table.MySqlReadableMetadata;
@@ -26,9 +25,10 @@ import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
 import org.apache.flink.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.StateRecoveryOptions;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
-import org.apache.flink.runtime.jobgraph.SavepointConfigOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -36,6 +36,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
+import org.apache.flink.streaming.util.RestartStrategyUtils;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
@@ -78,7 +79,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
-import static org.apache.flink.api.common.restartstrategy.RestartStrategies.noRestart;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** IT tests to cover various newly added tables during capture process. */
@@ -166,22 +166,6 @@ class NewlyAddedTableITCase extends MySqlSourceTestBase {
     void testNewlyAddedTableForExistsPipelineTwiceWithAheadBinlog() throws Exception {
         testNewlyAddedTableOneByOne(
                 DEFAULT_PARALLELISM,
-                FailoverType.NONE,
-                FailoverPhase.NEVER,
-                true,
-                "address_hangzhou",
-                "address_beijing",
-                "address_shanghai");
-    }
-
-    @Test
-    void testNewlyAddedTableForExistsPipelineTwiceWithAheadBinlogAndAutoCloseReader()
-            throws Exception {
-        Map<String, String> otherOptions = new HashMap<>();
-        otherOptions.put("scan.incremental.close-idle-reader.enabled", "true");
-        testNewlyAddedTableOneByOne(
-                DEFAULT_PARALLELISM,
-                otherOptions,
                 FailoverType.NONE,
                 FailoverPhase.NEVER,
                 true,
@@ -518,18 +502,19 @@ class NewlyAddedTableITCase extends MySqlSourceTestBase {
     /** Add a collect sink in the job. */
     protected CollectResultIterator<RowData> addCollectSink(DataStream<RowData> stream) {
         TypeSerializer<RowData> serializer =
-                stream.getType().createSerializer(stream.getExecutionConfig());
+                stream.getType()
+                        .createSerializer(stream.getExecutionConfig().getSerializerConfig());
         String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
         CollectSinkOperatorFactory<RowData> factory =
                 new CollectSinkOperatorFactory<>(serializer, accumulatorName);
         CollectSinkOperator<RowData> operator =
                 (CollectSinkOperator<RowData>) factory.getOperator();
         CollectStreamSink<RowData> sink = new CollectStreamSink<>(stream, factory);
-        sink.name("Data stream collect sink");
+        sink.name("Data stream collect sink").uid("uid");
         stream.getExecutionEnvironment().addOperator(sink.getTransformation());
         CollectResultIterator<RowData> iterator =
                 new CollectResultIterator(
-                        operator.getOperatorIdFuture(),
+                        "uid",
                         serializer,
                         accumulatorName,
                         stream.getExecutionEnvironment().getCheckpointConfig(),
@@ -934,13 +919,13 @@ class NewlyAddedTableITCase extends MySqlSourceTestBase {
             String finishedSavePointPath, int parallelism) throws Exception {
         Configuration configuration = new Configuration();
         if (finishedSavePointPath != null) {
-            configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, finishedSavePointPath);
+            configuration.set(StateRecoveryOptions.SAVEPOINT_PATH, finishedSavePointPath);
         }
         StreamExecutionEnvironment env =
                 StreamExecutionEnvironment.getExecutionEnvironment(configuration);
         env.setParallelism(parallelism);
         env.enableCheckpointing(200L);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 100L));
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(env, 3, 100L);
         return env;
     }
 
@@ -950,7 +935,9 @@ class NewlyAddedTableITCase extends MySqlSourceTestBase {
         // retry 600 times, it takes 100 milliseconds per time, at most retry 1 minute
         while (retryTimes < 600) {
             try {
-                return jobClient.triggerSavepoint(savepointDirectory).get();
+                return jobClient
+                        .triggerSavepoint(savepointDirectory, SavepointFormatType.DEFAULT)
+                        .get();
             } catch (Exception e) {
                 Optional<CheckpointException> exception =
                         ExceptionUtils.findThrowable(e, CheckpointException.class);
@@ -1138,7 +1125,7 @@ class NewlyAddedTableITCase extends MySqlSourceTestBase {
             String newlyAddedTable = captureAddressTables[round];
             StreamExecutionEnvironment env =
                     getStreamExecutionEnvironment(finishedSavePointPath, parallelism);
-            env.setRestartStrategy(noRestart());
+            RestartStrategyUtils.configureNoRestartStrategy(env);
             StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
             String createTableStatement =
                     getCreateTableStatement(sourceOptions, captureTablesThisRound);

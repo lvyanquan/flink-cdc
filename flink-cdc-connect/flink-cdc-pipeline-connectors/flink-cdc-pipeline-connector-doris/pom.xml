@@ -29,12 +29,20 @@ limitations under the License.
     <properties>
         <doris.connector.version>25.1.0</doris.connector.version>
         <mysql.connector.version>8.0.26</mysql.connector.version>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-cdc-composer</artifactId>
+            <artifactId>flink-cdc-runtime-1.x</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-composer-1.x</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

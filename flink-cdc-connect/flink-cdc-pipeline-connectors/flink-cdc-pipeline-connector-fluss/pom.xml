@@ -34,6 +34,8 @@ limitations under the License.
 
     <properties>
         <fluss.version>0.7.0</fluss.version>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>
@@ -42,12 +44,17 @@ limitations under the License.
             <artifactId>fluss-client</artifactId>
             <version>${fluss.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cdc-runtime-1.x</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-cdc-composer</artifactId>
+            <artifactId>flink-cdc-composer-1.x</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

@@ -308,7 +308,8 @@ public class MapDataSerializer extends TypeSerializer<MapData> {
 
         @Override
         public TypeSerializerSchemaCompatibility<MapData> resolveSchemaCompatibility(
-                TypeSerializer<MapData> newSerializer) {
+                TypeSerializerSnapshot<MapData> typeSerializerSnapshot) {
+            TypeSerializer<MapData> newSerializer = typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof MapDataSerializer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }

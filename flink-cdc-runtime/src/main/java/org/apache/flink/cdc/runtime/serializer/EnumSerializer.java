@@ -240,7 +240,8 @@ public final class EnumSerializer<T extends Enum<T>> extends TypeSerializer<T> {
 
         @Override
         public TypeSerializerSchemaCompatibility<T> resolveSchemaCompatibility(
-                TypeSerializer<T> newSerializer) {
+                TypeSerializerSnapshot<T> typeSerializerSnapshot) {
+            TypeSerializer<T> newSerializer = typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof EnumSerializer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }

@@ -26,10 +26,15 @@ limitations under the License.
     <artifactId>flink-cdc-pipeline-connector-maxcompute</artifactId>
     <name>flink-cdc-pipeline-connector-maxcompute</name>
 
+    <properties>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-cdc-composer</artifactId>
+            <artifactId>flink-cdc-composer-1.x</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>

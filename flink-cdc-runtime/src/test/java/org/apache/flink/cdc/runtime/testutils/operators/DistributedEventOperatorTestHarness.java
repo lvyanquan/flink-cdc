@@ -31,9 +31,11 @@ import org.apache.flink.cdc.runtime.operators.sink.SchemaEvolutionClient;
 import org.apache.flink.cdc.runtime.testutils.schema.CollectingMetadataApplier;
 import org.apache.flink.cdc.runtime.testutils.schema.TestingSchemaRegistryGateway;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.event.WatermarkEvent;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.runtime.operators.testutils.DummyEnvironment;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.watermark.Watermark;
@@ -47,6 +49,7 @@ import org.apache.flink.util.OutputTag;
 import org.apache.flink.util.SerializedValue;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -155,10 +158,24 @@ public class DistributedEventOperatorTestHarness<
     // -------------------------------------- Helper functions -------------------------------
 
     private void initializeOperator() throws Exception {
-        operator.setup(
-                new MockStreamTask(schemaRegistryGateway),
-                new MockStreamConfig(new Configuration(), numOutputs),
-                new EventCollectingOutput<>(outputRecords, schemaRegistryGateway));
+        try {
+            Class<?> flinkWriterClass =
+                    this.getClass()
+                            .getClassLoader()
+                            .loadClass(
+                                    "org.apache.flink.streaming.api.operators.AbstractStreamOperator");
+            Method setupMethod =
+                    flinkWriterClass.getDeclaredMethod(
+                            "setup", StreamTask.class, StreamConfig.class, Output.class);
+            setupMethod.setAccessible(true);
+            setupMethod.invoke(
+                    operator,
+                    new MockStreamTask(schemaRegistryGateway),
+                    new MockStreamConfig(new Configuration(), numOutputs),
+                    new EventCollectingOutput<>(outputRecords, schemaRegistryGateway));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to setup SinkWriterOperator in Flink", e);
+        }
         schemaRegistryGateway.sendOperatorEventToCoordinator(
                 SINK_OPERATOR_ID, new SerializedValue<>(new SinkWriterRegisterEvent(0)));
     }
@@ -213,6 +230,9 @@ public class DistributedEventOperatorTestHarness<
 
         @Override
         public void emitRecordAttributes(RecordAttributes recordAttributes) {}
+
+        @Override
+        public void emitWatermark(WatermarkEvent watermarkEvent) {}
 
         @Override
         public void close() {}

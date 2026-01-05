@@ -26,7 +26,7 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
-import org.apache.flink.streaming.api.operators.YieldingOperatorFactory;
+import org.apache.flink.streaming.api.operators.legacy.YieldingOperatorFactory;
 
 /** Operator factory for {@link DataSinkWriterOperator}. */
 @Internal
@@ -54,7 +54,7 @@ public class DataSinkWriterOperatorFactory<CommT>
         if (isBounded) {
             BatchDataSinkWriterOperator<CommT> writerOperator =
                     new BatchDataSinkWriterOperator<>(
-                            sink, processingTimeService, getMailboxExecutor());
+                            parameters, sink, processingTimeService, getMailboxExecutor());
             writerOperator.setup(
                     parameters.getContainingTask(),
                     parameters.getStreamConfig(),
@@ -63,7 +63,11 @@ public class DataSinkWriterOperatorFactory<CommT>
         }
         DataSinkWriterOperator<CommT> writerOperator =
                 new DataSinkWriterOperator<>(
-                        sink, processingTimeService, getMailboxExecutor(), schemaOperatorID);
+                        parameters,
+                        sink,
+                        processingTimeService,
+                        getMailboxExecutor(),
+                        schemaOperatorID);
         writerOperator.setup(
                 parameters.getContainingTask(),
                 parameters.getStreamConfig(),
