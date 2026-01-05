@@ -228,23 +228,23 @@ public class DataSinkTranslator {
     }
 
     private static <CommT>
-    OneInputStreamOperatorFactory<CommittableMessage<CommT>, CommittableMessage<CommT>>
-    getCommitterOperatorFactory(
-            Sink<Event> sink, boolean isBatchMode, boolean isCheckpointingEnabled) {
+            OneInputStreamOperatorFactory<CommittableMessage<CommT>, CommittableMessage<CommT>>
+                    getCommitterOperatorFactory(
+                            Sink<Event> sink, boolean isBatchMode, boolean isCheckpointingEnabled) {
         // FIX ME: OneInputStreamOperatorFactory is an @Internal class, and its signature has
         // changed during Flink 1.18 to 1.19. Remove this when Flink 1.18 is no longer supported.
         try {
             return (OneInputStreamOperatorFactory<
-                    CommittableMessage<CommT>, CommittableMessage<CommT>>)
+                            CommittableMessage<CommT>, CommittableMessage<CommT>>)
                     Class.forName(
                                     "org.apache.flink.streaming.runtime.operators.sink.CommitterOperatorFactory")
                             .getDeclaredConstructors()[0]
                             .newInstance(sink, isBatchMode, isCheckpointingEnabled);
 
         } catch (ClassNotFoundException
-                 | InstantiationException
-                 | IllegalAccessException
-                 | InvocationTargetException e) {
+                | InstantiationException
+                | IllegalAccessException
+                | InvocationTargetException e) {
             throw new RuntimeException("Failed to create CommitterOperatorFactory", e);
         }
     }

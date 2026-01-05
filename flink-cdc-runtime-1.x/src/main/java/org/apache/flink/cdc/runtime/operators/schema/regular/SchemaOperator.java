@@ -60,8 +60,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.flink.cdc.common.pipeline.PipelineOptions.DEFAULT_SCHEMA_OPERATOR_RPC_TIMEOUT;
 
 /**
- * The operator will evolve schemas in {@link
- * SchemaCoordinator} for incoming {@link
+ * The operator will evolve schemas in {@link SchemaCoordinator} for incoming {@link
  * SchemaChangeEvent}s and block the stream for tables before their schema changes finish.
  */
 @Internal

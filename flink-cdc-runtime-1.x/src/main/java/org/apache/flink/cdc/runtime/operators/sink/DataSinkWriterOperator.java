@@ -52,8 +52,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * An operator that processes records to be written into a {@link
- * Sink}.
+ * An operator that processes records to be written into a {@link Sink}.
  *
  * <p>The operator is a proxy of SinkWriterOperator in Flink.
  *

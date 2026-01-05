@@ -44,8 +44,7 @@ import java.util.Set;
  * An operator that processes records to be written into a {@link
  * org.apache.flink.streaming.api.functions.sink.SinkFunction}.
  *
- * <p>The operator is a proxy of {@link StreamSink} in
- * Flink.
+ * <p>The operator is a proxy of {@link StreamSink} in Flink.
  *
  * <p>The operator is always part of a sink pipeline and is the first operator.
  */

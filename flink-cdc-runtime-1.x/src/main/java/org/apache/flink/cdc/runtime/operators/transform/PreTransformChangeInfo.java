@@ -49,8 +49,7 @@ public class PreTransformChangeInfo {
     private final Map<String, RecordData.FieldGetter> sourceFieldGettersMap;
     private final BinaryRecordDataGenerator preTransformedRecordDataGenerator;
 
-    public static final Serializer SERIALIZER =
-            new Serializer();
+    public static final Serializer SERIALIZER = new Serializer();
 
     public PreTransformChangeInfo(
             TableId tableId,

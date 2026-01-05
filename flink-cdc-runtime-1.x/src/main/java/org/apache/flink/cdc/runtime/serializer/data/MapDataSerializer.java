@@ -243,8 +243,7 @@ public class MapDataSerializer extends TypeSerializer<MapData> {
 
     @Override
     public TypeSerializerSnapshot<MapData> snapshotConfiguration() {
-        return new MapDataSerializerSnapshot(
-                keyType, valueType, keySerializer, valueSerializer);
+        return new MapDataSerializerSnapshot(keyType, valueType, keySerializer, valueSerializer);
     }
 
     /** {@link TypeSerializerSnapshot} for {@link MapDataSerializer}. */

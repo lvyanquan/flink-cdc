@@ -37,7 +37,6 @@ import org.apache.flink.cdc.runtime.operators.schema.distributed.event.SchemaCha
 import org.apache.flink.cdc.runtime.operators.schema.distributed.event.SchemaChangeResponse;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import org.apache.flink.shaded.guava31.com.google.common.collect.HashBasedTable;
