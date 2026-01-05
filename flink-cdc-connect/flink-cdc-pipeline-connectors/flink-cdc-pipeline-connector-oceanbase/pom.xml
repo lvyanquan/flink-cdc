@@ -30,6 +30,8 @@ limitations under the License.
 
     <properties>
         <flink.connector.oceanbase>1.2</flink.connector.oceanbase>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>

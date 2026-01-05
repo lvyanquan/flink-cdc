@@ -267,14 +267,16 @@ public class ArrayDataSerializer extends TypeSerializer<ArrayData> {
 
         @Override
         public TypeSerializerSchemaCompatibility<ArrayData> resolveSchemaCompatibility(
-                TypeSerializer<ArrayData> newSerializer) {
+                TypeSerializerSnapshot<ArrayData> typeSerializerSnapshot) {
+            TypeSerializer<ArrayData> newSerializer = typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof ArrayDataSerializer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }
 
             ArrayDataSerializer newArrayDataSerializer = (ArrayDataSerializer) newSerializer;
             if (!previousType.equals(newArrayDataSerializer.eleType)
-                    || !previousEleSer.equals(newArrayDataSerializer.eleSer)) {
+                    || !new NullableSerializerWrapper<>(previousEleSer)
+                            .equals(newArrayDataSerializer.eleSer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             } else {
                 return TypeSerializerSchemaCompatibility.compatibleAsIs();

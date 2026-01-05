@@ -30,6 +30,8 @@ limitations under the License.
 
     <properties>
         <version.kafka>3.4.0</version.kafka>
+        <flink.version>${flink.1.x.version}</flink.version>
+        <shaded.guava.version>${flink.1.x.shaded.guava.version}</shaded.guava.version>
     </properties>
 
     <dependencies>

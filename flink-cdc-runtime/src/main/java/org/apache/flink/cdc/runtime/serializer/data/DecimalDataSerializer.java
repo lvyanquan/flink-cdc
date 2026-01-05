@@ -180,7 +180,8 @@ public final class DecimalDataSerializer extends TypeSerializer<DecimalData> {
 
         @Override
         public TypeSerializerSchemaCompatibility<DecimalData> resolveSchemaCompatibility(
-                TypeSerializer<DecimalData> newSerializer) {
+                TypeSerializerSnapshot<DecimalData> typeSerializerSnapshot) {
+            TypeSerializer<DecimalData> newSerializer = typeSerializerSnapshot.restoreSerializer();
             if (!(newSerializer instanceof DecimalDataSerializer)) {
                 return TypeSerializerSchemaCompatibility.incompatible();
             }

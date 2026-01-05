@@ -19,7 +19,7 @@ package org.apache.flink.cdc.composer.flink.translator;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.sink2.Sink;
-import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
+import org.apache.flink.api.connector.sink2.SupportsCommitter;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.configuration.Configuration;
@@ -40,12 +40,11 @@ import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessageTypeInfo;
-import org.apache.flink.streaming.api.connector.sink2.WithPostCommitTopology;
-import org.apache.flink.streaming.api.connector.sink2.WithPreCommitTopology;
-import org.apache.flink.streaming.api.connector.sink2.WithPreWriteTopology;
+import org.apache.flink.streaming.api.connector.sink2.SupportsPostCommitTopology;
+import org.apache.flink.streaming.api.connector.sink2.SupportsPreWriteTopology;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.api.transformations.LegacySinkTransformation;
@@ -129,11 +128,11 @@ public class DataSinkTranslator {
             OperatorUidGenerator operatorUidGenerator) {
         DataStream<Event> stream = input;
         // Pre-write topology
-        if (sink instanceof WithPreWriteTopology) {
-            stream = ((WithPreWriteTopology<Event>) sink).addPreWriteTopology(stream);
+        if (sink instanceof SupportsPreWriteTopology) {
+            stream = ((SupportsPreWriteTopology<Event>) sink).addPreWriteTopology(stream);
         }
 
-        if (sink instanceof TwoPhaseCommittingSink) {
+        if (sink instanceof SupportsCommitter) {
             addCommittingTopology(
                     sink, stream, sinkName, isBatchMode, schemaOperatorID, operatorUidGenerator);
         } else {
@@ -190,10 +189,6 @@ public class DataSinkTranslator {
                         .uid(operatorUidGenerator.generateUid("sink-writer"));
 
         DataStream<CommittableMessage<CommT>> preCommitted = written;
-        if (sink instanceof WithPreCommitTopology) {
-            preCommitted =
-                    ((WithPreCommitTopology<Event, CommT>) sink).addPreCommitTopology(written);
-        }
 
         // TODO: Hard coding checkpoint
         boolean isCheckpointingEnabled = true;
@@ -206,8 +201,8 @@ public class DataSinkTranslator {
                                         sink, isBatchMode, isCheckpointingEnabled))
                         .uid(operatorUidGenerator.generateUid("sink-committer"));
 
-        if (sink instanceof WithPostCommitTopology) {
-            ((WithPostCommitTopology<Event, CommT>) sink).addPostCommitTopology(committed);
+        if (sink instanceof SupportsPostCommitTopology) {
+            ((SupportsPostCommitTopology<CommT>) sink).addPostCommitTopology(committed);
         }
     }
 
