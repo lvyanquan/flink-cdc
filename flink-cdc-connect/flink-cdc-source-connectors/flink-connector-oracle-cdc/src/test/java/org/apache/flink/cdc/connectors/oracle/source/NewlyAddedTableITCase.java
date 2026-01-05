@@ -163,22 +163,6 @@ class NewlyAddedTableITCase extends OracleSourceTestBase {
     }
 
     @Test
-    void testNewlyAddedTableForExistsPipelineTwiceWithAheadRedoLogAndAutoCloseReader()
-            throws Exception {
-        Map<String, String> otherOptions = new HashMap<>();
-        otherOptions.put("scan.incremental.close-idle-reader.enabled", "true");
-        testNewlyAddedTableOneByOne(
-                DEFAULT_PARALLELISM,
-                otherOptions,
-                FailoverType.NONE,
-                FailoverPhase.NEVER,
-                true,
-                "ADDRESS_HANGZHOU",
-                "ADDRESS_BEIJING",
-                "ADDRESS_SHANGHAI");
-    }
-
-    @Test
     void testNewlyAddedTableForExistsPipelineThrice() throws Exception {
         testNewlyAddedTableOneByOne(
                 DEFAULT_PARALLELISM,

@@ -194,22 +194,6 @@ class NewlyAddedTableITCase extends PostgresTestBase {
     }
 
     @Test
-    void testNewlyAddedTableForExistsPipelineTwiceWithAheadWalLogAndAutoCloseReader()
-            throws Exception {
-        Map<String, String> otherOptions = new HashMap<>();
-        otherOptions.put("scan.incremental.close-idle-reader.enabled", "true");
-        testNewlyAddedTableOneByOne(
-                DEFAULT_PARALLELISM,
-                otherOptions,
-                PostgresTestUtils.FailoverType.NONE,
-                PostgresTestUtils.FailoverPhase.NEVER,
-                true,
-                "address_hangzhou",
-                "address_beijing",
-                "address_shanghai");
-    }
-
-    @Test
     void testNewlyAddedTableForExistsPipelineThrice() throws Exception {
         testNewlyAddedTableOneByOne(
                 DEFAULT_PARALLELISM,

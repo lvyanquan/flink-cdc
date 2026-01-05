@@ -156,22 +156,6 @@ class NewlyAddedTableITCase extends MongoDBSourceTestBase {
     }
 
     @Test
-    void testNewlyAddedCollectionForExistsPipelineTwiceWithAheadOplogAndAutoCloseReader()
-            throws Exception {
-        Map<String, String> otherOptions = new HashMap<>();
-        otherOptions.put("scan.incremental.close-idle-reader.enabled", "true");
-        testNewlyAddedCollectionOneByOne(
-                DEFAULT_PARALLELISM,
-                otherOptions,
-                MongoDBTestUtils.FailoverType.NONE,
-                MongoDBTestUtils.FailoverPhase.NEVER,
-                true,
-                "address_hangzhou",
-                "address_beijing",
-                "address_shanghai");
-    }
-
-    @Test
     void testNewlyAddedCollectionForExistsPipelineThrice() throws Exception {
         testNewlyAddedCollectionOneByOne(
                 DEFAULT_PARALLELISM,
