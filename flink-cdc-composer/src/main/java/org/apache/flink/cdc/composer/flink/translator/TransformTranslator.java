@@ -57,10 +57,12 @@ public class TransformTranslator {
         return input.transform(
                 "Transform:Schema",
                 new EventTypeInfo(),
-                generatePreTransform(transforms, udfFunctions, models, supportedMetadataColumns));
+                generatePreTransformBuilder(
+                                transforms, udfFunctions, models, supportedMetadataColumns)
+                        .buildFactory());
     }
 
-    private PreTransformOperator generatePreTransform(
+    private PreTransformOperatorBuilder generatePreTransformBuilder(
             List<TransformDef> transforms,
             List<UdfDef> udfFunctions,
             List<ModelDef> models,
@@ -87,7 +89,7 @@ public class TransformTranslator {
                 .addUdfFunctions(
                         models.stream().map(this::modelToUDFTuple).collect(Collectors.toList()));
 
-        return preTransformFunctionBuilder.build();
+        return preTransformFunctionBuilder;
     }
 
     public DataStream<Event> translatePostTransform(
