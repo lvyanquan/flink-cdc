@@ -25,11 +25,11 @@ limitations under the License.
     <baseDirectory>flink-cdc-${revision}</baseDirectory>
 
     <files>
-        <!-- copy flink-cdc-dist uber jar -->
+        <!-- copy flink-cdc-dist uber jar (connector-style: flink-cdc-dist-<revision>-<flink.major.version>.jar) -->
         <file>
-            <source>target/flink-cdc-dist-${revision}.jar</source>
+            <source>target/${project.build.finalName}.jar</source>
             <outputDirectory>lib</outputDirectory>
-            <destName>flink-cdc-dist-${revision}.jar</destName>
+            <destName>${project.build.finalName}.jar</destName>
             <fileMode>0644</fileMode>
         </file>
 
