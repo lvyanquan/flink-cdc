@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.connectors.mysql.source;
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.CreateTableEvent;
@@ -36,10 +35,12 @@ import org.apache.flink.cdc.common.types.RowType;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.factory.MySqlDataSourceFactory;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
+import org.apache.flink.cdc.connectors.utils.RestartStrategyUtils;
 import org.apache.flink.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.jobgraph.SavepointConfigOptions;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -47,6 +48,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.collect.AbstractCollectResultBuffer;
 import org.apache.flink.streaming.api.operators.collect.CheckpointedCollectResultBuffer;
 import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
+import org.apache.flink.streaming.api.operators.collect.CollectResultIteratorAdapter;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
@@ -175,7 +177,9 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
                         new EventTypeInfo());
 
         TypeSerializer<Event> serializer =
-                source.getTransformation().getOutputType().createSerializer(env.getConfig());
+                source.getTransformation()
+                        .getOutputType()
+                        .createSerializer(env.getConfig().getSerializerConfig());
         CheckpointedCollectResultBuffer<Event> resultBuffer =
                 new CheckpointedCollectResultBuffer<>(serializer);
         String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
@@ -217,7 +221,9 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
                         new EventTypeInfo());
 
         TypeSerializer<Event> serializer =
-                source.getTransformation().getOutputType().createSerializer(env.getConfig());
+                source.getTransformation()
+                        .getOutputType()
+                        .createSerializer(env.getConfig().getSerializerConfig());
         CheckpointedCollectResultBuffer<Event> resultBuffer =
                 new CheckpointedCollectResultBuffer<>(serializer);
         String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
@@ -325,7 +331,9 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
                         new EventTypeInfo());
 
         TypeSerializer<Event> serializer =
-                source.getTransformation().getOutputType().createSerializer(env.getConfig());
+                source.getTransformation()
+                        .getOutputType()
+                        .createSerializer(env.getConfig().getSerializerConfig());
         CheckpointedCollectResultBuffer<Event> resultBuffer =
                 new CheckpointedCollectResultBuffer<>(serializer);
         String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
@@ -476,7 +484,9 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
         // retry 600 times, it takes 100 milliseconds per time, at most retry 1 minute
         while (retryTimes < 600) {
             try {
-                return jobClient.triggerSavepoint(savepointDirectory).get();
+                return jobClient
+                        .triggerSavepoint(savepointDirectory, SavepointFormatType.DEFAULT)
+                        .get();
             } catch (Exception e) {
                 Optional<CheckpointException> exception =
                         ExceptionUtils.findThrowable(e, CheckpointException.class);
@@ -571,8 +581,7 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
                 new CollectSinkOperatorFactory<>(serializer, accumulatorName);
         CollectSinkOperator<T> operator = (CollectSinkOperator<T>) sinkFactory.getOperator();
         CollectResultIterator<T> iterator =
-                new CollectResultIterator<>(
-                        buffer, operator.getOperatorIdFuture(), accumulatorName, 0);
+                new CollectResultIteratorAdapter<>(buffer, operator, accumulatorName, 0);
         CollectStreamSink<T> sink = new CollectStreamSink<>(source, sinkFactory);
         sink.name("Data stream collect sink");
         env.addOperator(sink.getTransformation());
@@ -584,13 +593,13 @@ class MysqlPipelineNewlyAddedTableITCase extends MySqlSourceTestBase {
             String finishedSavePointPath, int parallelism) {
         Configuration configuration = new Configuration();
         if (finishedSavePointPath != null) {
-            configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, finishedSavePointPath);
+            configuration.set(SavepointConfigOptions.SAVEPOINT_PATH, finishedSavePointPath);
         }
         StreamExecutionEnvironment env =
                 StreamExecutionEnvironment.getExecutionEnvironment(configuration);
         env.setParallelism(parallelism);
         env.enableCheckpointing(500L);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 1000L));
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(env, 3, 1000L);
         return env;
     }
 

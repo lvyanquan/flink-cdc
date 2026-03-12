@@ -19,7 +19,6 @@ package org.apache.flink.cdc.connectors.mysql.source;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
@@ -32,6 +31,7 @@ import org.apache.flink.cdc.connectors.mysql.table.StartupOptions;
 import org.apache.flink.cdc.connectors.mysql.testutils.TestTable;
 import org.apache.flink.cdc.connectors.mysql.testutils.TestTableSchemas;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
+import org.apache.flink.cdc.connectors.utils.RestartStrategyUtils;
 import org.apache.flink.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.StringDebeziumDeserializationSchema;
 import org.apache.flink.cdc.debezium.table.MetadataConverter;
@@ -204,7 +204,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
                 FailoverType.NONE,
                 FailoverPhase.NEVER,
                 new String[] {tableName},
-                RestartStrategies.fixedDelayRestart(1, 0),
+                1,
+                0,
                 tableName,
                 chunkColumnName,
                 Collections.singletonMap(
@@ -301,7 +302,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
                 FailoverType.TM,
                 FailoverPhase.BINLOG,
                 new String[] {tableName, "customers_1"},
-                RestartStrategies.fixedDelayRestart(1, 0),
+                1,
+                0,
                 tableName,
                 chunkColumnName,
                 Collections.singletonMap(
@@ -349,7 +351,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
                 FailoverType.JM,
                 FailoverPhase.BINLOG,
                 new String[] {tableName, "customers_1"},
-                RestartStrategies.fixedDelayRestart(1, 0),
+                1,
+                0,
                 tableName,
                 chunkColumnName,
                 Collections.singletonMap(
@@ -400,7 +403,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
                 FailoverType.NONE,
                 FailoverPhase.NEVER,
                 new String[] {"customers"},
-                RestartStrategies.fixedDelayRestart(1, 0),
+                1,
+                0,
                 "customers",
                 "id",
                 options);
@@ -415,7 +419,7 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(DEFAULT_PARALLELISM);
         env.enableCheckpointing(5000L);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(env, 1, 0);
 
         // The sleeping source will sleep awhile after send per record
         MySqlSource<RowData> sleepingSource = buildSleepingSource(tableName, chunkColumnName);
@@ -1109,7 +1113,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
                 failoverType,
                 failoverPhase,
                 captureCustomerTables,
-                RestartStrategies.fixedDelayRestart(1, 0),
+                1,
+                0,
                 tableName,
                 chunkColumnName,
                 options);
@@ -1121,7 +1126,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
             FailoverType failoverType,
             FailoverPhase failoverPhase,
             String[] captureCustomerTables,
-            RestartStrategies.RestartStrategyConfiguration restartStrategyConfiguration,
+            int restartAttempts,
+            long delayBetweenAttempts,
             String tableName,
             String chunkColumnName,
             Map<String, String> otherOptions)
@@ -1132,7 +1138,8 @@ class MySqlSourceITCase extends MySqlSourceTestBase {
 
         env.setParallelism(parallelism);
         env.enableCheckpointing(200L);
-        env.setRestartStrategy(restartStrategyConfiguration);
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(
+                env, restartAttempts, delayBetweenAttempts);
         String sourceDDL =
                 format(
                         "CREATE TABLE customers ("
