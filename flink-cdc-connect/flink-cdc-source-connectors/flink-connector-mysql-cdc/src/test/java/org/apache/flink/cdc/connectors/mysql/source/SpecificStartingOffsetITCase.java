@@ -36,6 +36,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
+import org.apache.flink.streaming.api.operators.collect.CollectResultIteratorAdapter;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
@@ -489,18 +490,16 @@ class SpecificStartingOffsetITCase {
     private <T> CollectResultIterator<T> addCollector(
             StreamExecutionEnvironment env, DataStream<T> stream) {
         TypeSerializer<T> serializer =
-                stream.getTransformation().getOutputType().createSerializer(env.getConfig());
+                stream.getTransformation()
+                        .getOutputType()
+                        .createSerializer(env.getConfig().getSerializerConfig());
         String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
         CollectSinkOperatorFactory<T> factory =
                 new CollectSinkOperatorFactory<>(serializer, accumulatorName);
         CollectSinkOperator<T> operator = (CollectSinkOperator<T>) factory.getOperator();
         CollectResultIterator<T> iterator =
-                new CollectResultIterator<>(
-                        operator.getOperatorIdFuture(),
-                        serializer,
-                        accumulatorName,
-                        env.getCheckpointConfig(),
-                        10000L);
+                new CollectResultIteratorAdapter<>(
+                        operator, serializer, accumulatorName, env.getCheckpointConfig(), 10000L);
         CollectStreamSink<T> sink = new CollectStreamSink<>(stream, factory);
         sink.name("Data stream collect sink");
         env.addOperator(sink.getTransformation());
@@ -583,7 +582,7 @@ class SpecificStartingOffsetITCase {
         Field field = clazz.getDeclaredField("configuration");
         field.setAccessible(true);
         Configuration configuration = (Configuration) field.get(env);
-        configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, savepointPath);
+        configuration.set(SavepointConfigOptions.SAVEPOINT_PATH, savepointPath);
     }
 
     private void duplicateTransformations(
