@@ -19,6 +19,7 @@ package org.apache.flink.cdc.connectors.oceanbase;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.cdc.connectors.utils.ExternalResourceProxy;
+import org.apache.flink.cdc.connectors.utils.RestartStrategyUtils;
 import org.apache.flink.runtime.minicluster.RpcServiceSharing;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.CheckpointingMode;
@@ -29,7 +30,6 @@ import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.StringUtils;
-import org.apache.flink.utils.RestartStrategyUtils;
 
 import io.debezium.jdbc.JdbcConnection;
 import org.assertj.core.api.Assertions;
