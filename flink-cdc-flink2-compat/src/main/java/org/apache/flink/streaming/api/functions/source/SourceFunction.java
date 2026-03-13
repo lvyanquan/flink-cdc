@@ -18,6 +18,9 @@
 package org.apache.flink.streaming.api.functions.source;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.Public;
+import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 /**
  * Compatibility adapter for Flink 2.2. This class is part of the multi-version compatibility layer
@@ -25,4 +28,23 @@ import org.apache.flink.annotation.Internal;
  */
 @Internal
 public interface SourceFunction<T>
-        extends org.apache.flink.streaming.api.functions.source.legacy.SourceFunction<T> {}
+        extends org.apache.flink.streaming.api.functions.source.legacy.SourceFunction<T> {
+
+    @Public
+    public interface SourceContext<T> {
+        void collect(T var1);
+
+        @PublicEvolving
+        void collectWithTimestamp(T var1, long var2);
+
+        @PublicEvolving
+        void emitWatermark(Watermark var1);
+
+        @PublicEvolving
+        void markAsTemporarilyIdle();
+
+        Object getCheckpointLock();
+
+        void close();
+    }
+}
