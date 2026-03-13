@@ -17,11 +17,11 @@
 
 package org.apache.flink.cdc.connectors.postgres.source;
 
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.cdc.connectors.postgres.PostgresTestBase;
 import org.apache.flink.cdc.connectors.postgres.testutils.PostgresTestUtils;
 import org.apache.flink.cdc.connectors.postgres.testutils.UniqueDatabase;
 import org.apache.flink.cdc.connectors.utils.ExternalResourceProxy;
+import org.apache.flink.cdc.connectors.utils.RestartStrategyUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
@@ -922,7 +922,7 @@ class NewlyAddedTableITCase extends PostgresTestBase {
                 StreamExecutionEnvironment.getExecutionEnvironment(configuration);
         env.setParallelism(parallelism);
         env.enableCheckpointing(200L);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 100L));
+        RestartStrategyUtils.configureFixedDelayRestartStrategy(env, 3, 100L);
         return env;
     }
 

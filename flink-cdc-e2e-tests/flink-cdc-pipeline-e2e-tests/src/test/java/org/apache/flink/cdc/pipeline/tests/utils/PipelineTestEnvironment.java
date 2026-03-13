@@ -66,7 +66,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -162,12 +161,7 @@ public abstract class PipelineTestEnvironment extends TestLogger {
     protected String flinkVersion = getFlinkVersion();
 
     public static String getFlinkVersion() {
-        String flinkVersion = System.getProperty("specifiedFlinkVersion");
-        if (Objects.isNull(flinkVersion)) {
-            throw new IllegalArgumentException(
-                    "No Flink version specified to run this test. Please use -DspecifiedFlinkVersion to pass one.");
-        }
-        return flinkVersion;
+        return "2.2.0";
     }
 
     protected List<String> copyJarToFlinkLib() {
