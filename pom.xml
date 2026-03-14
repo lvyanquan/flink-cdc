@@ -870,6 +870,7 @@ limitations under the License.
                                                 <groupId>org.apache.flink</groupId>
                                                 <artifactId>flink-shaded-guava</artifactId>
                                                 <version>${flink.2.x.shaded.guava.version}</version>
+                                                <destFileName>flink-shaded-guava.jar</destFileName>
                                                 <outputDirectory>${project.build.directory}/flink2-extra-libs</outputDirectory>
                                             </artifactItem>
                                         </artifactItems>
@@ -882,7 +883,7 @@ limitations under the License.
                             <artifactId>maven-surefire-plugin</artifactId>
                             <configuration>
                                 <additionalClasspathElements>
-                                    <additionalClasspathElement>${project.build.directory}/flink2-extra-libs/flink-shaded-guava-${flink.2.x.shaded.guava.version}.jar</additionalClasspathElement>
+                                    <additionalClasspathElement>${project.build.directory}/flink2-extra-libs/flink-shaded-guava.jar</additionalClasspathElement>
                                 </additionalClasspathElements>
                             </configuration>
                         </plugin>
