@@ -51,31 +51,56 @@ public class JdbcConnectionFactory implements JdbcConnection.ConnectionFactory {
                 jdbcConnectionPoolFactory.getPoolId(
                         config, jdbcConnectionPoolFactory.getClass().getName());
 
-        HikariDataSource dataSource =
-                JdbcConnectionPools.getInstance(jdbcConnectionPoolFactory)
-                        .getOrCreateConnectionPool(connectionPoolId, sourceConfig);
+        int poolRecreationCount = 0;
+        SQLException lastException = null;
 
-        int i = 0;
-        while (i < connectRetryTimes) {
-            try {
-                return dataSource.getConnection();
-            } catch (SQLException e) {
-                if (i < connectRetryTimes - 1) {
-                    try {
-                        Thread.sleep(300);
-                    } catch (InterruptedException ie) {
-                        throw new FlinkRuntimeException(
-                                "Failed to get connection, interrupted while doing another attempt",
-                                ie);
+        while (poolRecreationCount < connectRetryTimes) {
+            HikariDataSource dataSource =
+                    JdbcConnectionPools.getInstance(jdbcConnectionPoolFactory)
+                            .getOrCreateConnectionPool(connectionPoolId, sourceConfig);
+
+            int connectionAttempt = 0;
+            while (connectionAttempt < connectRetryTimes) {
+                try {
+                    return dataSource.getConnection();
+                } catch (SQLException e) {
+                    lastException = e;
+                    // Check if the pool was closed concurrently (e.g., during failover)
+                    if (dataSource.isClosed()) {
+                        LOG.info(
+                                "Connection pool {} was closed concurrently, retrying to get or create pool (attempt {})",
+                                connectionPoolId,
+                                poolRecreationCount + 1);
+                        // Break inner loop to retry getting/creating the pool
+                        break;
                     }
-                    LOG.warn("Get connection failed, retry times {}", i + 1);
-                } else {
-                    LOG.error("Get connection failed after retry {} times", i + 1);
-                    throw new FlinkRuntimeException(e);
+
+                    if (connectionAttempt < connectRetryTimes - 1) {
+                        try {
+                            Thread.sleep(300);
+                        } catch (InterruptedException ie) {
+                            throw new FlinkRuntimeException(
+                                    "Failed to get connection, interrupted while doing another attempt",
+                                    ie);
+                        }
+                        LOG.warn("Get connection failed, retry times {}", connectionAttempt + 1);
+                    }
                 }
+                connectionAttempt++;
             }
-            i++;
+
+            // If pool was closed concurrently, increment pool recreation counter and retry
+            if (dataSource.isClosed()) {
+                poolRecreationCount++;
+                continue;
+            }
+            // Pool is not closed but we exhausted connection attempts
+            LOG.error("Get connection failed after retry {} times", connectRetryTimes);
+            throw new FlinkRuntimeException(lastException);
         }
-        return dataSource.getConnection();
+
+        LOG.error(
+                "Failed to get connection after {} pool recreation attempts", poolRecreationCount);
+        throw new FlinkRuntimeException(lastException);
     }
 }
