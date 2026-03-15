@@ -54,7 +54,13 @@ public class JdbcConnectionPools implements ConnectionPools<HikariDataSource, Jd
     public HikariDataSource getOrCreateConnectionPool(
             ConnectionPoolId poolId, JdbcSourceConfig sourceConfig) {
         synchronized (pools) {
-            if (!pools.containsKey(poolId)) {
+            HikariDataSource dataSource = pools.get(poolId);
+            // Check if the pool exists and is still valid (not closed)
+            if (dataSource == null || dataSource.isClosed()) {
+                if (dataSource != null) {
+                    LOG.info("Connection pool {} was closed, recreating it", poolId);
+                    pools.remove(poolId);
+                }
                 LOG.info("Create and register connection pool {}", poolId);
                 JdbcConnectionPoolFactory jdbcConnectionPoolFactory =
                         POOL_FACTORY_MAP.get(poolId.getDataSourcePoolFactoryIdentifier());
@@ -64,9 +70,10 @@ public class JdbcConnectionPools implements ConnectionPools<HikariDataSource, Jd
                                     "Pool factory identifier is required for connection pool, but unknown pool factory identifier %s found.",
                                     poolId.getDataSourcePoolFactoryIdentifier()));
                 }
-                pools.put(poolId, jdbcConnectionPoolFactory.createPooledDataSource(sourceConfig));
+                dataSource = jdbcConnectionPoolFactory.createPooledDataSource(sourceConfig);
+                pools.put(poolId, dataSource);
             }
-            return pools.get(poolId);
+            return dataSource;
         }
     }
 
