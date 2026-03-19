@@ -34,7 +34,7 @@ import java.io.IOException;
 
 /**
  * Copy from <a
- * href="https://github.com/apache/doris-flink-connector/blob/25.1.0/flink-doris-connector/src/main/java/org/apache/doris/flink/sink/batch/DorisBatchSink.java">...</a>
+ * href="https://github.com/apache/doris-flink-connector/blob/25.1.0/flink-doris-connector/src/main/java/org/apache/doris/flink/sink/batch/DorisBatchSink.java">DorisBatchSink</a>
  * to add {@link #createWriter(WriterInitContext)}} method.
  */
 @Deprecated
