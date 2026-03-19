@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.pipeline.tests;
 
 import org.apache.flink.cdc.common.test.utils.TestUtils;
-import org.apache.flink.cdc.connectors.doris.sink.utils.DorisContainer;
 import org.apache.flink.cdc.connectors.mysql.testutils.UniqueDatabase;
 import org.apache.flink.cdc.pipeline.tests.utils.PipelineTestEnvironment;
 
@@ -27,11 +26,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.lifecycle.Startables;
 
 import java.nio.file.Path;
@@ -50,13 +46,15 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /** End-to-end tests for mysql cdc to Doris pipeline job. */
-@EnabledIfSystemProperty(named = "specifiedFlinkVersion", matches = "^1.*")
 class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(MySqlToDorisE2eITCase.class);
 
-    @Container
-    protected static final DorisContainer DORIS =
-            new DorisContainer(NETWORK).withNetworkAliases("doris");
+    protected static final String DORIS_JDBC_URL =
+            "jdbc:mysql://selectdb-cn-axc4ayogl01-public.selectdbfe.rds.aliyuncs.com:9030";
+    protected static final String DORIS_FE_NODES =
+            "selectdb-cn-axc4ayogl01-public.selectdbfe.rds.aliyuncs.com:8080";
+    protected static final String DORIS_USERNAME = "admin";
+    protected static final String DORIS_PASSWORD = "Flink01-pw";
 
     protected final UniqueDatabase mysqlInventoryDatabase =
             new UniqueDatabase(MYSQL, "mysql_inventory", MYSQL_TEST_USER, MYSQL_TEST_PASSWORD);
@@ -68,28 +66,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     public static void initializeContainers() {
         LOG.info("Starting containers...");
         Startables.deepStart(Stream.of(MYSQL)).join();
-        Startables.deepStart(Stream.of(DORIS)).join();
         LOG.info("Waiting for backends to be available");
         long startWaitingTimestamp = System.currentTimeMillis();
 
-        new LogMessageWaitStrategy()
-                .withRegEx(".*get heartbeat from FE.*")
-                .withTimes(1)
-                .withStartupTimeout(STARTUP_WAITING_TIMEOUT)
-                .waitUntilReady(DORIS);
-
-        while (!checkBackendAvailability()) {
-            try {
-                if (System.currentTimeMillis() - startWaitingTimestamp
-                        > STARTUP_WAITING_TIMEOUT.toMillis()) {
-                    throw new RuntimeException("Doris backend startup timed out.");
-                }
-                LOG.info("Waiting for backends to be available");
-                Thread.sleep(1000);
-            } catch (InterruptedException ignored) {
-                // ignore and check next round
-            }
-        }
         LOG.info("Containers are started.");
     }
 
@@ -97,44 +76,16 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
     public void before() throws Exception {
         super.before();
         mysqlInventoryDatabase.createAndInitialize();
-        createDorisDatabase(mysqlInventoryDatabase.getDatabaseName());
 
         complexDataTypesDatabase.createAndInitialize();
-        createDorisDatabase(complexDataTypesDatabase.getDatabaseName());
-    }
-
-    private static boolean checkBackendAvailability() {
-        try {
-            org.testcontainers.containers.Container.ExecResult rs =
-                    DORIS.execInContainer(
-                            "mysql",
-                            "--protocol=TCP",
-                            "-uroot",
-                            "-P9030",
-                            "-h127.0.0.1",
-                            "-e SHOW BACKENDS\\G");
-
-            if (rs.getExitCode() != 0) {
-                return false;
-            }
-            String output = rs.getStdout();
-            LOG.info("Doris backend status:\n{}", output);
-            return output.contains("*************************** 1. row ***************************")
-                    && !output.contains("AvailCapacity: 1.000 B");
-        } catch (Exception e) {
-            LOG.info("Failed to check backend status.", e);
-            return false;
-        }
     }
 
     @AfterEach
     public void after() {
         super.after();
         mysqlInventoryDatabase.dropDatabase();
-        dropDorisDatabase(mysqlInventoryDatabase.getDatabaseName());
 
         complexDataTypesDatabase.dropDatabase();
-        dropDorisDatabase(complexDataTypesDatabase.getDatabaseName());
     }
 
     @Test
@@ -154,8 +105,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: doris\n"
-                                + "  fenodes: doris:8030\n"
-                                + "  benodes: doris:8040\n"
+                                + "  fenodes: %s\n"
                                 + "  username: %s\n"
                                 + "  password: \"%s\"\n"
                                 + "  table.create.properties.replication_num: 1\n"
@@ -165,8 +115,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         databaseName,
-                        DORIS.getUsername(),
-                        DORIS.getPassword(),
+                        DORIS_FE_NODES,
+                        DORIS_USERNAME,
+                        DORIS_PASSWORD,
                         parallelism);
         Path dorisCdcConnector = TestUtils.getResource("doris-cdc-pipeline-connector.jar");
         submitPipelineJob(pipelineJob, dorisCdcConnector);
@@ -323,8 +274,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: doris\n"
-                                + "  fenodes: doris:8030\n"
-                                + "  benodes: doris:8040\n"
+                                + "  fenodes: %s\n"
                                 + "  username: %s\n"
                                 + "  password: \"%s\"\n"
                                 + "  table.create.properties.replication_num: 1\n"
@@ -335,8 +285,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         databaseName,
-                        DORIS.getUsername(),
-                        DORIS.getPassword(),
+                        DORIS_FE_NODES,
+                        DORIS_USERNAME,
+                        DORIS_PASSWORD,
                         parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path dorisCdcConnector = TestUtils.getResource("doris-cdc-pipeline-connector.jar");
@@ -409,8 +360,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: doris\n"
-                                + "  fenodes: doris:8030\n"
-                                + "  benodes: doris:8040\n"
+                                + "  fenodes: %s\n"
                                 + "  username: %s\n"
                                 + "  password: \"%s\"\n"
                                 + "  table.create.properties.replication_num: 1\n"
@@ -424,8 +374,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         databaseName,
-                        DORIS.getUsername(),
-                        DORIS.getPassword(),
+                        DORIS_FE_NODES,
+                        DORIS_USERNAME,
+                        DORIS_PASSWORD,
                         databaseName,
                         parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
@@ -564,8 +515,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: doris\n"
-                                + "  fenodes: doris:8030\n"
-                                + "  benodes: doris:8040\n"
+                                + "  fenodes: %s\n"
                                 + "  username: %s\n"
                                 + "  password: \"%s\"\n"
                                 + "  table.create.properties.replication_num: 1\n"
@@ -580,8 +530,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         databaseName,
-                        DORIS.getUsername(),
-                        DORIS.getPassword(),
+                        DORIS_FE_NODES,
+                        DORIS_USERNAME,
+                        DORIS_PASSWORD,
                         databaseName,
                         parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
@@ -672,8 +623,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                                 + "\n"
                                 + "sink:\n"
                                 + "  type: doris\n"
-                                + "  fenodes: doris:8030\n"
-                                + "  benodes: doris:8040\n"
+                                + "  fenodes: %s\n"
                                 + "  username: %s\n"
                                 + "  password: \"%s\"\n"
                                 + "  table.create.properties.replication_num: 1\n"
@@ -684,8 +634,9 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                         MYSQL_TEST_USER,
                         MYSQL_TEST_PASSWORD,
                         databaseName,
-                        DORIS.getUsername(),
-                        DORIS.getPassword(),
+                        DORIS_FE_NODES,
+                        DORIS_USERNAME,
+                        DORIS_PASSWORD,
                         parallelism);
         Path mysqlCdcJar = TestUtils.getResource("mysql-cdc-pipeline-connector.jar");
         Path dorisCdcConnector = TestUtils.getResource("doris-cdc-pipeline-connector.jar");
@@ -927,10 +878,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
             Assertions.assertThatThrownBy(
                             () -> {
                                 try (Connection connection =
-                                                DriverManager.getConnection(
-                                                        DORIS.getJdbcUrl(
-                                                                databaseName,
-                                                                DORIS.getUsername()));
+                                                DriverManager.getConnection(DORIS_JDBC_URL);
                                         Statement statement = connection.createStatement()) {
                                     statement.executeQuery("SELECT * FROM products;");
                                 }
@@ -939,44 +887,6 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
                     .hasMessageContaining("errCode = 2, detailMessage = Unknown table 'products'");
         } catch (SQLException e) {
             throw new RuntimeException("Failed to trigger schema change.", e);
-        }
-    }
-
-    public static void createDorisDatabase(String databaseName) {
-        try {
-            org.testcontainers.containers.Container.ExecResult rs =
-                    DORIS.execInContainer(
-                            "mysql",
-                            "--protocol=TCP",
-                            "-uroot",
-                            "-P9030",
-                            "-h127.0.0.1",
-                            String.format("-e CREATE DATABASE IF NOT EXISTS `%s`;", databaseName));
-
-            if (rs.getExitCode() != 0) {
-                throw new RuntimeException("Failed to create database." + rs.getStderr());
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create database.", e);
-        }
-    }
-
-    public static void dropDorisDatabase(String databaseName) {
-        try {
-            org.testcontainers.containers.Container.ExecResult rs =
-                    DORIS.execInContainer(
-                            "mysql",
-                            "--protocol=TCP",
-                            "-uroot",
-                            "-P9030",
-                            "-h127.0.0.1",
-                            String.format("-e DROP DATABASE IF EXISTS %s;", databaseName));
-
-            if (rs.getExitCode() != 0) {
-                throw new RuntimeException("Failed to drop database." + rs.getStderr());
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to drop database.", e);
         }
     }
 
@@ -1045,9 +955,7 @@ class MySqlToDorisE2eITCase extends PipelineTestEnvironment {
             throws Exception {
 
         List<String> results = new ArrayList<>();
-        try (Connection conn =
-                        DriverManager.getConnection(
-                                DORIS.getJdbcUrl(databaseName, DORIS.getUsername()));
+        try (Connection conn = DriverManager.getConnection(DORIS_JDBC_URL);
                 Statement stat = conn.createStatement()) {
             ResultSet rs = stat.executeQuery(sql);
 
