@@ -1313,46 +1313,50 @@ class FlinkPipelineComposerITCase {
         String[] expected =
                 Stream.of(
                                 // Merging timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0)}, primaryKeys=id, options=()}",
-                                "DataChangeEvent{tableId={}_table_timestamp_merged, before=[], after=[1, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}_table_timestamp_merged, typeMapping={birthday=TIMESTAMP(9)}, oldTypeMapping={birthday=TIMESTAMP(0)}, comments={}}",
-                                "DataChangeEvent{tableId={}_table_timestamp_merged, before=[], after=[2, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_timestamp_merged, before=[], after=[101, Zen, 19, 2020-01-01T14:28:57], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_timestamp_merged, before=[], after=[102, Zen, 19, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0)}, primaryKeys=id, options=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, before=[], after=[1, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, typeMapping={birthday=TIMESTAMP(9)}, oldTypeMapping={birthday=TIMESTAMP(0)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, before=[], after=[2, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, before=[], after=[101, Zen, 19, 2020-01-01T14:28:57], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, before=[], after=[102, Zen, 19, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
 
                                 // Merging zoned timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0) WITH TIME ZONE}, primaryKeys=id, options=()}",
-                                "DataChangeEvent{tableId={}_table_zoned_timestamp_merged, before=[], after=[3, Alice, 17, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}_table_zoned_timestamp_merged, typeMapping={birthday=TIMESTAMP(9) WITH TIME ZONE}, oldTypeMapping={birthday=TIMESTAMP(0) WITH TIME ZONE}, comments={}}",
-                                "DataChangeEvent{tableId={}_table_zoned_timestamp_merged, before=[], after=[4, Alice, 17, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_zoned_timestamp_merged, before=[], after=[103, Zen, 19, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_zoned_timestamp_merged, before=[], after=[104, Zen, 19, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0) WITH TIME ZONE}, primaryKeys=id, options=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, before=[], after=[3, Alice, 17, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, typeMapping={birthday=TIMESTAMP(9) WITH TIME ZONE}, oldTypeMapping={birthday=TIMESTAMP(0) WITH TIME ZONE}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, before=[], after=[4, Alice, 17, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, before=[], after=[103, Zen, 19, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, before=[], after=[104, Zen, 19, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
 
                                 // Merging local-zoned timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_local_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP_LTZ(0)}, primaryKeys=id, options=()}",
-                                "DataChangeEvent{tableId={}_table_local_zoned_timestamp_merged, before=[], after=[5, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}_table_local_zoned_timestamp_merged, typeMapping={birthday=TIMESTAMP_LTZ(9)}, oldTypeMapping={birthday=TIMESTAMP_LTZ(0)}, comments={}}",
-                                "DataChangeEvent{tableId={}_table_local_zoned_timestamp_merged, before=[], after=[6, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_local_zoned_timestamp_merged, before=[], after=[105, Zen, 19, 2020-01-01T14:28:57], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_table_local_zoned_timestamp_merged, before=[], after=[106, Zen, 19, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP_LTZ(0)}, primaryKeys=id, options=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, before=[], after=[5, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, typeMapping={birthday=TIMESTAMP_LTZ(9)}, oldTypeMapping={birthday=TIMESTAMP_LTZ(0)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, before=[], after=[6, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, before=[], after=[105, Zen, 19, 2020-01-01T14:28:57], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, before=[], after=[106, Zen, 19, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
 
                                 // Merging all
-                                "CreateTableEvent{tableId={}_everything_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0)}, primaryKeys=id, options=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[1, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}_everything_merged, typeMapping={birthday=TIMESTAMP(9)}, oldTypeMapping={birthday=TIMESTAMP(0)}, comments={}}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[2, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}_everything_merged, typeMapping={birthday=TIMESTAMP(9) WITH TIME ZONE}, oldTypeMapping={birthday=TIMESTAMP(9)}, comments={}}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[3, Alice, 17, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[4, Alice, 17, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[5, Alice, 17, 2020-01-01T04:28:57-05:00], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[6, Alice, 17, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[101, Zen, 19, 2020-01-01T09:28:57-05:00], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[102, Zen, 19, 2020-01-01T09:28:57.123456789-05:00], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[103, Zen, 19, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[104, Zen, 19, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[105, Zen, 19, 2020-01-01T04:28:57-05:00], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}_everything_merged, before=[], after=[106, Zen, 19, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}")
-                        .map(s -> s.replace("{}", "default_namespace.default_schema.default"))
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_everything_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(0)}, primaryKeys=id, options=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[1, Alice, 17, 2020-01-01T14:28:57], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>_everything_merged, typeMapping={birthday=TIMESTAMP(9)}, oldTypeMapping={birthday=TIMESTAMP(0)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[2, Alice, 17, 2020-01-01T14:28:57.123456789], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>_everything_merged, typeMapping={birthday=TIMESTAMP(9) WITH TIME ZONE}, oldTypeMapping={birthday=TIMESTAMP(9)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[3, Alice, 17, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[4, Alice, 17, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[5, Alice, 17, 2020-01-01T04:28:57-05:00], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[6, Alice, 17, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[101, Zen, 19, 2020-01-01T09:28:57-05:00], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[102, Zen, 19, 2020-01-01T09:28:57.123456789-05:00], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[103, Zen, 19, 2020-01-01T14:28:57Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[104, Zen, 19, 2020-01-01T14:28:57.123456789Z], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[105, Zen, 19, 2020-01-01T04:28:57-05:00], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>_everything_merged, before=[], after=[106, Zen, 19, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}")
+                        .map(
+                                s ->
+                                        s.replace(
+                                                "<<TABLE_ID>>",
+                                                "default_namespace.default_schema.default"))
                         .toArray(String[]::new);
 
         assertThat(outputEvents).containsExactlyInAnyOrder(expected);
@@ -1409,33 +1413,33 @@ class FlinkPipelineComposerITCase {
 
         String[] expected =
                 Stream.of(
-                                "CreateTableEvent{tableId={}, schema=columns={`id` INT,`name` STRING,`age` INT,`fav_num` TINYINT}, primaryKeys=id, options=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[1, Alice, 17, 1], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=SMALLINT}, oldTypeMapping={fav_num=TINYINT}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[2, Alice, 17, 22], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=INT}, oldTypeMapping={fav_num=SMALLINT}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[3, Alice, 17, 3333], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=BIGINT}, oldTypeMapping={fav_num=INT}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[4, Alice, 17, 44444444], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=DECIMAL(19, 0)}, oldTypeMapping={fav_num=BIGINT}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[5, Alice, 17, 555555555555555], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=DECIMAL(24, 5)}, oldTypeMapping={fav_num=DECIMAL(19, 0)}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[6, Alice, 17, 66666.66666], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[7, Alice, 17, 77777777.17000], op=INSERT, meta=()}",
-                                "AlterColumnTypeEvent{tableId={}, typeMapping={fav_num=DECIMAL(38, 19)}, oldTypeMapping={fav_num=DECIMAL(24, 5)}, comments={}}",
-                                "DataChangeEvent{tableId={}, before=[], after=[8, Alice, 17, 888888888.8888888888888888888], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[101, Zen, 19, 1.0000000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[102, Zen, 19, 22.0000000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[103, Zen, 19, 3333.0000000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[104, Zen, 19, 44444444.0000000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[105, Zen, 19, 555555555555555.0000000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[106, Zen, 19, 66666.6666600000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[107, Zen, 19, 77777777.1700000000000000000], op=INSERT, meta=()}",
-                                "DataChangeEvent{tableId={}, before=[], after=[108, Zen, 19, 888888888.8888888888888888888], op=INSERT, meta=()}")
+                                "CreateTableEvent{tableId=<<TABLE_ID>>, schema=columns={`id` INT,`name` STRING,`age` INT,`fav_num` TINYINT}, primaryKeys=id, options=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[1, Alice, 17, 1], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=SMALLINT}, oldTypeMapping={fav_num=TINYINT}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[2, Alice, 17, 22], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=INT}, oldTypeMapping={fav_num=SMALLINT}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[3, Alice, 17, 3333], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=BIGINT}, oldTypeMapping={fav_num=INT}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[4, Alice, 17, 44444444], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=DECIMAL(19, 0)}, oldTypeMapping={fav_num=BIGINT}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[5, Alice, 17, 555555555555555], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=DECIMAL(24, 5)}, oldTypeMapping={fav_num=DECIMAL(19, 0)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[6, Alice, 17, 66666.66666], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[7, Alice, 17, 77777777.17000], op=INSERT, meta=()}",
+                                "AlterColumnTypeEvent{tableId=<<TABLE_ID>>, typeMapping={fav_num=DECIMAL(38, 19)}, oldTypeMapping={fav_num=DECIMAL(24, 5)}, comments={}}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[8, Alice, 17, 888888888.8888888888888888888], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[101, Zen, 19, 1.0000000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[102, Zen, 19, 22.0000000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[103, Zen, 19, 3333.0000000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[104, Zen, 19, 44444444.0000000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[105, Zen, 19, 555555555555555.0000000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[106, Zen, 19, 66666.6666600000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[107, Zen, 19, 77777777.1700000000000000000], op=INSERT, meta=()}",
+                                "DataChangeEvent{tableId=<<TABLE_ID>>, before=[], after=[108, Zen, 19, 888888888.8888888888888888888], op=INSERT, meta=()}")
                         .map(
                                 s ->
                                         s.replace(
-                                                "{}",
+                                                "<<TABLE_ID>>",
                                                 "default_namespace.default_schema.default_everything_merged"))
                         .toArray(String[]::new);
 

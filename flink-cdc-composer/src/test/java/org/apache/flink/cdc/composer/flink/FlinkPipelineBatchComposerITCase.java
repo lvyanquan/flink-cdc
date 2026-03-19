@@ -1205,13 +1205,13 @@ public class FlinkPipelineBatchComposerITCase {
         String[] expected =
                 Stream.of(
                                 // Merging timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
                                 // Merging zoned timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
                                 // Merging local-zoned timestamp with different precision
-                                "CreateTableEvent{tableId={}_table_local_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_table_local_zoned_timestamp_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
                                 // Merging all
-                                "CreateTableEvent{tableId={}_everything_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
+                                "CreateTableEvent{tableId=<<TABLE_ID>>_everything_merged, schema=columns={`id` INT,`name` STRING,`age` INT,`birthday` TIMESTAMP(9) WITH TIME ZONE}, primaryKeys=id, options=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_table_timestamp_merged, before=[], after=[1, Alice, 17, 2020-01-01T09:28:57-05:00], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[1, Alice, 17, 2020-01-01T09:28:57-05:00], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_table_timestamp_merged, before=[], after=[2, Alice, 17, 2020-01-01T09:28:57.123456789-05:00], op=INSERT, meta=()}",
@@ -1236,7 +1236,11 @@ public class FlinkPipelineBatchComposerITCase {
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[105, Zen, 19, 2020-01-01T04:28:57-05:00], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_table_local_zoned_timestamp_merged, before=[], after=[106, Zen, 19, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[106, Zen, 19, 2020-01-01T04:28:57.123456789-05:00], op=INSERT, meta=()}")
-                        .map(s -> s.replace("{}", "default_namespace.default_schema.default"))
+                        .map(
+                                s ->
+                                        s.replace(
+                                                "<<TABLE_ID>>",
+                                                "default_namespace.default_schema.default"))
                         .toArray(String[]::new);
 
         assertThat(outputEvents).containsExactlyInAnyOrder(expected);
@@ -1311,11 +1315,6 @@ public class FlinkPipelineBatchComposerITCase {
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[106, Zen, 19, 66666.6666600000000000000], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[107, Zen, 19, 77777777.1700000000000000000], op=INSERT, meta=()}",
                                 "DataChangeEvent{tableId=default_namespace.default_schema.default_everything_merged, before=[], after=[108, Zen, 19, 888888888.8888888888888888888], op=INSERT, meta=()}")
-                        .map(
-                                s ->
-                                        s.replace(
-                                                "{}",
-                                                "default_namespace.default_schema.default_everything_merged"))
                         .toArray(String[]::new);
 
         assertThat(outputEvents).containsExactlyInAnyOrder(expected);
