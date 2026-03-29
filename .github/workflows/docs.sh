@@ -31,8 +31,8 @@ javadoc -J-version
 git config --global --add safe.directory /root/flink-cdc
 git submodule update --init --recursive
 
-HUGO_REPO=https://github.com/gohugoio/hugo/releases/download/v0.80.0/hugo_extended_0.80.0_Linux-64bit.tar.gz
-HUGO_ARTIFACT=hugo_extended_0.80.0_Linux-64bit.tar.gz
+HUGO_REPO=https://github.com/gohugoio/hugo/releases/download/v0.146.0/hugo_extended_0.146.0_linux-amd64.tar.gz
+HUGO_ARTIFACT=hugo_extended_0.146.0_linux-amd64.tar.gz
 if ! curl --fail -OL $HUGO_REPO ; then
 	echo "Failed to download Hugo binary"
 	exit 1
