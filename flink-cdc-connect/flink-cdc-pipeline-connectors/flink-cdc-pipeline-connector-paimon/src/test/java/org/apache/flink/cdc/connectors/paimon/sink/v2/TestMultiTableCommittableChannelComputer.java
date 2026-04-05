@@ -39,18 +39,18 @@ public class TestMultiTableCommittableChannelComputer {
         computer.setup(4);
         List<MultiTableCommittable> commits =
                 Arrays.asList(
-                        new MultiTableCommittable("database", "table1", 1L, null, null),
-                        new MultiTableCommittable("database", "table2", 1L, null, null),
-                        new MultiTableCommittable("database", "table1", 1L, null, null),
-                        new MultiTableCommittable("database", "table5", 1L, null, null),
-                        new MultiTableCommittable("database", "table3", 1L, null, null),
-                        new MultiTableCommittable("database", "table8", 1L, null, null),
-                        new MultiTableCommittable("database", "table5", 1L, null, null),
-                        new MultiTableCommittable("database", "table1", 1L, null, null),
-                        new MultiTableCommittable("database", "table9", 1L, null, null),
-                        new MultiTableCommittable("database", "table5", 1L, null, null),
-                        new MultiTableCommittable("database", "table3", 1L, null, null),
-                        new MultiTableCommittable("database", "table8", 1L, null, null));
+                        createCommittable("database", "table1"),
+                        createCommittable("database", "table2"),
+                        createCommittable("database", "table1"),
+                        createCommittable("database", "table5"),
+                        createCommittable("database", "table3"),
+                        createCommittable("database", "table8"),
+                        createCommittable("database", "table5"),
+                        createCommittable("database", "table1"),
+                        createCommittable("database", "table9"),
+                        createCommittable("database", "table5"),
+                        createCommittable("database", "table3"),
+                        createCommittable("database", "table8"));
         Map<Integer, Set<String>> map = new HashMap<>();
         commits.forEach(
                 (commit) -> {
@@ -68,5 +68,9 @@ public class TestMultiTableCommittableChannelComputer {
                         Arrays.asList("table1", "table2", "table3", "table5", "table8", "table9"));
         // Not a table is appeared in more than one channel.
         Assertions.assertThat(actualTables).isEqualTo(expectedTables);
+    }
+
+    private static MultiTableCommittable createCommittable(String database, String table) {
+        return new MultiTableCommittable(database, table, 1L, null);
     }
 }

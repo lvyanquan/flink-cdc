@@ -109,14 +109,15 @@ public class PreCommitOperator
     public void prepareSnapshotPreBarrier(long checkpointId) {
         for (int i = 0; i < multiTableCommittables.size(); i++) {
             MultiTableCommittable multiTableCommittable = multiTableCommittables.get(i);
+            // In Paimon 1.5+, MultiTableCommittable no longer has kind() and wrappedCommittable()
+            // It now uses commitMessage() directly
             multiTableCommittables.set(
                     i,
                     new MultiTableCommittable(
                             multiTableCommittable.getDatabase(),
                             multiTableCommittable.getTable(),
                             checkpointId,
-                            multiTableCommittable.kind(),
-                            multiTableCommittable.wrappedCommittable()));
+                            multiTableCommittable.commitMessage()));
         }
     }
 

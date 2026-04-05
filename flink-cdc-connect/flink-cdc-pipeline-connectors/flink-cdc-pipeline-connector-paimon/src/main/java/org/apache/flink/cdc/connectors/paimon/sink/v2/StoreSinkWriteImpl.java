@@ -27,11 +27,9 @@ import org.apache.paimon.disk.IOManagerImpl;
 import org.apache.paimon.flink.metrics.FlinkMetricRegistry;
 import org.apache.paimon.flink.sink.Committable;
 import org.apache.paimon.flink.sink.StoreSinkWrite;
-import org.apache.paimon.flink.sink.StoreSinkWriteState;
 import org.apache.paimon.io.DataFileMeta;
 import org.apache.paimon.memory.HeapMemorySegmentPool;
 import org.apache.paimon.memory.MemoryPoolFactory;
-import org.apache.paimon.memory.MemorySegmentPool;
 import org.apache.paimon.operation.FileStoreWrite;
 import org.apache.paimon.operation.WriteRestore;
 import org.apache.paimon.table.FileStoreTable;
@@ -41,14 +39,10 @@ import org.apache.paimon.table.sink.TableWriteImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-
-import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
  * copy from {@link org.apache.paimon.flink.sink.StoreSinkWriteImpl}. remove {@link
@@ -64,12 +58,11 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
     private final boolean ignorePreviousFiles;
     private final boolean waitCompaction;
     private final boolean isStreamingMode;
-    @Nullable private final MemorySegmentPool memoryPool;
-    @Nullable private final MemoryPoolFactory memoryPoolFactory;
+    private final MemoryPoolFactory memoryPoolFactory;
 
     protected TableWriteImpl<?> write;
 
-    @Nullable private final MetricGroup metricGroup;
+    private final MetricGroup metricGroup;
 
     public StoreSinkWriteImpl(
             FileStoreTable table,
@@ -79,45 +72,18 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
             boolean waitCompaction,
             boolean isStreamingMode,
             MemoryPoolFactory memoryPoolFactory,
-            @Nullable MetricGroup metricGroup) {
-        this(
-                table,
-                commitUser,
-                ioManager,
-                ignorePreviousFiles,
-                waitCompaction,
-                isStreamingMode,
-                null,
-                memoryPoolFactory,
-                metricGroup);
-    }
-
-    private StoreSinkWriteImpl(
-            FileStoreTable table,
-            String commitUser,
-            IOManager ioManager,
-            boolean ignorePreviousFiles,
-            boolean waitCompaction,
-            boolean isStreamingMode,
-            @Nullable MemorySegmentPool memoryPool,
-            @Nullable MemoryPoolFactory memoryPoolFactory,
-            @Nullable MetricGroup metricGroup) {
+            MetricGroup metricGroup) {
         this.commitUser = commitUser;
         this.paimonIOManager = new IOManagerImpl(ioManager.getSpillingDirectoriesPaths());
         this.ignorePreviousFiles = ignorePreviousFiles;
         this.waitCompaction = waitCompaction;
         this.isStreamingMode = isStreamingMode;
-        this.memoryPool = memoryPool;
         this.memoryPoolFactory = memoryPoolFactory;
         this.metricGroup = metricGroup;
         this.write = newTableWrite(table);
     }
 
     private TableWriteImpl<?> newTableWrite(FileStoreTable table) {
-        checkArgument(
-                !(memoryPool != null && memoryPoolFactory != null),
-                "memoryPool and memoryPoolFactory cannot be set at the same time.");
-
         TableWriteImpl<?> tableWrite =
                 table.newWrite(commitUser)
                         .withIOManager(paimonIOManager)
@@ -127,16 +93,15 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
             tableWrite.withMetricRegistry(new FlinkMetricRegistry(metricGroup));
         }
 
+        // In Paimon 1.5+, withMemoryPool is removed, only withMemoryPoolFactory is available
         if (memoryPoolFactory != null) {
             return tableWrite.withMemoryPoolFactory(memoryPoolFactory);
         } else {
-            return (TableWriteImpl<?>)
-                    tableWrite.withMemoryPool(
-                            memoryPool != null
-                                    ? memoryPool
-                                    : new HeapMemorySegmentPool(
-                                            table.coreOptions().writeBufferSize(),
-                                            table.coreOptions().pageSize()));
+            // Create a MemoryPoolFactory from table options when memoryPoolFactory is not provided
+            HeapMemorySegmentPool segmentPool =
+                    new HeapMemorySegmentPool(
+                            table.coreOptions().writeBufferSize(), table.coreOptions().pageSize());
+            return tableWrite.withMemoryPoolFactory(new MemoryPoolFactory(segmentPool));
         }
     }
 
@@ -159,10 +124,7 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
         return write.writeAndReturn(internalRow, i);
     }
 
-    @Override
-    public SinkRecord toLogRecord(SinkRecord record) {
-        return write.toLogRecord(record);
-    }
+    // toLogRecord was removed in Paimon 1.5+, log related functionality is no longer needed
 
     @Override
     public void compact(BinaryRow partition, int bucket, boolean fullCompaction) throws Exception {
@@ -189,10 +151,11 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
         List<Committable> committables = new ArrayList<>();
         if (write != null) {
             try {
-                for (CommitMessage committable :
+                for (CommitMessage commitMessage :
                         write.prepareCommit(this.waitCompaction || waitCompaction, checkpointId)) {
-                    committables.add(
-                            new Committable(checkpointId, Committable.Kind.FILE, committable));
+                    // In Paimon 1.5+, Committable no longer uses Kind enum
+                    // It directly takes CommitMessage instead
+                    committables.add(new Committable(checkpointId, commitMessage));
                 }
             } catch (Exception e) {
                 throw new IOException(e);

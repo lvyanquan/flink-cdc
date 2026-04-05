@@ -32,6 +32,7 @@ import org.apache.flink.api.connector.sink2.CommitterInitContext;
 import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.cdc.common.configuration.Configuration;
+import org.apache.flink.cdc.common.data.GenericArrayData;
 import org.apache.flink.cdc.common.data.binary.BinaryRecordData;
 import org.apache.flink.cdc.common.data.binary.BinaryStringData;
 import org.apache.flink.cdc.common.event.AddColumnEvent;
@@ -86,7 +87,10 @@ import org.apache.calcite.sql.validate.SqlValidatorException;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.flink.FlinkCatalogFactory;
 import org.apache.paimon.flink.sink.MultiTableCommittable;
+import org.apache.paimon.index.IndexFileMeta;
+import org.apache.paimon.manifest.IndexManifestEntry;
 import org.apache.paimon.options.Options;
+import org.apache.paimon.table.FileStoreTable;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -111,6 +115,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.cdc.common.pipeline.PipelineOptions.DEFAULT_SCHEMA_OPERATOR_RPC_TIMEOUT;
+import static org.apache.flink.cdc.common.types.DataTypes.ARRAY;
+import static org.apache.flink.cdc.common.types.DataTypes.FLOAT;
 import static org.apache.flink.cdc.common.types.DataTypes.INT;
 import static org.apache.flink.cdc.common.types.DataTypes.STRING;
 import static org.apache.flink.cdc.common.types.DataTypes.VARCHAR;
@@ -975,6 +981,191 @@ public class PaimonSinkITCase {
                         Row.ofKind(RowKind.INSERT, "20250604", "2", "Bob"));
     }
 
+    @ParameterizedTest
+    @CsvSource({"filesystem"})
+    public void testSinkWithArrayFloatColumn(String metastore) throws Exception {
+        initialize(metastore);
+        PaimonSink<Event> paimonSink =
+                new PaimonSink<>(
+                        catalogOptions, new PaimonRecordEventSerializer(ZoneId.systemDefault()));
+        PaimonWriter<Event> writer = paimonSink.createWriter(new MockInitContext());
+        Committer<MultiTableCommittable> committer =
+                paimonSink.createCommitter(new MockCommitterInitContext());
+
+        // Create table with ARRAY<FLOAT> column for vector storage
+        Schema schema =
+                Schema.newBuilder()
+                        .physicalColumn("id", INT().notNull())
+                        .physicalColumn("embedding", ARRAY(FLOAT()))
+                        .primaryKey("id")
+                        .option("bucket", "1")
+                        .build();
+        CreateTableEvent createTableEvent = new CreateTableEvent(table1, schema);
+        PaimonMetadataApplier metadataApplier = new PaimonMetadataApplier(catalogOptions);
+        metadataApplier.applySchemaChange(createTableEvent);
+
+        List<Event> testEvents = new ArrayList<>();
+        testEvents.add(createTableEvent);
+
+        // Insert rows with float array (vector embeddings)
+        // Row 1: id=1, embedding=[1.0, 2.0, 3.0]
+        testEvents.add(
+                generateInsertWithArray(
+                        table1,
+                        Arrays.asList(
+                                Tuple2.of(INT(), 1),
+                                Tuple2.of(
+                                        ARRAY(FLOAT()),
+                                        new GenericArrayData(new float[] {1.0f, 2.0f, 3.0f})))));
+
+        // Row 2: id=2, embedding=[4.0, 5.0, 6.0]
+        testEvents.add(
+                generateInsertWithArray(
+                        table1,
+                        Arrays.asList(
+                                Tuple2.of(INT(), 2),
+                                Tuple2.of(
+                                        ARRAY(FLOAT()),
+                                        new GenericArrayData(new float[] {4.0f, 5.0f, 6.0f})))));
+
+        // Row 3: id=3, embedding=[7.0, 8.0, 9.0]
+        testEvents.add(
+                generateInsertWithArray(
+                        table1,
+                        Arrays.asList(
+                                Tuple2.of(INT(), 3),
+                                Tuple2.of(
+                                        ARRAY(FLOAT()),
+                                        new GenericArrayData(new float[] {7.0f, 8.0f, 9.0f})))));
+
+        // Write and commit
+        writeAndCommit(writer, committer, testEvents.toArray(new Event[0]));
+
+        // Verify results
+        List<Row> results = fetchResults(table1);
+        Assertions.assertThat(results).hasSize(3);
+
+        // Verify each row contains the correct id and array
+        for (Row row : results) {
+            Integer id = (Integer) row.getField(0);
+            Float[] embedding = (Float[]) row.getField(1);
+
+            Assertions.assertThat(id).isIn(1, 2, 3);
+            Assertions.assertThat(embedding).hasSize(3);
+
+            if (id == 1) {
+                Assertions.assertThat(embedding).containsExactly(1.0f, 2.0f, 3.0f);
+            } else if (id == 2) {
+                Assertions.assertThat(embedding).containsExactly(4.0f, 5.0f, 6.0f);
+            } else {
+                Assertions.assertThat(embedding).containsExactly(7.0f, 8.0f, 9.0f);
+            }
+        }
+    }
+
+    private DataChangeEvent generateInsertWithArray(
+            TableId tableId, List<Tuple2<DataType, Object>> elements) {
+        BinaryRecordDataGenerator generator =
+                new BinaryRecordDataGenerator(
+                        RowType.of(elements.stream().map(e -> e.f0).toArray(DataType[]::new)));
+        Object[] values =
+                elements.stream()
+                        .map(e -> e.f1)
+                        .map(o -> o instanceof String ? BinaryStringData.fromString((String) o) : o)
+                        .toArray(Object[]::new);
+        return DataChangeEvent.insertEvent(tableId, generator.generate(values));
+    }
+
+    /**
+     * Test creating vector index on ARRAY&lt;FLOAT&gt; column using sys.create_global_index
+     * procedure.
+     *
+     * <p>Note: This test requires Lumina native library to be available. If the library is not
+     * loaded, the test will be skipped.
+     */
+    @SuppressWarnings("IllegalImport")
+    @ParameterizedTest
+    @CsvSource({"filesystem"})
+    public void testVectorIndexCreation(String metastore) throws Exception {
+        // Check if Lumina native library is available
+        try {
+            Class<?> luminaClass = Class.forName("org.aliyun.lumina.Lumina");
+            java.lang.reflect.Method isLoaded = luminaClass.getMethod("isLibraryLoaded");
+            if (!(boolean) isLoaded.invoke(null)) {
+                java.lang.reflect.Method loadLib = luminaClass.getMethod("loadLibrary");
+                loadLib.invoke(null);
+            }
+        } catch (Exception e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    false, "Lumina native library not available: " + e.getMessage());
+        }
+
+        initialize(metastore);
+
+        // Create table with proper configuration for vector index
+        // Requirements:
+        // 1. bucket = '-1' (append-only table)
+        // 2. row-tracking.enabled = 'true' (required for global index)
+        // 3. data-evolution.enabled = 'true'
+        // 4. lumina.index.dimension = vector dimension
+        // 5. lumina.distance.metric = distance metric (e.g., 'l2')
+        tEnv.executeSql(
+                String.format(
+                        "CREATE TABLE paimon_catalog.test.vector_table ("
+                                + "id INT, "
+                                + "embedding ARRAY<FLOAT>) WITH ("
+                                + "'bucket' = '-1', "
+                                + "'row-tracking.enabled' = 'true', "
+                                + "'data-evolution.enabled' = 'true', "
+                                + "'lumina.index.dimension' = '3', "
+                                + "'lumina.distance.metric' = 'l2'"
+                                + ")"));
+
+        // Insert vector data using SQL
+        tEnv.executeSql(
+                "INSERT INTO paimon_catalog.test.vector_table VALUES "
+                        + "(1, ARRAY[CAST(1.0 AS FLOAT), CAST(2.0 AS FLOAT), CAST(3.0 AS FLOAT)]), "
+                        + "(2, ARRAY[CAST(4.0 AS FLOAT), CAST(5.0 AS FLOAT), CAST(6.0 AS FLOAT)]), "
+                        + "(3, ARRAY[CAST(7.0 AS FLOAT), CAST(8.0 AS FLOAT), CAST(9.0 AS FLOAT)])");
+
+        // Call sys.create_global_index procedure to build vector index
+        tEnv.executeSql(
+                "CALL sys.create_global_index("
+                        + "`table` => 'test.vector_table', "
+                        + "index_column => 'embedding', "
+                        + "index_type => 'lumina-vector-ann')");
+
+        // Verify the index was created successfully
+        FileStoreTable table =
+                (FileStoreTable)
+                        FlinkCatalogFactory.createPaimonCatalog(catalogOptions)
+                                .getTable(
+                                        org.apache.paimon.catalog.Identifier.create(
+                                                "test", "vector_table"));
+
+        // Get index files for the vector index
+        List<IndexFileMeta> indexFiles =
+                table.store().newIndexFileHandler().scanEntries().stream()
+                        .map(IndexManifestEntry::indexFile)
+                        .filter(f -> "lumina-vector-ann".equals(f.indexType()))
+                        .collect(Collectors.toList());
+
+        // Verify that index files were created
+        Assertions.assertThat(indexFiles).isNotEmpty();
+        long totalRowCount = indexFiles.stream().mapToLong(IndexFileMeta::rowCount).sum();
+        Assertions.assertThat(totalRowCount).isEqualTo(3L);
+
+        // Verify each index file has valid metadata
+        for (IndexFileMeta meta : indexFiles) {
+            Assertions.assertThat(meta.indexType()).isEqualTo("lumina-vector-ann");
+            Assertions.assertThat(meta.globalIndexMeta()).isNotNull();
+            Assertions.assertThat(meta.globalIndexMeta().rowRangeStart()).isGreaterThanOrEqualTo(0);
+            Assertions.assertThat(meta.globalIndexMeta().rowRangeEnd())
+                    .isGreaterThanOrEqualTo(meta.globalIndexMeta().rowRangeStart());
+            Assertions.assertThat(meta.fileSize()).isGreaterThan(0);
+        }
+    }
+
     private void runJobWithEvents(List<Event> events, boolean isBatchMode) throws Exception {
         DataStream<Event> stream = env.fromCollection(events, TypeInformation.of(Event.class));
 
@@ -1045,8 +1236,7 @@ public class PaimonSinkITCase {
                 committable.getDatabase(),
                 committable.getTable(),
                 checkpointId++,
-                committable.kind(),
-                committable.wrappedCommittable());
+                committable.commitMessage());
     }
 
     private static class MockCommitRequestImpl<CommT> extends CommitRequestImpl<CommT> {
