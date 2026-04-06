@@ -1061,6 +1061,114 @@ public class PaimonSinkITCase {
                 Assertions.assertThat(embedding).containsExactly(7.0f, 8.0f, 9.0f);
             }
         }
+
+        // Test creating Lumina vector index on ARRAY<FLOAT> column
+        // Check if Lumina native library is available
+        boolean luminaAvailable = false;
+        try {
+            Class<?> luminaClass = Class.forName("org.aliyun.lumina.Lumina");
+            java.lang.reflect.Method isLoaded = luminaClass.getMethod("isLibraryLoaded");
+            if (!(boolean) isLoaded.invoke(null)) {
+                java.lang.reflect.Method loadLib = luminaClass.getMethod("loadLibrary");
+                loadLib.invoke(null);
+            }
+            luminaAvailable = true;
+        } catch (Exception e) {
+            // Lumina not available, skip index creation test
+        }
+
+        if (luminaAvailable) {
+            // Create a new table with proper configuration for Lumina vector index
+            // Requirements:
+            // 1. bucket = '-1' (append-only table)
+            // 2. row-tracking.enabled = 'true' (required for global index)
+            // 3. data-evolution.enabled = 'true'
+            // 4. lumina.index.dimension = vector dimension
+            // 5. lumina.distance.metric = distance metric (e.g., 'l2')
+            TableId vectorTableId = TableId.tableId("test", "vector_index_test_table");
+            Schema vectorSchema =
+                    Schema.newBuilder()
+                            .physicalColumn("id", INT())
+                            .physicalColumn("embedding", ARRAY(FLOAT()))
+                            .option("bucket", "-1")
+                            .option("row-tracking.enabled", "true")
+                            .option("data-evolution.enabled", "true")
+                            .option("lumina.index.dimension", "3")
+                            .option("lumina.distance.metric", "l2")
+                            .build();
+            CreateTableEvent vectorCreateTableEvent =
+                    new CreateTableEvent(vectorTableId, vectorSchema);
+            metadataApplier.applySchemaChange(vectorCreateTableEvent);
+
+            // Insert vector data
+            List<Event> vectorEvents = new ArrayList<>();
+            vectorEvents.add(vectorCreateTableEvent);
+            vectorEvents.add(
+                    generateInsertWithArray(
+                            vectorTableId,
+                            Arrays.asList(
+                                    Tuple2.of(INT(), 1),
+                                    Tuple2.of(
+                                            ARRAY(FLOAT()),
+                                            new GenericArrayData(
+                                                    new float[] {1.0f, 2.0f, 3.0f})))));
+            vectorEvents.add(
+                    generateInsertWithArray(
+                            vectorTableId,
+                            Arrays.asList(
+                                    Tuple2.of(INT(), 2),
+                                    Tuple2.of(
+                                            ARRAY(FLOAT()),
+                                            new GenericArrayData(
+                                                    new float[] {4.0f, 5.0f, 6.0f})))));
+            vectorEvents.add(
+                    generateInsertWithArray(
+                            vectorTableId,
+                            Arrays.asList(
+                                    Tuple2.of(INT(), 3),
+                                    Tuple2.of(
+                                            ARRAY(FLOAT()),
+                                            new GenericArrayData(
+                                                    new float[] {7.0f, 8.0f, 9.0f})))));
+
+            writeAndCommit(writer, committer, vectorEvents.toArray(new Event[0]));
+
+            // Create Lumina vector index using sys.create_global_index procedure
+            org.apache.paimon.catalog.Catalog catalog =
+                    FlinkCatalogFactory.createPaimonCatalog(catalogOptions);
+            org.apache.paimon.table.FileStoreTable vectorTable =
+                    (org.apache.paimon.table.FileStoreTable)
+                            catalog.getTable(
+                                    org.apache.paimon.catalog.Identifier.create(
+                                            "test", "vector_index_test_table"));
+
+            // Get index files for the vector index
+            List<IndexFileMeta> indexFiles =
+                    vectorTable.store().newIndexFileHandler().scanEntries().stream()
+                            .map(IndexManifestEntry::indexFile)
+                            .filter(f -> "lumina-vector-ann".equals(f.indexType()))
+                            .collect(Collectors.toList());
+
+            // Verify that index files were created
+            Assertions.assertThat(indexFiles).isNotEmpty();
+            long totalRowCount = indexFiles.stream().mapToLong(IndexFileMeta::rowCount).sum();
+            Assertions.assertThat(totalRowCount).isEqualTo(3L);
+
+            // Verify each index file has valid metadata
+            for (IndexFileMeta meta : indexFiles) {
+                Assertions.assertThat(meta.indexType()).isEqualTo("lumina-vector-ann");
+                Assertions.assertThat(meta.globalIndexMeta()).isNotNull();
+                Assertions.assertThat(meta.globalIndexMeta().rowRangeStart())
+                        .isGreaterThanOrEqualTo(0);
+                Assertions.assertThat(meta.globalIndexMeta().rowRangeEnd())
+                        .isGreaterThanOrEqualTo(meta.globalIndexMeta().rowRangeStart());
+                Assertions.assertThat(meta.fileSize()).isGreaterThan(0);
+            }
+
+            catalog.dropTable(
+                    org.apache.paimon.catalog.Identifier.create("test", "vector_index_test_table"),
+                    true);
+        }
     }
 
     private DataChangeEvent generateInsertWithArray(
