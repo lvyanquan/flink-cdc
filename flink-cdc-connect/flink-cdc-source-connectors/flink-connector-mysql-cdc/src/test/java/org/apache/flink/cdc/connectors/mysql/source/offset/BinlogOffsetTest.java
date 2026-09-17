@@ -225,6 +225,30 @@ public class BinlogOffsetTest {
     }
 
     @Test
+    public void testCompareToWithDifferentFilenameLength() {
+        BinlogOffset offset1 =
+                BinlogOffset.builder().setBinlogFilePosition("mysql.999", 123).build();
+        BinlogOffset offset2 =
+                BinlogOffset.builder().setBinlogFilePosition("mysql.1000", 123).build();
+        assertCompareTo(offset1, offset2, -1);
+        assertCompareTo(offset2, offset1, 1);
+
+        BinlogOffset offset3 =
+                BinlogOffset.builder().setBinlogFilePosition("binlog.99", 100).build();
+        BinlogOffset offset4 =
+                BinlogOffset.builder().setBinlogFilePosition("binlog.100", 100).build();
+        assertCompareTo(offset3, offset4, -1);
+        assertCompareTo(offset4, offset3, 1);
+
+        BinlogOffset offset5 =
+                BinlogOffset.builder().setBinlogFilePosition("mysql.9999", 50).build();
+        BinlogOffset offset6 =
+                BinlogOffset.builder().setBinlogFilePosition("mysql.10000", 50).build();
+        assertCompareTo(offset5, offset6, -1);
+        assertCompareTo(offset6, offset5, 1);
+    }
+
+    @Test
     public void testCompareToTimestampWithDifferentServerId() {
         // Test different server IDs with different timestamps
         BinlogOffset offset1 =
