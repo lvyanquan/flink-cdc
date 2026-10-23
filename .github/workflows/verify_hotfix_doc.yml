@@ -1,0 +1,72 @@
+name: "Verify hotfix-doc"
+
+on:
+  push:
+    branches:
+      - verify-hotfix-doc
+
+jobs:
+  build-documentation:
+    name: "Check and build doc (${{ matrix.case }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: before-apache-release-3.6
+            repository: apache/flink-cdc
+            branch: release-3.6
+          - case: after-hotfix-doc
+            repository: lvyanquan/flink-cdc
+            branch: hotfix-doc
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.branch }}
+
+      - name: Set branch environment variable
+        run: |
+          currentBranch=$(git branch --show-current)
+          echo "flink_branch=${currentBranch}" >> ${GITHUB_ENV}
+          git log --oneline -1
+          ls -la .github/actions/
+
+      - name: Build documentation
+        run: |
+          docker run --rm --volume "$PWD:/root/flink-cdc" chesnay/flink-ci:java_8_11_17_21_maven_386 bash -c "cd /root/flink-cdc && chmod +x ./.github/workflows/docs.sh && ./.github/workflows/docs.sh"
+
+      - name: Start local SSH server as rsync target
+        run: |
+          if [ ! -x /usr/sbin/sshd ]; then sudo apt-get update && sudo apt-get install -y openssh-server; fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f /tmp/test_key -q
+          cat /tmp/test_key.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+          sudo mkdir -p /run/sshd
+          sudo /usr/sbin/sshd -p 2222
+          mkdir -p /tmp/nightlies/flink
+          {
+            echo "TEST_KEY<<EOF"
+            cat /tmp/test_key
+            echo "EOF"
+          } >> ${GITHUB_ENV}
+          echo "TEST_USER=$(whoami)" >> ${GITHUB_ENV}
+
+      - name: Upload documentation
+        uses: ./.github/actions/rsync-deployments
+        with:
+          switches: --archive --compress --delete
+          path: docs/target/
+          remote_path: /tmp/nightlies/flink/flink-cdc-docs-${{ env.flink_branch }}/
+          remote_host: 127.0.0.1
+          remote_port: 2222
+          remote_user: ${{ env.TEST_USER }}
+          remote_key: ${{ env.TEST_KEY }}
+
+      - name: Verify uploaded documentation
+        run: |
+          target=/tmp/nightlies/flink/flink-cdc-docs-${{ env.flink_branch }}
+          test -f "${target}/index.html"
+          echo "files uploaded: $(find "${target}" -type f | wc -l)"
+          diff -rq docs/target "${target}" && echo "upload matches docs/target"
